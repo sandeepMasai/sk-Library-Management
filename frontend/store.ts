@@ -48,6 +48,12 @@ export interface User {
   ownerName?: string;
   email?: string;
   city?: string;
+  /** Indian state / UT (library tenants). */
+  state?: string;
+  /** Locality / area / landmark (library tenants). */
+  place?: string;
+  /** India postal PIN (6 digits, library tenants). */
+  pincode?: string;
   phone?: string | null;
   address?: string | null;
   logoUrl?: string | null;
@@ -66,6 +72,8 @@ export interface User {
   cancelReason?: string | null;
   cancelNote?: string | null;
   libraryCode?: string;
+  /** True after successful mobile OTP verification (backend). */
+  isMobileVerified?: boolean;
 }
 
 export interface Attendance {
@@ -199,10 +207,19 @@ interface AppState {
   patchCurrentUser: (patch: Partial<User>) => void;
   fetchMyProfile: () => Promise<{ ok: boolean; message?: string }>;
 
-  // Library - Password
+  // Library - Password / MSG91 OTP
   requestLibraryPasswordReset: (email: string) => Promise<{ ok: boolean; message?: string }>;
+  forgotLibraryPasswordSendOtp: (mobile: string) => Promise<{ ok: boolean; message?: string }>;
+  forgotLibraryPasswordVerifyOtp: (mobile: string, otp: string) => Promise<{ ok: boolean; resetToken?: string; message?: string }>;
   resetLibraryPassword: (token: string, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
   changeLibraryPassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
+  sendLoginOtp: (p: { mobile: string; role: 'student' | 'library'; libraryCode?: string }) => Promise<{ ok: boolean; message?: string }>;
+  verifyLoginOtp: (p: {
+    mobile: string;
+    role: 'student' | 'library';
+    otp: string;
+    libraryCode?: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
 
   // Helpers
   isAuthenticated: () => boolean;
@@ -220,10 +237,17 @@ interface AppState {
   createSpace: (name: string) => Promise<{ ok: boolean; message?: string; space?: Space }>;
   fetchShifts: () => Promise<void>;
   createShift: (data: { name: string; type?: Shift['type']; startTime: number | string; endTime: number | string }) => Promise<{ ok: boolean; message?: string; shift?: Shift }>;
+  updateShift: (
+    id: string,
+    data: Partial<{ name: string; type: Shift['type']; startTime: number | string; endTime: number | string }>
+  ) => Promise<{ ok: boolean; message?: string; shift?: Shift }>;
+  deleteShift: (id: string) => Promise<{ ok: boolean; message?: string }>;
   fetchAllocations: (shiftId?: string, spaceId?: string) => Promise<void>;
   assignAllocation: (data: { seatId: string; studentId: string; shiftId: string; startDate: string; endDate: string }) => Promise<{ ok: boolean; message?: string; allocation?: SeatAllocation }>;
   cancelAllocation: (allocationId: string) => Promise<{ ok: boolean; message?: string }>;
   bulkCreateSeats: (totalSeats: number, spaceId?: string | null) => Promise<{ ok: boolean; message?: string }>;
+  /** Set exact seat count (1..N); may remove high-numbered seats when safe. */
+  setTotalSeats: (totalSeats: number) => Promise<{ ok: boolean; message?: string }>;
   updateSeatSpace: (seatId: string, spaceId: string | null) => Promise<{ ok: boolean; message?: string }>;
 
   // Admin - Students
@@ -286,6 +310,72 @@ const initialAdmin: User = {
   feeAmount: 0,
   isBlocked: false,
 };
+
+/**
+ * Shared post-login hydration (password login + MSG91 OTP verify).
+ */
+async function hydrateSessionAfterAuth(
+  get: () => AppState,
+  set: (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void,
+  data: { user: User; authToken?: string | null; libraryCode?: string | null },
+  libraryCodeFromForm?: string | null
+): Promise<{ ok: boolean; message?: string }> {
+  const authenticatedUser = data.user;
+  const token = data.authToken || null;
+
+  if (authenticatedUser?.role === 'admin') {
+    return { ok: false, message: 'Admin login is not available here.' };
+  }
+
+  const nextLibraryCode =
+    authenticatedUser.role === 'library'
+      ? (authenticatedUser.libraryCode ?? data.libraryCode ?? null)
+      : (libraryCodeFromForm ?? null);
+
+  let nextLibraryId: string | null =
+    authenticatedUser.role === 'library'
+      ? authenticatedUser.id
+      : authenticatedUser.role === 'student'
+        ? (authenticatedUser.libraryId ?? null)
+        : null;
+
+  set((state) => ({
+    currentUser: authenticatedUser,
+    authToken: token,
+    token,
+    role: authenticatedUser.role,
+    libraryId: nextLibraryId,
+    libraryCode: nextLibraryCode,
+    users:
+      authenticatedUser.role === 'admin'
+        ? [authenticatedUser, ...state.users.filter((u) => u.role !== 'student')]
+        : [initialAdmin, authenticatedUser, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
+  }));
+
+  if (authenticatedUser.role === 'student' && !nextLibraryId && token) {
+    try {
+      const me = await apiGet<{ ok: boolean; student?: { libraryId?: string | null } }>(`/api/student/me`);
+      const hydratedLibraryId = me?.student?.libraryId ?? null;
+      if (hydratedLibraryId) {
+        nextLibraryId = hydratedLibraryId;
+        set({ libraryId: hydratedLibraryId });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (authenticatedUser.role === 'admin') {
+    await get().fetchStudents();
+  } else {
+    await Promise.all([
+      get().fetchNotifications(authenticatedUser.id),
+      get().fetchStudentAttendance(authenticatedUser.id),
+    ]);
+  }
+
+  return { ok: true };
+}
 
 const API_URL = resolveApiBaseUrl();
 
@@ -522,6 +612,31 @@ export const useAppStore = create<AppState>()(
     }
   },
 
+  updateShift: async (id, data) => {
+    try {
+      const response = await apiPatch<Shift | ApiEnvelope<Shift>>(`/api/shifts/${id}`, data);
+      const shift = unwrapApiData(response);
+      set((s) => ({
+        shifts: s.shifts.map((x) => (x.id === id ? shift : x)).sort((a, b) => a.startTime - b.startTime),
+      }));
+      return { ok: true, shift };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to update shift' };
+    }
+  },
+
+  deleteShift: async (id) => {
+    try {
+      await apiDelete<{ ok?: boolean } | ApiEnvelope<{ ok?: boolean }>>(`/api/shifts/${id}`);
+      set((s) => ({ shifts: s.shifts.filter((x) => x.id !== id) }));
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to delete shift' };
+    }
+  },
+
   fetchAllocations: async (shiftId, spaceId) => {
     try {
       const params: any = {};
@@ -582,6 +697,18 @@ export const useAppStore = create<AppState>()(
     } catch (e) {
       const err = e as ApiError;
       return { ok: false, message: err?.message || 'Failed to create seats' };
+    }
+  },
+
+  setTotalSeats: async (totalSeats) => {
+    try {
+      const response = await apiPost<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats/set-total`, { totalSeats });
+      const list = unwrapApiData(response);
+      set({ seats: list });
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to update seat capacity' };
     }
   },
 
@@ -655,75 +782,8 @@ export const useAppStore = create<AppState>()(
         ...(libraryCode ? { libraryCode } : {}),
       });
       const data = 'success' in response ? response.data : response;
-      const authenticatedUser = data.user;
-      const token = data.authToken || null;
-
-      // Safety: backend no longer supports admin via /api/auth/login
-      if (authenticatedUser?.role === 'admin') {
-        return { ok: false, message: 'Admin login is not available here.' };
-      }
-
-      // For library logins, backend includes libraryCode in user; for student logins, we keep what user typed.
-      const nextLibraryCode =
-        authenticatedUser.role === 'library'
-          ? (authenticatedUser.libraryCode ?? data.libraryCode ?? null)
-          : (libraryCode ?? null);
-
-      /**
-       * Persist required auth fields:
-       * - token
-       * - role
-       * - libraryId (tenant)
-       *
-       * Library role: libraryId === user.id
-       * Student role: libraryId may not be present in login response → hydrate via GET /api/student/me
-       */
-      let nextLibraryId: string | null =
-        authenticatedUser.role === 'library'
-          ? authenticatedUser.id
-          : authenticatedUser.role === 'student'
-            ? (authenticatedUser.libraryId ?? null)
-            : null;
-
-      set((state) => ({
-        currentUser: authenticatedUser,
-        // Keep both fields in sync until the rest of codebase is migrated.
-        authToken: token,
-        token,
-        role: authenticatedUser.role,
-        libraryId: nextLibraryId,
-        libraryCode: nextLibraryCode,
-        users:
-          authenticatedUser.role === 'admin'
-            ? [authenticatedUser, ...state.users.filter((u) => u.role === 'student')]
-            // Always include the logged-in student in users so getStudentNotifications can find them
-            : [initialAdmin, authenticatedUser, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
-      }));
-
-      // If student login didn't include libraryId, fetch /api/student/me once to hydrate tenant id.
-      if (authenticatedUser.role === 'student' && !nextLibraryId && token) {
-        try {
-          const me = await apiGet<{ ok: boolean; student?: { libraryId?: string | null } }>(`/api/student/me`);
-          const hydratedLibraryId = me?.student?.libraryId ?? null;
-          if (hydratedLibraryId) {
-            nextLibraryId = hydratedLibraryId;
-            set({ libraryId: hydratedLibraryId });
-          }
-        } catch {
-          // Non-fatal: UI can still work, but some tenant-scoped calls may fail until refreshed.
-        }
-      }
-
-      if (authenticatedUser.role === 'admin') {
-        await get().fetchStudents();
-      } else {
-        // Fetch student's notifications and attendance on login
-        await Promise.all([
-          get().fetchNotifications(authenticatedUser.id),
-          get().fetchStudentAttendance(authenticatedUser.id),
-        ]);
-      }
-
+      const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode);
+      if (!hydrated.ok) return hydrated;
       return { ok: true };
     } catch (e) {
       const err = e as ApiError;
@@ -784,9 +844,17 @@ export const useAppStore = create<AppState>()(
     if (!effectiveRole) return { ok: false, message: 'Not logged in' };
     try {
       if (effectiveRole === 'library') {
+        // IMPORTANT: for library, prefer /api/subscription/me as it includes subscriptionStatus/currentPlanKey
+        // which drives access gating (LibraryRoot tabs vs Subscription screen).
+        const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
+        if (me?.user) {
+          set({ currentUser: me.user });
+          return { ok: true };
+        }
+
+        // Fallback (older servers): hydrate from profile.
         const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
         const p = res.profile;
-        // If currentUser wasn't persisted, create it from profile response.
         set({
           currentUser: {
             ...(cu || ({} as any)),
@@ -796,6 +864,7 @@ export const useAppStore = create<AppState>()(
             ownerName: p?.name ?? cu?.ownerName,
             email: p?.email ?? cu?.email,
             phone: p?.phone ?? cu?.phone,
+            isMobileVerified: Boolean(p?.isMobileVerified ?? (cu as any)?.isMobileVerified),
             address: p?.address ?? cu?.address,
             city: p?.city ?? cu?.city,
             logoUrl: p?.logoUrl ?? cu?.logoUrl,
@@ -837,13 +906,79 @@ export const useAppStore = create<AppState>()(
     }
   },
 
-  resetLibraryPassword: async (token, newPassword) => {
+  forgotLibraryPasswordSendOtp: async (mobile) => {
     try {
-      await apiPost<{ ok: boolean; message?: string }>(`/api/auth/reset-password`, { token, newPassword });
+      await apiPost(`/api/auth/forgot-password/send-otp`, { mobile });
       return { ok: true };
     } catch (e) {
       const err = e as ApiError;
       return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  forgotLibraryPasswordVerifyOtp: async (mobile, otp) => {
+    try {
+      const response = await apiPost<{ success?: boolean; data: { resetToken: string } } | { resetToken: string }>(
+        `/api/auth/forgot-password/verify-otp`,
+        { mobile, otp }
+      );
+      const data = unwrapApiData(response);
+      return { ok: true, resetToken: data.resetToken };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  resetLibraryPassword: async (token, newPassword) => {
+    try {
+      await apiPost<{ ok: boolean; message?: string }>(`/api/auth/reset-password`, {
+        resetToken: token,
+        newPassword,
+      });
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  sendLoginOtp: async ({ mobile, role, libraryCode }) => {
+    try {
+      await apiPost(`/api/otp/send-otp`, {
+        mobile,
+        role,
+        ...(role === 'student' && libraryCode ? { libraryCode } : {}),
+      });
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  verifyLoginOtp: async ({ mobile, role, otp, libraryCode }) => {
+    try {
+      const response = await apiPost<
+        | { user: User; authToken?: string; libraryCode?: string }
+        | { success: boolean; data: { user: User; authToken?: string; libraryCode?: string } }
+      >(`/api/otp/verify-otp`, {
+        mobile,
+        role,
+        otp,
+        ...(role === 'student' && libraryCode ? { libraryCode } : {}),
+      });
+      const data = 'success' in response ? response.data : response;
+      const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode ?? null);
+      if (!hydrated.ok) return hydrated;
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      const msg = err?.message || 'Network error';
+      if (/Network/i.test(msg)) {
+        return { ok: false, message: 'Please check your internet connection' };
+      }
+      return { ok: false, message: msg };
     }
   },
 

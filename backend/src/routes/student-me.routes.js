@@ -12,8 +12,21 @@ const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const upload = require("../middleware/upload.middleware");
 const { uploadBuffer, isCloudinaryConfigured } = require("../utils/cloudinary");
+const otpService = require("../services/otp.service");
+const { normalizeIndianMobile } = require("../utils/mobile");
 
 const router = express.Router();
+
+function getRequestMeta(req) {
+  return {
+    ip: String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown"),
+    userAgent: String(req.headers["user-agent"] || ""),
+  };
+}
+
+function otpExpiryMinutes() {
+  return Number.parseInt(process.env.MSG91_OTP_EXPIRY_MINUTES || "5", 10) || 5;
+}
 
 function toDateKey(date = new Date()) {
   const y = date.getUTCFullYear();
@@ -35,6 +48,14 @@ function getUtcMonthRange(year, month) {
   return { start, end };
 }
 
+function feeStatusToLegacy(feeStatus) {
+  const s = String(feeStatus || "").trim().toLowerCase();
+  if (s === "paid") return "Paid";
+  if (s === "partial") return "Half Paid";
+  if (s === "pending") return "Pending";
+  return "Pending";
+}
+
 function toStudentResponse(student, library) {
   return {
     id: student._id.toString(),
@@ -49,10 +70,11 @@ function toStudentResponse(student, library) {
       : null,
     name: student.name,
     mobile: student.mobile,
+    isMobileVerified: Boolean(student.isMobileVerified),
     username: student.username,
     joinDate: student.joinDate?.toISOString?.() || null,
     expiryDate: student.expiryDate?.toISOString?.() || null,
-    feeStatus: student.feeStatus,
+    feeStatus: feeStatusToLegacy(student.feeStatus),
     feeAmount: student.feeAmount,
     isBlocked: Boolean(student.isBlocked),
     photoUrl: student.photoUrl || null,
@@ -129,6 +151,107 @@ router.get("/me", requireAuth, requireRole("student"), async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load student dashboard", error: error.message });
+  }
+});
+
+/**
+ * POST /api/student/me/send-mobile-verify-otp
+ *
+ * Sends MSG91 OTP to the student's registered mobile (token-scoped).
+ */
+router.post("/me/send-mobile-verify-otp", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const userId = String(req.user?.userId || "").trim();
+    const libraryId = String(req.user?.libraryId || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
+      return res.status(400).json({ message: "Invalid auth payload" });
+    }
+    const student = await Student.findOne({ _id: userId, libraryId, isDeleted: false });
+    if (!student) return res.status(404).json({ message: "Student not found" });
+    if (student.isBlocked) return res.status(403).json({ message: "Account is blocked" });
+    if (student.isMobileVerified) {
+      return res.status(400).json({ message: "This mobile number is already verified." });
+    }
+    const mobile10 = normalizeIndianMobile(student.mobile);
+    if (!mobile10) {
+      return res.status(400).json({ message: "No valid 10-digit Indian mobile on this account." });
+    }
+    otpService.assertMsg91Configured();
+    otpService.assertNotOtpBlocked(student);
+    const mobileKey = `student_profile_verify:${userId}`;
+    const meta = getRequestMeta(req);
+    await otpService.enforceSendPolicies({ mobileKey, ip: meta.ip });
+    await otpService.dispatchMsg91Otp(mobile10);
+    await otpService.logSend({ mobileKey, purpose: "student_profile_verify", ip: meta.ip });
+    return res.json({
+      ok: true,
+      message: "OTP sent successfully",
+      resendAfterSeconds: Math.ceil(otpService.RESEND_COOLDOWN_MS / 1000),
+      otpExpiresInMinutes: otpExpiryMinutes(),
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({
+        message: error.message || "Request failed",
+        ...(error.data && typeof error.data === "object" ? error.data : {}),
+      });
+    }
+    return res.status(500).json({ message: "Failed to send OTP", error: error.message });
+  }
+});
+
+/**
+ * POST /api/student/me/verify-mobile-otp
+ * Body: { otp }
+ */
+router.post("/me/verify-mobile-otp", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const userId = String(req.user?.userId || "").trim();
+    const libraryId = String(req.user?.libraryId || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
+      return res.status(400).json({ message: "Invalid auth payload" });
+    }
+    const otp = String(req.body?.otp || "").trim().replace(/\D/g, "");
+    if (!/^\d{4,8}$/.test(otp)) {
+      return res.status(400).json({ message: "Invalid OTP format" });
+    }
+    const student = await Student.findOne({ _id: userId, libraryId, isDeleted: false });
+    if (!student) return res.status(404).json({ message: "Student not found" });
+    if (student.isBlocked) return res.status(403).json({ message: "Account is blocked" });
+    if (student.isMobileVerified) {
+      const library = await Library.findById(libraryId).select("name logoUrl").lean();
+      return res.json({
+        ok: true,
+        alreadyVerified: true,
+        student: toStudentResponse(student, library),
+        message: "Mobile already verified",
+      });
+    }
+    const mobile10 = normalizeIndianMobile(student.mobile);
+    if (!mobile10) {
+      return res.status(400).json({ message: "No valid 10-digit Indian mobile on this account." });
+    }
+    otpService.assertMsg91Configured();
+    otpService.assertNotOtpBlocked(student);
+    const ok = await otpService.verifyMsg91Otp(mobile10, otp);
+    if (!ok) {
+      await otpService.recordVerifyFailure(Student, student._id);
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+    await otpService.resetOtpGateOnSuccess(Student, student._id);
+    const fresh = await Student.findOne({ _id: userId, libraryId, isDeleted: false }).lean();
+    const library = await Library.findById(libraryId).select("name logoUrl").lean();
+    return res.json({ ok: true, student: toStudentResponse(fresh, library), message: "Mobile verified" });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({
+        message: error.message || "Request failed",
+        ...(error.data && typeof error.data === "object" ? error.data : {}),
+      });
+    }
+    return res.status(500).json({ message: "Failed to verify OTP", error: error.message });
   }
 });
 

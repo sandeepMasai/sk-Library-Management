@@ -21,10 +21,13 @@ import StudentCard from '../../components/StudentCard';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal, type ConfirmTone } from '../../components/ConfirmModal';
 
+const PAGE_SIZE = 10;
+
 export default function AdminStudents() {
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const users = useAppStore((s) => s.users);
   const fetchStudents = useAppStore((s) => s.fetchStudents);
@@ -52,6 +55,10 @@ export default function AdminStudents() {
     parentNav()?.navigate('AdminStudentForm', studentId ? { studentId } : undefined);
   };
 
+  const goStudentDetail = (studentId: string) => {
+    parentNav()?.navigate('AdminStudentDetail', { studentId });
+  };
+
   const students = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
 
   const sortedStudents = useMemo(
@@ -69,6 +76,25 @@ export default function AdminStudents() {
       ),
     [sortedStudents, searchQuery]
   );
+
+  const filteredTotal = filteredStudents.length;
+  const pageCount = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const safePage = Math.min(pageCount, Math.max(1, page));
+  const startIdx = filteredTotal === 0 ? 0 : (safePage - 1) * PAGE_SIZE;
+  const endIdx = filteredTotal === 0 ? 0 : Math.min(filteredTotal, startIdx + PAGE_SIZE);
+
+  const paginatedStudents = useMemo(
+    () => filteredStudents.slice(startIdx, startIdx + PAGE_SIZE),
+    [filteredStudents, startIdx]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
 
   const stats = useMemo(() => {
     const active = students.filter((s) => differenceInDays(new Date(s.expiryDate), new Date()) >= 0).length;
@@ -136,6 +162,7 @@ export default function AdminStudents() {
   const renderStudent = ({ item }: { item: (typeof students)[0] }) => (
     <StudentCard
       student={item}
+      onViewDetails={() => goStudentDetail(item.id)}
       onEdit={() => goForm(item.id)}
       onBlock={() => handleBlock(item.id, item.name, item.isBlocked)}
       onDelete={() => handleDelete(item.id, item.name)}
@@ -157,8 +184,8 @@ export default function AdminStudents() {
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryVal}>{filteredStudents.length}</Text>
-            <Text style={styles.summaryLab}>Showing</Text>
+            <Text style={styles.summaryVal}>{filteredTotal}</Text>
+            <Text style={styles.summaryLab}>Matches</Text>
           </View>
         </View>
 
@@ -182,10 +209,10 @@ export default function AdminStudents() {
         </View>
 
         <FlatList
-          data={filteredStudents}
+          data={paginatedStudents}
           renderItem={renderStudent}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: scrollBottom + 56 + 72 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: scrollBottom + 56 + 72 + (filteredTotal > 0 ? 56 : 0) }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
@@ -198,7 +225,40 @@ export default function AdminStudents() {
               </View>
             ) : null
           }
-          ListFooterComponent={<View style={{ height: 14 }} />}
+          ListFooterComponent={
+            filteredTotal > 0 ? (
+              <View style={styles.pager}>
+                <Text style={styles.pagerText}>
+                  Showing {startIdx + 1}-{endIdx} of {filteredTotal}
+                </Text>
+                <View style={styles.pagerActions}>
+                  <TouchableOpacity
+                    onPress={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    style={[styles.pagerBtn, safePage <= 1 && styles.pagerBtnDisabled]}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={safePage <= 1 ? theme.colors.mutedText : theme.colors.text} />
+                    <Text style={[styles.pagerBtnTxt, safePage <= 1 && styles.pagerBtnTxtDisabled]}>Prev</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.pagerText}>{safePage}/{pageCount}</Text>
+
+                  <TouchableOpacity
+                    onPress={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    disabled={safePage >= pageCount}
+                    style={[styles.pagerBtn, safePage >= pageCount && styles.pagerBtnDisabled]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.pagerBtnTxt, safePage >= pageCount && styles.pagerBtnTxtDisabled]}>Next</Text>
+                    <Ionicons name="chevron-forward" size={16} color={safePage >= pageCount ? theme.colors.mutedText : theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={{ height: 14 }} />
+            )
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
@@ -315,6 +375,31 @@ function makeStyles() {
     },
     pageLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 6 },
     pageLoadingTxt: { fontSize: 13, fontWeight: '700', color: theme.colors.mutedText },
+    pager: {
+      marginTop: 8,
+      paddingBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      flexWrap: 'wrap',
+    },
+    pagerText: { fontSize: 12, fontWeight: '800', color: theme.colors.mutedText },
+    pagerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    pagerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    pagerBtnDisabled: { opacity: 0.55 },
+    pagerBtnTxt: { fontSize: 12, fontWeight: '900', color: theme.colors.text },
+    pagerBtnTxtDisabled: { color: theme.colors.mutedText },
     fab: {
       position: 'absolute',
       right: 20,

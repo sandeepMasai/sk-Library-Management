@@ -1,4 +1,5 @@
 const Log = require("../models/Log");
+const mongoose = require("mongoose");
 const logger = require("./logger");
 const { sanitizeAuditMetadata } = require("./auditMetadata");
 
@@ -17,11 +18,22 @@ const SEVERITY_ENUM = new Set([
 async function writeLog(entry = {}) {
   let sanitizedMeta = null;
   try {
+    const action = String(entry.action || "").trim().toLowerCase();
+    if (!action) return;
+
+    const coerceObjectIdOrNull = (v) => {
+      if (v == null || v === "") return null;
+      const s = String(v).trim();
+      if (!mongoose.Types.ObjectId.isValid(s)) return null;
+      return new mongoose.Types.ObjectId(s);
+    };
+
     const doc = {
-      action: String(entry.action || "").trim(),
-      userId: entry.userId ? String(entry.userId) : null,
-      role: entry.role ? String(entry.role) : null,
-      libraryId: entry.libraryId || null,
+      action,
+      // Keep schema-safe: admin uses "admin-1" which is not an ObjectId → store null
+      userId: coerceObjectIdOrNull(entry.userId),
+      role: entry.role ? String(entry.role).trim().toLowerCase() : null,
+      libraryId: coerceObjectIdOrNull(entry.libraryId),
       timestamp: entry.timestamp || new Date(),
     };
     if (entry.ip != null) doc.ip = String(entry.ip).slice(0, 80);
@@ -42,8 +54,13 @@ async function writeLog(entry = {}) {
       const sev = String(entry.severity).trim().toLowerCase();
       if (SEVERITY_ENUM.has(sev)) doc.severity = sev;
     }
-    const createOpts = entry.session ? { session: entry.session } : {};
-    await Log.create(doc, createOpts);
+    // Important: `Model.create(doc, {})` can be interpreted as `create(doc, {})` (two docs),
+    // causing validation errors on the empty second doc. Only pass options when needed.
+    if (entry.session) {
+      await Log.create([doc], { session: entry.session });
+    } else {
+      await Log.create(doc);
+    }
   } catch (error) {
     let preview = null;
     try {

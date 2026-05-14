@@ -9,6 +9,7 @@ const router = express.Router();
 router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredSubscription, seatController.listSeats);
 router.post("/", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.createSeat);
 router.post("/bulk-create", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.bulkCreateSeats);
+router.post("/set-total", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.setTotalSeats);
 router.patch("/:id", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.updateSeatSpace);
 router.post("/:id/assign", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.assignSeat);
 router.post("/assign", requireAuth, requireRole("library"), requireNotExpiredSubscription, seatController.assignSeat);

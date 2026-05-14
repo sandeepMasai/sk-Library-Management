@@ -75,6 +75,13 @@ const getSettings = asyncHandler(async (req, res) => {
   return sendSuccess(res, settings, "Settings fetched successfully");
 });
 
+// Public/read-only settings used by mobile app (privacy/terms/support links).
+// Keep response shape stable for frontend: { ok: true, settings }.
+const publicGetSettings = asyncHandler(async (_req, res) => {
+  const settings = await settingsService.getSettings();
+  return res.json({ ok: true, settings });
+});
+
 const updateSettings = asyncHandler(async (req, res) => {
   assertAdmin(req.user);
   const settings = await settingsService.updateSettings({ body: sanitizeSettingsBody(req.body) });
@@ -83,5 +90,6 @@ const updateSettings = asyncHandler(async (req, res) => {
 
 module.exports = {
   getSettings,
+  publicGetSettings,
   updateSettings,
 };

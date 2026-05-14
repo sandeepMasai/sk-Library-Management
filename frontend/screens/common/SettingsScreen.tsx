@@ -403,16 +403,19 @@ export default function SettingsScreen() {
             iconColor="#7C3AED"
             iconBgColor="rgba(124,58,237,0.12)"
             onPress={() => navTo('MessageTemplates')}
+            hideDivider={role !== 'library'}
           />
-          <SettingsItem
-            title="Shift Management"
-            subtitle="Timing & scheduling"
-            icon="time-outline"
-            iconColor="#2563EB"
-            iconBgColor="rgba(37,99,235,0.12)"
-            onPress={() => setInfoModal({ title: 'Shifts', description: 'Coming soon' })}
-            hideDivider
-          />
+          {role === 'library' ? (
+            <SettingsItem
+              title="Shift Management"
+              subtitle="Seats, shifts & allocations"
+              icon="time-outline"
+              iconColor="#2563EB"
+              iconBgColor="rgba(37,99,235,0.12)"
+              onPress={() => navTo('ShiftManagement')}
+              hideDivider
+            />
+          ) : null}
         </SettingsSectionCard>
 
         {section('SUPPORT')}

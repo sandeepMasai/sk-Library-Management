@@ -268,7 +268,7 @@ export default function LoginScreen() {
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel="Forgot password"
-                      onPress={() => navigation.navigate('LibraryForgotPassword')}
+                      onPress={() => navigation.navigate('ForgotPassword')}
                       hitSlop={10}
                     >
                       <Text style={styles.forgotTxt}>Forgot?</Text>
@@ -323,6 +323,10 @@ export default function LoginScreen() {
                     </>
                   )}
                 </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.otpLink} onPress={() => navigation.navigate('MobileLogin')} activeOpacity={0.85}>
+                <Text style={styles.otpLinkTxt}>Login with OTP (mobile)</Text>
               </TouchableOpacity>
 
               {loginType === 'library' ? (
@@ -566,6 +570,8 @@ function makeStyles(isSmall: boolean) {
       borderRadius: 14,
     },
     btnTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
+    otpLink: { marginTop: 14, alignItems: 'center' },
+    otpLinkTxt: { color: '#0F766E', fontWeight: '800', fontSize: 14 },
     createRow: {
       flexDirection: 'row',
       alignItems: 'center',

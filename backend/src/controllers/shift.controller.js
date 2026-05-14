@@ -13,6 +13,9 @@ function trimString(value) {
   return String(value || "").trim();
 }
 
+/** Must match `Shift` model enum */
+const SHIFT_TYPES = ["morning", "evening", "full_day", "half_day", "custom"];
+
 function parseMinutes(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const text = trimString(value);
@@ -52,11 +55,17 @@ function sanitizeCreateShiftBody(body = {}) {
   if (body.endTime === undefined) throw createHttpError(400, "Invalid endTime");
   validateTimeRange(body);
 
-  return {
+  const out = {
     name,
     startTime: body.startTime,
     endTime: body.endTime,
   };
+  if (body.type !== undefined && body.type !== null && trimString(body.type) !== "") {
+    const t = trimString(body.type);
+    if (!SHIFT_TYPES.includes(t)) throw createHttpError(400, "Invalid shift type");
+    out.type = t;
+  }
+  return out;
 }
 
 function sanitizeUpdateShiftBody(body = {}) {
@@ -68,6 +77,11 @@ function sanitizeUpdateShiftBody(body = {}) {
   }
   if (body.startTime !== undefined) sanitized.startTime = body.startTime;
   if (body.endTime !== undefined) sanitized.endTime = body.endTime;
+  if (body.type !== undefined && body.type !== null) {
+    const t = trimString(body.type);
+    if (!SHIFT_TYPES.includes(t)) throw createHttpError(400, "Invalid shift type");
+    sanitized.type = t;
+  }
 
   if (!Object.keys(sanitized).length) {
     throw createHttpError(400, "No shift fields provided");

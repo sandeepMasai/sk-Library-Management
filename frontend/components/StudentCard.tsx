@@ -9,12 +9,14 @@ import { useTheme } from '../theme/ThemeProvider';
 
 interface StudentCardProps {
   student: User;
+  /** Opens read-only detail screen (card tap). */
+  onViewDetails: () => void;
   onEdit: () => void;
   onBlock: () => void;
   onDelete: () => void;
 }
 
-export default function StudentCard({ student, onEdit, onBlock, onDelete }: StudentCardProps) {
+export default function StudentCard({ student, onViewDetails, onEdit, onBlock, onDelete }: StudentCardProps) {
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   const currentUser = useAppStore((s) => s.currentUser);
@@ -36,7 +38,7 @@ export default function StudentCard({ student, onEdit, onBlock, onDelete }: Stud
   const deleteFg = theme.colors.danger;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onEdit} activeOpacity={0.85}>
+    <TouchableOpacity style={styles.card} onPress={onViewDetails} activeOpacity={0.85}>
       {/* ── Header: photo + name + status ── */}
       <View style={styles.header}>
         <PhotoAvatar name={student.name} photoUrl={student.photoUrl} isBlocked={student.isBlocked} />

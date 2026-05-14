@@ -37,12 +37,14 @@ export default function AdminSubscriptionsPage() {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const role = useAppStore((s) => s.role);
 
+  const PAGE_SIZE = 10;
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'cancelled'>('all');
   const [payFilter, setPayFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<SubscriptionRow[]>([]);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,12 +56,17 @@ export default function AdminSubscriptionsPage() {
         ...(search.trim() ? { search: search.trim() } : {}),
       });
       setRows(res.rows || []);
+      setPage(1);
     } catch (e: any) {
       const err = e as ApiError;
       setError(err?.message || 'Failed to load subscriptions');
     } finally {
       setLoading(false);
     }
+  }, [statusFilter, payFilter, search]);
+
+  useEffect(() => {
+    setPage(1);
   }, [statusFilter, payFilter, search]);
 
   useEffect(() => {
@@ -116,6 +123,13 @@ export default function AdminSubscriptionsPage() {
     if (p === 'pending') return { bg: withAlpha(theme.colors.warning, 0.14), fg: theme.colors.warning, border: withAlpha(theme.colors.warning, 0.28), label: 'Pending' };
     return { bg: withAlpha(theme.colors.success, 0.12), fg: theme.colors.success, border: withAlpha(theme.colors.success, 0.25), label: 'Paid' };
   }, []);
+
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(pageCount, Math.max(1, page));
+  const startIdx = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE;
+  const endIdx = total === 0 ? 0 : Math.min(total, startIdx + PAGE_SIZE);
+  const pageRows = rows.slice(startIdx, endIdx);
 
   if (!isAuthenticated()) return <LoginScreen />;
   if (role && role !== 'admin') return <ForbiddenScreen message="This page is only for admin accounts." />;
@@ -193,7 +207,7 @@ export default function AdminSubscriptionsPage() {
       </View>
 
       <View style={styles.card}>
-        {rows.map((r) => {
+        {pageRows.map((r) => {
           const sb = statusBadge(r.status);
           const pb = payBadge(r.paymentStatus);
           const pt = planTypeBadge(r.plan);
@@ -250,6 +264,39 @@ export default function AdminSubscriptionsPage() {
           </View>
         )}
       </View>
+
+      {rows.length > 0 && (
+        <View style={styles.pager}>
+          <Text style={styles.pagerText}>
+            Showing {startIdx + 1}-{endIdx} of {total}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              style={[styles.pagerBtn, safePage <= 1 && styles.pagerBtnDisabled]}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chevron-back" size={16} color={safePage <= 1 ? theme.colors.mutedText : theme.colors.text} />
+              <Text style={[styles.pagerBtnTxt, safePage <= 1 && styles.pagerBtnTxtDisabled]}>Prev</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.pagerText}>
+              {safePage}/{pageCount}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={safePage >= pageCount}
+              style={[styles.pagerBtn, safePage >= pageCount && styles.pagerBtnDisabled]}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.pagerBtnTxt, safePage >= pageCount && styles.pagerBtnTxtDisabled]}>Next</Text>
+              <Ionicons name="chevron-forward" size={16} color={safePage >= pageCount ? theme.colors.mutedText : theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -312,6 +359,22 @@ function makeStyles(_mode: 'light' | 'dark') {
     meta2: { marginTop: 2, fontWeight: '800', color: theme.colors.mutedText, fontSize: 12 },
     badge: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
     badgeTxt: { fontWeight: '900', fontSize: 11 },
+    pager: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    pagerText: { fontSize: 12, fontWeight: '800', color: theme.colors.mutedText },
+    pagerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    pagerBtnDisabled: { opacity: 0.55 },
+    pagerBtnTxt: { fontSize: 12, fontWeight: '900', color: theme.colors.text },
+    pagerBtnTxtDisabled: { color: theme.colors.mutedText },
   });
 }
 

@@ -10,6 +10,8 @@ const REGEX = Object.freeze({
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   // International digits only (no +, spaces, hyphens)
   digitsOnly: /^\d{7,15}$/,
+  /** India postal index number (6 digits). */
+  pincodeIndia: /^\d{6}$/,
 });
 
 function isValidUrl(value) {
@@ -61,6 +63,21 @@ const librarySchema = new mongoose.Schema(
     },
     passwordHash: { type: String, required: true, select: false },
     city: { type: String, required: true, trim: true, maxlength: 80 },
+    /** Indian state / UT name (optional for legacy libraries). */
+    state: { type: String, default: '', trim: true, maxlength: 80 },
+    /** Locality / area / landmark (optional for legacy libraries). */
+    place: { type: String, default: '', trim: true, maxlength: 200 },
+    /** India PIN code (6 digits; optional for legacy libraries). */
+    pincode: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 6,
+      validate: {
+        validator: (v) => v == null || v === '' ? true : REGEX.pincodeIndia.test(String(v).trim()),
+        message: 'Invalid pincode (6 digits)',
+      },
+    },
     phone: {
       type: String,
       default: null,
@@ -71,6 +88,12 @@ const librarySchema = new mongoose.Schema(
         message: "Invalid phone number",
       },
     },
+    /** Set true after successful MSG91 (or future) mobile OTP verification. */
+    isMobileVerified: { type: Boolean, default: false },
+    /** Failed OTP verify attempts (MSG91); reset on success. */
+    otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
+    /** When set and in the future, OTP send/verify is refused for this library. */
+    otpBlockedUntil: { type: Date, default: null },
     // WhatsApp contact (international digits only, no + or spaces)
     whatsappNumber: {
       type: String,

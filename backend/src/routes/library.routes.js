@@ -4,38 +4,10 @@ const upload = require("../middleware/upload.middleware");
 const { uploadBuffer, isCloudinaryConfigured } = require("../utils/cloudinary");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
+const { normalizeIndianMobile, normalizeIndianMobileOptional, hasNonIndiaPlusPrefix } = require("../utils/mobile");
+const { toLibraryProfile } = require("./library.serialize");
 
 const router = express.Router();
-
-function toLibraryProfile(lib) {
-  return {
-    id: lib._id.toString(),
-    name: lib.ownerName, // account owner name
-    email: lib.email,
-    phone: lib.phone || "",
-    whatsappNumber: lib.whatsappNumber || "",
-    communication: {
-      whatsapp: lib.communication?.whatsapp || "",
-      channel: lib.communication?.channel || "",
-      email: lib.communication?.email || "",
-    },
-    communityLinks: {
-      whatsappGroup: lib.communityLinks?.whatsappGroup || "",
-      whatsappChannel: lib.communityLinks?.whatsappChannel || "",
-      telegram: lib.communityLinks?.telegram || "",
-    },
-    libraryName: lib.name,
-    address: lib.address || "",
-    city: lib.city || "",
-    logoUrl: lib.logoUrl || null,
-    plan: lib.plan,
-    subscriptionStatus: lib.subscriptionStatus || "inactive",
-    cancelledAt: lib.cancelledAt?.toISOString?.() || null,
-    cancelReason: lib.cancelReason || null,
-    cancelNote: lib.cancelNote || null,
-    planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
-  };
-}
 
 /**
  * GET /api/library/profile
@@ -75,17 +47,44 @@ router.get("/profile", requireAuth, requireRole("library", "student"), async (re
 router.put("/profile", requireAuth, requireRole("library"), async (req, res) => {
   try {
     const id = req.user?.libraryId;
+    const existingLib = await Library.findById(id).select("phone").lean();
+    if (!existingLib) return res.status(404).json({ message: "Library not found" });
+
     const ownerName = String(req.body?.name || "").trim();
-    const phone = String(req.body?.phone || "").trim();
+    const phoneTrim = String(req.body?.phone ?? "").trim();
+    let phoneValue = null;
+    if (phoneTrim) {
+      const mobile10 = normalizeIndianMobile(phoneTrim);
+      if (!mobile10) {
+        const nonIndia = hasNonIndiaPlusPrefix(phoneTrim);
+        return res.status(400).json({
+          message: nonIndia
+            ? "Only Indian (+91) mobile numbers are supported."
+            : "Invalid phone number (10-digit Indian mobile required)",
+          code: nonIndia ? "UNSUPPORTED_COUNTRY" : "INVALID_INDIAN_MOBILE",
+        });
+      }
+      phoneValue = mobile10;
+    }
+    const prev10 = normalizeIndianMobileOptional(existingLib.phone);
+    const phoneChanged = (prev10 || "") !== (phoneValue || "");
     const rawWhatsapp = req.body?.whatsappNumber === undefined ? undefined : String(req.body.whatsappNumber || "").trim();
     const rawCommunity = req.body?.communityLinks;
     const rawCommunication = req.body?.communication;
     const libraryName = String(req.body?.libraryName || "").trim();
     const address = String(req.body?.address || "").trim();
     const city = String(req.body?.city || "").trim();
+    const rawState = req.body?.state === undefined ? undefined : String(req.body.state || "").trim();
+    const rawPlace = req.body?.place === undefined ? undefined : String(req.body.place || "").trim();
+    const rawPincode =
+      req.body?.pincode === undefined ? undefined : String(req.body.pincode || "").replace(/\D/g, "").slice(0, 6);
 
     if (!ownerName || !libraryName || !city) {
       return res.status(400).json({ message: "name, libraryName, city are required" });
+    }
+
+    if (rawPincode !== undefined && rawPincode !== "" && !/^\d{6}$/.test(rawPincode)) {
+      return res.status(400).json({ message: "pincode must be exactly 6 digits" });
     }
 
     let whatsappNumber = undefined;
@@ -172,10 +171,14 @@ router.put("/profile", requireAuth, requireRole("library"), async (req, res) => 
       {
         $set: {
           ownerName,
-          phone: phone || null,
+          phone: phoneValue,
+          ...(phoneChanged ? { isMobileVerified: false } : {}),
           name: libraryName,
           address: address || null,
           city,
+          ...(rawState !== undefined ? { state: rawState } : {}),
+          ...(rawPlace !== undefined ? { place: rawPlace } : {}),
+          ...(rawPincode !== undefined ? { pincode: rawPincode } : {}),
           ...(rawWhatsapp !== undefined ? { whatsappNumber } : {}),
           ...(rawCommunity !== undefined ? { communityLinks } : {}),
           ...(rawCommunication !== undefined ? { communication } : {}),

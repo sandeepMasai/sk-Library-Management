@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image, ScrollView, StyleSheet,
   Text, TouchableOpacity, View, Platform, Dimensions,
+  TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../../store';
 import { useFocusEffect } from '@react-navigation/native';
-import { apiGet, type ApiError } from '../../services/api';
+import { apiGet, apiPost, type ApiError } from '../../services/api';
 import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
@@ -37,6 +38,10 @@ export default function StudentProfile() {
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
+  const [verifyMobileOpen, setVerifyMobileOpen] = useState(false);
+  const [verifyOtp, setVerifyOtp] = useState('');
+  const [verifySendLoading, setVerifySendLoading] = useState(false);
+  const [verifySubmitLoading, setVerifySubmitLoading] = useState(false);
 
   // Bootstrap on direct navigation / reload (when token exists but currentUser is not hydrated yet).
   useEffect(() => {
@@ -170,6 +175,65 @@ export default function StudentProfile() {
       setShowSignOutModal(false);
     } finally {
       setSignOutLoading(false);
+    }
+  };
+
+  const isMobileVerified = Boolean((currentUser as { isMobileVerified?: boolean }).isMobileVerified);
+
+  const openStudentVerifyMobile = () => {
+    const d = String(currentUser.mobile || '').replace(/\D/g, '');
+    const ten = d.length >= 12 && d.startsWith('91') ? d.slice(2, 12) : d.slice(0, 10);
+    if (!/^\d{10}$/.test(ten)) {
+      setInfoModal({ title: 'Mobile', description: 'Your account does not have a valid 10-digit mobile number.' });
+      return;
+    }
+    setVerifyOtp('');
+    setVerifyMobileOpen(true);
+  };
+
+  const sendStudentProfileMobileOtp = async () => {
+    setVerifySendLoading(true);
+    try {
+      await apiPost('/api/student/me/send-mobile-verify-otp');
+      setInfoModal({ title: 'OTP sent', description: 'Enter the code we sent to your phone.' });
+    } catch (e: any) {
+      const err = e as ApiError;
+      setInfoModal({ title: 'Could not send', description: err?.message || 'Failed to send OTP' });
+    } finally {
+      setVerifySendLoading(false);
+    }
+  };
+
+  const submitStudentProfileMobileOtp = async () => {
+    const digits = verifyOtp.replace(/\D/g, '');
+    if (digits.length < 4) {
+      setInfoModal({ title: 'OTP', description: 'Enter the verification code.' });
+      return;
+    }
+    setVerifySubmitLoading(true);
+    try {
+      const res = await apiPost<{ ok: boolean; student?: { isMobileVerified?: boolean; id?: string } }>(
+        '/api/student/me/verify-mobile-otp',
+        { otp: digits }
+      );
+      if (res.student?.id) {
+        useAppStore.setState((s) => ({
+          currentUser: s.currentUser
+            ? { ...s.currentUser, ...res.student, isMobileVerified: Boolean(res.student?.isMobileVerified) }
+            : s.currentUser,
+          users: s.users.map((u) =>
+            u.id === res.student?.id ? { ...u, ...res.student, isMobileVerified: Boolean(res.student?.isMobileVerified) } : u
+          ),
+        }));
+      }
+      setVerifyMobileOpen(false);
+      setVerifyOtp('');
+      setInfoModal({ title: 'Verified', description: 'Your mobile number is verified.' });
+    } catch (e: any) {
+      const err = e as ApiError;
+      setInfoModal({ title: 'Verification failed', description: err?.message || 'Invalid or expired OTP' });
+    } finally {
+      setVerifySubmitLoading(false);
     }
   };
 
@@ -380,7 +444,34 @@ export default function StudentProfile() {
           <View style={styles.infoCard}>
             <InfoRow icon="person-outline" label="Full Name" value={displayName} />
             <InfoRow icon="at-outline" label="Username" value={`@${String(currentUser.username || '').toUpperCase()}`} />
-            <InfoRow icon="call-outline" label="Mobile" value={currentUser.mobile} last />
+            <InfoRow icon="call-outline" label="Mobile" value={currentUser.mobile} last={false} />
+            {isMobileVerified ? (
+              <View style={[styles.infoRow, styles.infoRowLast]}>
+                <View style={styles.infoLeft}>
+                  <View style={styles.infoIconBox}>
+                    <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                  </View>
+                  <Text style={styles.infoLabel}>Mobile status</Text>
+                </View>
+                <Text style={[styles.infoValue, { color: '#15803D' }]}>Verified</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.infoRow, styles.infoRowLast]}
+                onPress={openStudentVerifyMobile}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Verify mobile number"
+              >
+                <View style={styles.infoLeft}>
+                  <View style={styles.infoIconBox}>
+                    <Ionicons name="shield-checkmark-outline" size={14} color="#6366F1" />
+                  </View>
+                  <Text style={styles.infoLabel}>Verification</Text>
+                </View>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#6366F1' }}>Verify</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -396,6 +487,55 @@ export default function StudentProfile() {
         <Text style={styles.versionTxt}>libDesk v1.0.0</Text>
 
       </ScrollView>
+
+      <Modal
+        visible={verifyMobileOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+      >
+        <View style={styles.verifyModalBackdrop}>
+          <View style={styles.verifyModalCard}>
+            <Text style={styles.verifyModalTitle}>Verify mobile</Text>
+            <Text style={styles.verifyModalHint}>
+              We will text a code to {String(currentUser.mobile || '').trim() || 'your registered number'}.
+            </Text>
+            <TouchableOpacity
+              style={styles.verifyModalSendBtn}
+              onPress={sendStudentProfileMobileOtp}
+              disabled={verifySendLoading || verifySubmitLoading}
+            >
+              <Text style={styles.verifyModalSendTxt}>{verifySendLoading ? 'Sending…' : 'Send OTP'}</Text>
+            </TouchableOpacity>
+            <TextInput
+              value={verifyOtp}
+              onChangeText={setVerifyOtp}
+              keyboardType="number-pad"
+              placeholder="Enter OTP"
+              placeholderTextColor={theme.colors.mutedText}
+              style={styles.verifyModalInput}
+              editable={!verifySubmitLoading}
+              maxLength={8}
+            />
+            <View style={styles.verifyModalActions}>
+              <TouchableOpacity
+                style={[styles.verifyModalBtn, styles.verifyModalBtnGhost]}
+                onPress={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+                disabled={verifySendLoading || verifySubmitLoading}
+              >
+                <Text style={styles.verifyModalBtnGhostTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.verifyModalBtn, styles.verifyModalBtnPrimary]}
+                onPress={submitStudentProfileMobileOtp}
+                disabled={verifySubmitLoading}
+              >
+                <Text style={styles.verifyModalBtnPrimaryTxt}>{verifySubmitLoading ? 'Checking…' : 'Verify'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <SignOutConfirmModal
         visible={showSignOutModal}
@@ -643,6 +783,53 @@ function makeStyles() {
     infoIconBox: { width: 28, height: 28, borderRadius: 8, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
     infoLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.mutedText },
     infoValue: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
+    infoRowLast: { borderBottomWidth: 0 },
+
+    verifyModalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(15,23,42,0.55)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 22,
+    },
+    verifyModalCard: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    verifyModalTitle: { fontSize: 17, fontWeight: '900', color: theme.colors.text },
+    verifyModalHint: { marginTop: 8, fontSize: 13, fontWeight: '600', color: theme.colors.mutedText, lineHeight: 18, marginBottom: 12 },
+    verifyModalSendBtn: {
+      marginBottom: 12,
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    verifyModalSendTxt: { fontSize: 14, fontWeight: '900', color: theme.colors.text },
+    verifyModalInput: {
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      minHeight: 48,
+      fontSize: 16,
+      fontWeight: '800',
+      color: theme.colors.text,
+    },
+    verifyModalActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+    verifyModalBtn: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+    verifyModalBtnGhost: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border },
+    verifyModalBtnGhostTxt: { fontSize: 14, fontWeight: '900', color: theme.colors.text },
+    verifyModalBtnPrimary: { backgroundColor: '#6366F1' },
+    verifyModalBtnPrimaryTxt: { fontSize: 14, fontWeight: '900', color: '#fff' },
 
     // ── Sign out ──
     signOutBtn: {

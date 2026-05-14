@@ -8,6 +8,11 @@ const { requireNotExpiredSubscription } = require("../middleware/subscription.mi
 
 const router = express.Router();
 
+/** DB stores enum lowercase; dashboard must not compare to legacy Title Case strings. */
+function isFeeFullyPaid(status) {
+  return String(status ?? "").trim().toLowerCase() === "paid";
+}
+
 function toDateKey(date = new Date()) {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -71,10 +76,10 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
     const expiredStudents = students.filter((s) => new Date(s.expiryDate).getTime() < now).length;
     const blockedStudents = students.filter((s) => Boolean(s.isBlocked)).length;
 
-    const feeDueStudents = students.filter((s) => s.feeStatus !== "Paid").length;
+    const feeDueStudents = students.filter((s) => !isFeeFullyPaid(s.feeStatus)).length;
     const totalFeeAmount = students.reduce((sum, s) => sum + (Number(s.feeAmount) || 0), 0);
     const dueAmount = students.reduce(
-      (sum, s) => sum + (s.feeStatus === "Paid" ? 0 : (Number(s.feeAmount) || 0)),
+      (sum, s) => sum + (isFeeFullyPaid(s.feeStatus) ? 0 : (Number(s.feeAmount) || 0)),
       0
     );
     const collectedAmount = Math.max(0, totalFeeAmount - dueAmount);

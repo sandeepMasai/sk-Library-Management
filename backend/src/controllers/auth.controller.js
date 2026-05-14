@@ -1,6 +1,7 @@
 const authService = require("../services/auth.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
+const { assertIndianMobileBody } = require("../utils/mobile");
 const { sendSuccess } = require("../utils/response");
 
 const AUTH_ROLES = new Set(["admin", "library", "student"]);
@@ -57,10 +58,18 @@ function sanitizeRegisterLibraryBody(body = {}) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "").trim();
   const city = String(body.city || "").trim();
+  const state = String(body.state || "").trim();
+  const place = String(body.place || "").trim();
+  const pincode = String(body.pincode || "").replace(/\D/g, "").slice(0, 6);
 
-  if (!libraryName || !ownerName || !email || !password || !city) {
-    throw createHttpError(400, "libraryName, ownerName, email, password, city are required");
+  if (!libraryName || !ownerName || !email || !password || !city || !state || !place || !pincode) {
+    throw createHttpError(400, "libraryName, ownerName, email, password, city, state, place, pincode are required");
   }
+  if (!/^\d{6}$/.test(pincode)) {
+    throw createHttpError(400, "pincode must be exactly 6 digits");
+  }
+
+  const phone = assertIndianMobileBody(body.phone || body.mobile, "phone");
 
   return {
     libraryName,
@@ -68,6 +77,10 @@ function sanitizeRegisterLibraryBody(body = {}) {
     email,
     password,
     city,
+    state,
+    place,
+    pincode,
+    phone,
   };
 }
 

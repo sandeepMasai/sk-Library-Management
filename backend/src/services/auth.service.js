@@ -10,6 +10,7 @@ const {
   resolveLibrarySubscriptionPeriod,
 } = require("../utils/subscription");
 const { createHttpError } = require("../utils/httpError");
+const { assertIndianMobileBody } = require("../utils/mobile");
 const { verifyBcryptPassword, hashPassword } = require("../utils/authCredentials");
 const { recordLibraryIdentity, recordStudentIdentity } = require("./authIdentity.service");
 const { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } = require("../utils/token");
@@ -82,6 +83,7 @@ function studentResponse(student) {
     feeStatus: student.feeStatus,
     isBlocked: student.isBlocked,
     photoUrl: student.photoUrl || null,
+    isMobileVerified: Boolean(student.isMobileVerified),
   };
 }
 
@@ -94,6 +96,9 @@ function libraryResponse(library, latestSub = null) {
     ownerName: library.ownerName,
     email: library.email,
     city: library.city,
+    state: library.state || "",
+    place: library.place || "",
+    pincode: library.pincode || "",
     phone: library.phone || null,
     address: library.address || null,
     logoUrl: library.logoUrl || null,
@@ -108,6 +113,7 @@ function libraryResponse(library, latestSub = null) {
     planExpiryDate: period.expiryDate,
     libraryCode: library.libraryCode,
     isActive: library.isActive,
+    isMobileVerified: Boolean(library.isMobileVerified),
   };
 }
 
@@ -226,16 +232,66 @@ async function login({ body, metadata }) {
   return { user, ...tokens };
 }
 
+/**
+ * Issue JWT + refresh after password-less verification (MSG91 OTP).
+ */
+async function issueLibrarySession(library, metadata) {
+  await ensureLibraryNotExpired(library);
+  const latestSub = await Subscription.findOne({ libraryId: library._id }).sort({ createdAt: -1 }).lean();
+  const user = libraryResponse(library, latestSub);
+  const identity = await safeRecordIdentity(() => recordLibraryIdentity(library));
+  const tokens = await issueAuthTokens(user, user.id, metadata, {
+    identityUserId: identity?._id,
+  });
+  writeLog({ action: "login_otp", userId: user.id, role: "library", libraryId: user.id });
+  await logAction({
+    action: "login_otp",
+    userId: user.id,
+    role: "library",
+    libraryId: user.id,
+    ip: metadata?.ip,
+    userAgent: metadata?.userAgent,
+  });
+  return { user, ...tokens };
+}
+
+async function issueStudentSession(student, metadata) {
+  const user = studentResponse(student);
+  const libraryId = student.libraryId.toString();
+  const identity = await safeRecordIdentity(() => recordStudentIdentity(student));
+  const tokens = await issueAuthTokens(user, libraryId, metadata, {
+    identityUserId: identity?._id,
+  });
+  writeLog({ action: "login_otp", userId: user.id, role: "student", libraryId: student.libraryId });
+  await logAction({
+    action: "login_otp",
+    userId: user.id,
+    role: "student",
+    libraryId: student.libraryId,
+    ip: metadata?.ip,
+    userAgent: metadata?.userAgent,
+  });
+  return { user, ...tokens };
+}
+
 async function registerLibrary({ body, metadata }) {
   const libraryName = String(body?.libraryName || "").trim();
   const ownerName = String(body?.ownerName || "").trim();
   const email = String(body?.email || "").trim().toLowerCase();
   const password = String(body?.password || "").trim();
   const city = String(body?.city || "").trim();
+  const state = String(body?.state || "").trim();
+  const place = String(body?.place || "").trim();
+  const pincode = String(body?.pincode || "").replace(/\D/g, "").slice(0, 6);
 
-  if (!libraryName || !ownerName || !email || !password || !city) {
-    throw createHttpError(400, "libraryName, ownerName, email, password, city are required");
+  if (!libraryName || !ownerName || !email || !password || !city || !state || !place || !pincode) {
+    throw createHttpError(400, "libraryName, ownerName, email, password, city, state, place, pincode are required");
   }
+  if (!/^\d{6}$/.test(pincode)) {
+    throw createHttpError(400, "pincode must be exactly 6 digits");
+  }
+
+  const phone = assertIndianMobileBody(body?.phone || body?.mobile, "phone");
 
   const passwordHash = await hashPassword(password, 10);
 
@@ -245,6 +301,10 @@ async function registerLibrary({ body, metadata }) {
     email,
     passwordHash,
     city,
+    state,
+    place,
+    pincode,
+    phone,
     plan: "none",
     currentPlanKey: "none",
     subscriptionStatus: "inactive",
@@ -324,4 +384,6 @@ module.exports = {
   login,
   refresh,
   registerLibrary,
+  issueLibrarySession,
+  issueStudentSession,
 };

@@ -75,6 +75,11 @@ const bulkCreateSeats = asyncHandler(async (req, res) => {
   return sendSuccess(res, seats, "Seats created successfully");
 });
 
+const setTotalSeats = asyncHandler(async (req, res) => {
+  const seats = await seatService.setTotalSeats({ user: req.user, body: sanitizeBulkCreateBody(req.body) });
+  return sendSuccess(res, seats, "Seat capacity updated successfully");
+});
+
 const updateSeatSpace = asyncHandler(async (req, res) => {
   const seat = await seatService.updateSeatSpace({
     user: req.user,
@@ -100,6 +105,7 @@ module.exports = {
   listSeats,
   createSeat,
   bulkCreateSeats,
+  setTotalSeats,
   updateSeatSpace,
   assignSeat,
   unassignSeat,

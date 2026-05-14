@@ -72,6 +72,13 @@ const studentSchema = new mongoose.Schema(
       match: /^[0-9]{10}$/,
     },
 
+    /** Set true after successful MSG91 mobile OTP verification. */
+    isMobileVerified: { type: Boolean, default: false },
+    /** Failed OTP verify attempts; reset on success. */
+    otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
+    /** When set and in the future, OTP send/verify is refused for this student. */
+    otpBlockedUntil: { type: Date, default: null },
+
     username: {
       type: String,
       required: true,

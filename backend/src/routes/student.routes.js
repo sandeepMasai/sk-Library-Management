@@ -8,10 +8,19 @@ const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { requireNotExpiredSubscription } = require("../middleware/subscription.middleware");
 const { writeLog } = require("../utils/logging");
+const { normalizeIndianMobile, hasNonIndiaPlusPrefix } = require("../utils/mobile");
 
 const router = express.Router();
 
 function toStudentResponse(student) {
+  const feeStatusLegacy = (() => {
+    const s = String(student.feeStatus || "").trim().toLowerCase();
+    if (s === "paid") return "Paid";
+    if (s === "partial") return "Half Paid";
+    if (s === "pending") return "Pending";
+    // Fallback: preserve original for debugging, but avoid undefined on clients
+    return "Pending";
+  })();
   return {
     id: student._id.toString(),
     role: "student",
@@ -23,7 +32,7 @@ function toStudentResponse(student) {
     joinDate: student.joinDate.toISOString(),
     expiryDate: student.expiryDate.toISOString(),
     feeAmount: student.feeAmount,
-    feeStatus: student.feeStatus,
+    feeStatus: feeStatusLegacy,
     feeMethod: student.feeMethod || "cash",
     isBlocked: student.isBlocked,
     photoUrl: student.photoUrl || null,
@@ -49,6 +58,16 @@ function parseMembershipDays(value) {
   // Allow common plans: 30, 90, 180, 365 (fallback to 30)
   if ([30, 90, 180, 365].includes(Math.round(n))) return Math.round(n);
   return 30;
+}
+
+function normalizeFeeStatus(value) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  // Frontend legacy labels: "Paid" | "Half Paid" | "Pending"
+  if (raw === "paid") return "paid";
+  if (raw === "pending") return "pending";
+  if (raw === "half paid" || raw === "half_paid" || raw === "half-paid" || raw === "partial") return "partial";
+  return null;
 }
 
 function parsePagination(req) {
@@ -102,6 +121,10 @@ router.post("/", requireAuth, requireRole("library"), async (req, res) => {
     if (!/^\d{4}$/.test(String(pin))) {
       return res.status(400).json({ message: "PIN must be 4 digits" });
     }
+    const normalizedFeeStatus = normalizeFeeStatus(feeStatus);
+    if (!normalizedFeeStatus) {
+      return res.status(400).json({ message: "Invalid feeStatus. Use paid/partial/pending." });
+    }
     const libraryId = req.user.libraryId;
     if (!libraryId || !mongoose.Types.ObjectId.isValid(String(libraryId))) {
       return res.status(400).json({ message: "Invalid library account" });
@@ -109,16 +132,28 @@ router.post("/", requireAuth, requireRole("library"), async (req, res) => {
 
     const days = parseMembershipDays(membershipDays);
 
+    const mobileNorm = normalizeIndianMobile(mobile);
+    if (!mobileNorm) {
+      const code = hasNonIndiaPlusPrefix(mobile) ? "UNSUPPORTED_COUNTRY" : "INVALID_INDIAN_MOBILE";
+      return res.status(400).json({
+        message:
+          code === "UNSUPPORTED_COUNTRY"
+            ? "Only Indian (+91) mobile numbers are supported."
+            : "Valid 10-digit Indian mobile number is required.",
+        code,
+      });
+    }
+
     const student = await Student.create({
       libraryId,
       name,
-      mobile,
+      mobile: mobileNorm,
       username: String(username).trim().toLowerCase(),
       pinHash: await bcrypt.hash(String(pin).trim(), 10),
       joinDate: parsedJoinDate,
       expiryDate: addDays(parsedJoinDate, days),
       feeAmount: Number(feeAmount),
-      feeStatus,
+      feeStatus: normalizedFeeStatus,
       feeMethod: String(feeMethod || "cash").trim().toLowerCase() === "upi" ? "upi" : "cash",
       isBlocked,
       isDeleted: false,
@@ -132,6 +167,9 @@ router.post("/", requireAuth, requireRole("library"), async (req, res) => {
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ message: "Username or mobile already exists" });
+    }
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({ message: error.message || "Invalid student data" });
     }
     return res.status(500).json({ message: "Failed to create student", error: error.message });
   }
@@ -148,7 +186,20 @@ router.put("/:id", requireAuth, requireRole("library"), async (req, res) => {
     }
 
     if (name !== undefined) updates.name = name;
-    if (mobile !== undefined) updates.mobile = mobile;
+    if (mobile !== undefined) {
+      const mobileNorm = normalizeIndianMobile(mobile);
+      if (!mobileNorm) {
+        const code = hasNonIndiaPlusPrefix(mobile) ? "UNSUPPORTED_COUNTRY" : "INVALID_INDIAN_MOBILE";
+        return res.status(400).json({
+          message:
+            code === "UNSUPPORTED_COUNTRY"
+              ? "Only Indian (+91) mobile numbers are supported."
+              : "Valid 10-digit Indian mobile number is required.",
+          code,
+        });
+      }
+      updates.mobile = mobileNorm;
+    }
     if (username !== undefined) updates.username = username;
     if (username !== undefined) updates.username = String(username).trim().toLowerCase();
     if (pin !== undefined) {
@@ -158,7 +209,13 @@ router.put("/:id", requireAuth, requireRole("library"), async (req, res) => {
       updates.pinHash = await bcrypt.hash(String(pin).trim(), 10);
     }
     if (feeAmount !== undefined) updates.feeAmount = Number(feeAmount);
-    if (feeStatus !== undefined) updates.feeStatus = feeStatus;
+    if (feeStatus !== undefined) {
+      const normalizedFeeStatus = normalizeFeeStatus(feeStatus);
+      if (!normalizedFeeStatus) {
+        return res.status(400).json({ message: "Invalid feeStatus. Use Paid/Half Paid/Pending or paid/partial/pending." });
+      }
+      updates.feeStatus = normalizedFeeStatus;
+    }
     if (feeMethod !== undefined) updates.feeMethod = String(feeMethod).trim().toLowerCase() === "upi" ? "upi" : "cash";
     if (isBlocked !== undefined) updates.isBlocked = Boolean(isBlocked);
     updates.updatedBy = libraryId;

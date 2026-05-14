@@ -14,8 +14,10 @@ import { ConfirmModal } from './components/ConfirmModal';
 // Screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterLibraryScreen from './screens/auth/RegisterLibraryScreen';
-import LibraryForgotPasswordScreen from './screens/auth/LibraryForgotPassword';
-import LibraryResetPasswordScreen from './screens/auth/LibraryResetPassword';
+import MobileLoginScreen from './screens/auth/MobileLoginScreen';
+import VerifyOTPScreen from './screens/auth/VerifyOTPScreen';
+import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import AdminLoginScreen from './screens/auth/AdminLoginScreen';
 import AdminDashboardScreen from './screens/admin/Dashboard.tsx';
 import AdminDashboardPage from './pages/AdminDashboardPage';
@@ -29,6 +31,7 @@ import AdminPlansPage from './pages/AdminPlansPage';
 import AdminGlobalSettingsPage from './pages/AdminGlobalSettingsPage';
 import AdminStudents from './screens/admin/Students';
 import AdminStudentForm from './screens/admin/StudentForm';
+import AdminStudentDetail from './screens/admin/StudentDetail';
 import AdminAttendance from './screens/admin/Attendance';
 import AdminNotifications from './screens/admin/Notifications';
 import AdminFees from './screens/admin/Fees';
@@ -73,6 +76,10 @@ const linking = {
   config: {
     screens: {
       Login: '',
+      MobileLogin: 'mobile-login',
+      VerifyOTP: 'verify-otp',
+      ForgotPassword: 'forgot-password',
+      ResetPassword: 'reset-password',
       AdminLogin: 'admin/login',
       RegisterLibrary: 'register-library',
       AdminRoot: {
@@ -320,7 +327,8 @@ function LibraryMainStack() {
   const initialRouteName = gate ? 'Subscription' : 'LibraryTabs';
 
   return (
-    <Stack.Navigator initialRouteName={initialRouteName}>
+    // Key forces remount when gate flips (avoids unsupported RESET dispatch).
+    <Stack.Navigator key={gate ? 'gate_on' : 'gate_off'} initialRouteName={initialRouteName}>
       <Stack.Screen name="LibraryTabs" component={LibraryTabs} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={AdminNotifications} options={{ headerShown: false }} />
       <Stack.Screen name="PlanSelection" component={PlanSelectionScreen} options={{ headerShown: false }} />
@@ -352,6 +360,17 @@ function LibraryMainStack() {
       <Stack.Screen name="EditTemplate" component={EditTemplateScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CreateTemplate" component={CreateTemplateScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LibraryBranding" component={LibraryBrandingScreen} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="ShiftManagement"
+        component={LibrarySeatsScreen}
+        options={{
+          title: 'Shift management',
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.text,
+          headerTitleStyle: { fontWeight: '700', color: theme.colors.text },
+          headerShadowVisible: false,
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -499,8 +518,10 @@ function AppInner() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
         <Stack.Screen name="RegisterLibrary" component={RegisterLibraryScreen} />
-        <Stack.Screen name="LibraryForgotPassword" component={LibraryForgotPasswordScreen} />
-        <Stack.Screen name="LibraryResetPassword" component={LibraryResetPasswordScreen} />
+        <Stack.Screen name="MobileLogin" component={MobileLoginScreen} />
+        <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
 
         {/* Protected role roots */}
         <Stack.Screen name="AdminRoot" component={AdminRoot} />
@@ -509,11 +530,23 @@ function AppInner() {
 
         {/* Shared screens (kept for backwards compatible navigation flows) */}
         <Stack.Screen
+          name="AdminStudentDetail"
+          component={AdminStudentDetail}
+          options={{
+            headerShown: true,
+            title: 'Student',
+            headerStyle: { backgroundColor: uiTheme.colors.surface },
+            headerTintColor: uiTheme.colors.text,
+            headerTitleStyle: { fontWeight: '700' },
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
           name="AdminStudentForm"
           component={AdminStudentForm}
           options={{
             headerShown: true,
-            title: 'Student Details',
+            title: 'Student details',
             headerStyle: { backgroundColor: uiTheme.colors.surface },
             headerTintColor: uiTheme.colors.text,
             headerTitleStyle: { fontWeight: '700' },

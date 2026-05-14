@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Seat = require("../models/Seat");
+const SeatAllocation = require("../models/SeatAllocation");
 const { createHttpError } = require("../utils/httpError");
 
 function requireObjectId(value, message) {
@@ -63,6 +64,59 @@ async function bulkCreateSeats({ user, body }) {
   return list.map(toSeatResponse);
 }
 
+/**
+ * Set library seat capacity to exactly `totalSeats` (numbered 1..N).
+ * Removes seats with number > N when safe (no active allocation / not occupied).
+ * Adds missing seats in 1..N range (same as bulk-create gap fill).
+ */
+async function setTotalSeats({ user, body }) {
+  const libraryId = user.libraryId;
+  const totalSeats = Number(body?.totalSeats);
+  if (!Number.isInteger(totalSeats) || totalSeats < 1 || totalSeats > 5000) {
+    throw createHttpError(400, "totalSeats must be an integer between 1 and 5000");
+  }
+
+  const highSeats = await Seat.find({ libraryId, number: { $gt: totalSeats } }).select("_id number status studentId").lean();
+  if (highSeats.length) {
+    const ids = highSeats.map((s) => s._id);
+    const legacyBlock = await Seat.exists({
+      _id: { $in: ids },
+      $or: [{ status: "occupied" }, { studentId: { $ne: null } }],
+    });
+    if (legacyBlock) {
+      throw createHttpError(
+        409,
+        "Cannot lower seat count: some seats above the new total are still marked occupied. Unassign them first."
+      );
+    }
+    const allocBlock = await SeatAllocation.exists({
+      libraryId,
+      seatId: { $in: ids },
+      status: "active",
+    });
+    if (allocBlock) {
+      throw createHttpError(
+        409,
+        "Cannot lower seat count: seats above the new total still have active shift assignments. Unassign them first."
+      );
+    }
+    await Seat.deleteMany({ _id: { $in: ids } });
+  }
+
+  const existing = await Seat.find({ libraryId, number: { $gte: 1, $lte: totalSeats } }, { number: 1 }).lean();
+  const existsSet = new Set(existing.map((s) => s.number));
+  const docs = [];
+  for (let n = 1; n <= totalSeats; n++) {
+    if (!existsSet.has(n)) {
+      docs.push({ libraryId, number: n, spaceId: null, status: "available", studentId: null });
+    }
+  }
+  if (docs.length) await Seat.insertMany(docs, { ordered: false });
+
+  const list = await Seat.find({ libraryId }).sort({ number: 1 }).lean();
+  return list.map(toSeatResponse);
+}
+
 async function updateSeatSpace({ user, params, body }) {
   const libraryId = user.libraryId;
   const seatId = requireObjectId(params.id, "Invalid seatId");
@@ -103,6 +157,7 @@ module.exports = {
   listSeats,
   createSeat,
   bulkCreateSeats,
+  setTotalSeats,
   updateSeatSpace,
   assignSeat,
   unassignSeat,

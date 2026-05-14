@@ -196,6 +196,25 @@ export default function AdminStudentForm() {
       return;
     }
 
+    // Backend validation alignment:
+    // - mobile: exactly 10 digits
+    // - username: lowercase 2–40, allows . _ - but not at ends
+    const mobile = formData.mobile.trim();
+    if (!/^\d{10}$/.test(mobile)) {
+      setInfoModal({ title: 'Invalid mobile', description: 'Mobile number must be exactly 10 digits.', tone: 'neutral' });
+      return;
+    }
+    const username = formData.username.trim().toLowerCase();
+    const usernameOk = /^([a-z0-9]{2,40}|[a-z0-9](?:[a-z0-9._-]){1,38}[a-z0-9])$/.test(username);
+    if (!usernameOk) {
+      setInfoModal({
+        title: 'Invalid username',
+        description: 'Username must be 2–40 chars (a-z, 0-9) and may contain . _ - (not at start/end).',
+        tone: 'neutral',
+      });
+      return;
+    }
+
     // PIN rules:
     // - required on create
     // - optional on edit (only updates if provided)
@@ -225,8 +244,8 @@ export default function AdminStudentForm() {
 
     const payload = {
       name: formData.name.trim(),
-      username: formData.username.trim(),
-      mobile: formData.mobile.trim(),
+      username,
+      mobile,
       ...(formData.pin.trim() ? { pin: formData.pin.trim() } : {}),
       joinDate: parsedJoinDate.toISOString(),
       membershipDays: formData.membershipDays,

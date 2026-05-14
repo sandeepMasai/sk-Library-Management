@@ -174,7 +174,11 @@ Request:
   "ownerName": "Owner Name",
   "email": "owner@example.com",
   "password": "password123",
-  "city": "Delhi"
+  "city": "Delhi",
+  "state": "Delhi",
+  "place": "Connaught Place",
+  "pincode": "110001",
+  "phone": "9876543210"
 }
 ```
 

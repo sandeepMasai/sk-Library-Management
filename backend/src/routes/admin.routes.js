@@ -56,7 +56,7 @@ function parsePagination(req) {
  * Admin SaaS overview:
  * - Total libraries / active libraries
  * - Total students (across tenants)
- * - Revenue (simple placeholder: sum of student feeAmount where feeStatus === "Paid")
+ * - Revenue (simple placeholder: sum of student feeAmount where feeStatus === "paid")
  */
 router.get("/dashboard", requireAdminAuth, async (req, res) => {
   try {
@@ -65,7 +65,7 @@ router.get("/dashboard", requireAdminAuth, async (req, res) => {
       Library.countDocuments({ isActive: true }),
       Student.countDocuments({ isDeleted: false }),
       Student.aggregate([
-        { $match: { isDeleted: false, feeStatus: "Paid" } },
+        { $match: { isDeleted: false, feeStatus: "paid" } },
         { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
       ]),
     ]);
@@ -299,7 +299,7 @@ router.get("/library/:id", requireAdminAuth, async (req, res) => {
         expiryDate: { $gte: now },
       }),
       Student.aggregate([
-        { $match: { libraryId, isDeleted: false, feeStatus: "Paid" } },
+        { $match: { libraryId, isDeleted: false, feeStatus: "paid" } },
         { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
       ]),
     ]);
@@ -387,7 +387,7 @@ router.get("/library/:id/subscription", requireAdminAuth, async (req, res) => {
         expiryDate: { $gte: now },
       }),
       Student.aggregate([
-        { $match: { libraryId, isDeleted: false, feeStatus: "Paid" } },
+        { $match: { libraryId, isDeleted: false, feeStatus: "paid" } },
         { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
       ]),
       Payment.find({ libraryId })
@@ -573,7 +573,7 @@ function monthKey(date) {
  * - active vs expired subscriptions (based on planExpiryDate + isActive)
  *
  * Notes:
- * - Revenue definition: sum of Student.feeAmount where feeStatus === "Paid"
+ * - Revenue definition: sum of Student.feeAmount where feeStatus === "paid"
  * - Month bucketing: Student.joinDate month (simple proxy)
  */
 router.get("/analytics/revenue", requireAdminAuth, async (req, res) => {
@@ -590,7 +590,7 @@ router.get("/analytics/revenue", requireAdminAuth, async (req, res) => {
 
     // Revenue aggregation grouped by month
     const revenueAgg = await Student.aggregate([
-      { $match: { isDeleted: false, feeStatus: "Paid", joinDate: { $gte: start } } },
+      { $match: { isDeleted: false, feeStatus: "paid", joinDate: { $gte: start } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$joinDate" } },

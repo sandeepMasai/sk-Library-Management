@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, useWindowDimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../theme';
-import { useAppStore, type SeatAllocation } from '../../store';
+import { useAppStore, type SeatAllocation, type Shift } from '../../store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ErrorModal } from '../../components/ErrorModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -16,6 +16,56 @@ function withAlpha(color: string, alpha: number) {
   const g = parseInt(hex.slice(2, 4), 16);
   const b = parseInt(hex.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function minutesToHHMM(totalMinutes: number): string {
+  const m = Math.max(0, Math.min(1439, Math.round(Number(totalMinutes) || 0)));
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function shiftTypeLabel(t: string): string {
+  switch (t) {
+    case 'morning':
+      return 'Morning';
+    case 'evening':
+      return 'Evening';
+    case 'full_day':
+      return 'Full Day';
+    case 'half_day':
+      return 'Half Day';
+    default:
+      return 'Custom';
+  }
+}
+
+/** Default times when picking Morning / Evening / Full Day / Half Day (fixed — not edited by library) */
+const SHIFT_TYPE_PRESETS: Record<'morning' | 'evening' | 'full_day' | 'half_day', { startMin: number; endMin: number }> = {
+  morning: { startMin: 6 * 60, endMin: 12 * 60 },
+  evening: { startMin: 14 * 60, endMin: 20 * 60 },
+  full_day: { startMin: 6 * 60, endMin: 20 * 60 },
+  half_day: { startMin: 16 * 60, endMin: 20 * 60 },
+};
+
+function dateFromMinutes(totalMinutes: number): Date {
+  const m = Math.max(0, Math.min(1439, Math.round(totalMinutes)));
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  return d;
+}
+
+function dateToMinutes(d: Date): number {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** Stored shift name: preset types use fixed labels; custom uses times in the name */
+function shiftSaveName(type: Shift['type'], startMin: number, endMin: number): string {
+  if (type === 'custom') {
+    return `Custom ${minutesToHHMM(startMin)}–${minutesToHHMM(endMin)}`;
+  }
+  return shiftTypeLabel(type);
 }
 
 /**
@@ -49,6 +99,8 @@ export default function LibrarySeatsScreen() {
   const cancelAllocation = useAppStore((s) => s.cancelAllocation);
   const createSpace = useAppStore((s) => s.createSpace);
   const createShift = useAppStore((s) => s.createShift);
+  const updateShift = useAppStore((s) => s.updateShift);
+  const deleteShift = useAppStore((s) => s.deleteShift);
 
   const students = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
   const studentById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
@@ -65,11 +117,15 @@ export default function LibrarySeatsScreen() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addSpaceOpen, setAddSpaceOpen] = useState(false);
   const [spaceName, setSpaceName] = useState('');
-  const [addShiftOpen, setAddShiftOpen] = useState(false);
-  const [shiftName, setShiftName] = useState('');
-  const [shiftStart, setShiftStart] = useState('06:00');
-  const [shiftEnd, setShiftEnd] = useState('12:00');
-  const [shiftType, setShiftType] = useState<'morning' | 'evening' | 'full_day' | 'half_day' | 'custom'>('custom');
+  const [shiftFormOpen, setShiftFormOpen] = useState(false);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [manageShiftsOpen, setManageShiftsOpen] = useState(false);
+  const [deleteShiftTarget, setDeleteShiftTarget] = useState<Shift | null>(null);
+  const [shiftType, setShiftType] = useState<'morning' | 'evening' | 'full_day' | 'half_day' | 'custom'>('morning');
+  const [shiftStartTime, setShiftStartTime] = useState<Date>(() => dateFromMinutes(SHIFT_TYPE_PRESETS.morning.startMin));
+  const [shiftEndTime, setShiftEndTime] = useState<Date>(() => dateFromMinutes(SHIFT_TYPE_PRESETS.morning.endMin));
+  const [showShiftStartTimePicker, setShowShiftStartTimePicker] = useState(false);
+  const [showShiftEndTimePicker, setShowShiftEndTimePicker] = useState(false);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [activeSeatId, setActiveSeatId] = useState<string | null>(null);
@@ -100,6 +156,12 @@ export default function LibrarySeatsScreen() {
   useEffect(() => {
     if (!selectedShiftId && shifts.length) setSelectedShiftId(shifts[0].id);
   }, [selectedShiftId, shifts]);
+
+  useEffect(() => {
+    if (selectedShiftId && !shifts.some((s) => s.id === selectedShiftId)) {
+      setSelectedShiftId(shifts[0]?.id ?? null);
+    }
+  }, [shifts, selectedShiftId]);
 
   useEffect(() => {
     if (selectedSpaceId === null && spaces.length === 0) return;
@@ -166,6 +228,34 @@ export default function LibrarySeatsScreen() {
     setErrorMessage(message);
     setShowErrorModal(true);
   };
+
+  const applyPresetTimes = useCallback((t: typeof shiftType) => {
+    if (t === 'custom') return;
+    const p = SHIFT_TYPE_PRESETS[t];
+    setShiftStartTime(dateFromMinutes(p.startMin));
+    setShiftEndTime(dateFromMinutes(p.endMin));
+  }, []);
+
+  const openAddShiftForm = useCallback(() => {
+    setEditingShiftId(null);
+    setShiftType('morning');
+    setShiftStartTime(dateFromMinutes(SHIFT_TYPE_PRESETS.morning.startMin));
+    setShiftEndTime(dateFromMinutes(SHIFT_TYPE_PRESETS.morning.endMin));
+    setShowShiftStartTimePicker(false);
+    setShowShiftEndTimePicker(false);
+    setShiftFormOpen(true);
+  }, []);
+
+  const openEditShiftForm = useCallback((s: Shift) => {
+    setEditingShiftId(s.id);
+    setShiftType(s.type);
+    setShiftStartTime(dateFromMinutes(s.startTime));
+    setShiftEndTime(dateFromMinutes(s.endTime));
+    setShowShiftStartTimePicker(false);
+    setShowShiftEndTimePicker(false);
+    setManageShiftsOpen(false);
+    setShiftFormOpen(true);
+  }, []);
 
   const onSeatPress = (seatId: string) => {
     const alloc = allocationBySeatId.get(seatId);
@@ -322,6 +412,12 @@ export default function LibrarySeatsScreen() {
         </View>
       </View>
 
+      <View style={styles.shiftSectionHead}>
+        <Text style={styles.sectionLabel}>Shifts</Text>
+        <TouchableOpacity onPress={() => setManageShiftsOpen(true)} hitSlop={12} activeOpacity={0.85}>
+          <Text style={styles.manageLink}>Manage</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.selectorRow}>
         <FlatList
           horizontal
@@ -439,11 +535,7 @@ export default function LibrarySeatsScreen() {
               style={[styles.quickRow, { borderBottomWidth: 0 }]}
               onPress={() => {
                 setQuickAddOpen(false);
-                setShiftName('');
-                setShiftType('custom');
-                setShiftStart('06:00');
-                setShiftEnd('12:00');
-                setAddShiftOpen(true);
+                openAddShiftForm();
               }}
             >
               <Ionicons name="time-outline" size={18} color={theme.colors.text} />
@@ -521,18 +613,89 @@ export default function LibrarySeatsScreen() {
         </View>
       </Modal>
 
-      {/* Add shift modal */}
-      <Modal visible={addShiftOpen} transparent animationType="fade" onRequestClose={() => setAddShiftOpen(false)}>
+      {/* Manage shifts: list + edit/delete */}
+      <Modal visible={manageShiftsOpen} transparent animationType="fade" onRequestClose={() => setManageShiftsOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.manageShiftsCard]}>
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>Manage shifts</Text>
+              <TouchableOpacity onPress={() => setManageShiftsOpen(false)} hitSlop={12}>
+                <Ionicons name="close" size={22} color={theme.colors.mutedText} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalHint}>Edit type or times. Delete only works when no active seat assignment uses this shift.</Text>
+            <FlatList
+              data={shifts}
+              keyExtractor={(s) => s.id}
+              style={styles.manageShiftList}
+              renderItem={({ item }) => (
+                <View style={styles.manageShiftRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.manageShiftName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.manageShiftMeta} numberOfLines={1}>
+                      {shiftTypeLabel(item.type)} · {minutesToHHMM(item.startTime)}–{minutesToHHMM(item.endTime)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => openEditShiftForm(item)} style={styles.manageShiftIconBtn} hitSlop={10} accessibilityLabel="Edit shift">
+                    <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setDeleteShiftTarget(item)} style={styles.manageShiftIconBtn} hitSlop={10} accessibilityLabel="Delete shift">
+                    <Ionicons name="trash-outline" size={22} color={theme.colors.danger} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={{ textAlign: 'center', color: theme.colors.mutedText, fontWeight: '700', paddingVertical: 16 }}>No shifts yet</Text>
+              }
+            />
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.primaryBtn, { marginTop: 8 }]}
+              onPress={() => {
+                setManageShiftsOpen(false);
+                openAddShiftForm();
+              }}
+            >
+              <Text style={styles.primaryBtnTxt}>Add shift</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add / edit shift */}
+      <Modal
+        visible={shiftFormOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShiftFormOpen(false);
+          setEditingShiftId(null);
+          setShowShiftStartTimePicker(false);
+          setShowShiftEndTimePicker(false);
+        }}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHead}>
-              <Text style={styles.modalTitle}>Add shift</Text>
-              <TouchableOpacity onPress={() => setAddShiftOpen(false)} hitSlop={12}>
+              <Text style={styles.modalTitle}>{editingShiftId ? 'Edit shift' : 'Add shift'}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShiftFormOpen(false);
+                  setEditingShiftId(null);
+                  setShowShiftStartTimePicker(false);
+                  setShowShiftEndTimePicker(false);
+                }}
+                hitSlop={12}
+              >
                 <Ionicons name="close" size={22} color={theme.colors.mutedText} />
               </TouchableOpacity>
             </View>
 
-            <TextInput value={shiftName} onChangeText={setShiftName} placeholder="Shift name (Morning)" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
+            <Text style={styles.modalHint}>
+              Select a shift type. Morning, Evening, Full day, and Half day use fixed hours. For Custom, tap start and end to set times with the clock — no typing.
+            </Text>
 
             <View style={styles.shiftTypeRow}>
               {([
@@ -544,66 +707,161 @@ export default function LibrarySeatsScreen() {
               ] as const).map((x) => {
                 const active = shiftType === x.k;
                 return (
-                  <TouchableOpacity key={x.k} activeOpacity={0.9} onPress={() => setShiftType(x.k)} style={[styles.smallChip, active && styles.smallChipOn]}>
+                  <TouchableOpacity
+                    key={x.k}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      setShiftType(x.k);
+                      setShowShiftStartTimePicker(false);
+                      setShowShiftEndTimePicker(false);
+                      if (x.k !== 'custom') applyPresetTimes(x.k);
+                    }}
+                    style={[styles.smallChip, active && styles.smallChipOn]}
+                  >
                     <Text style={[styles.smallChipTxt, active && styles.smallChipTxtOn]}>{x.t}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <View style={styles.shiftTimeRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Start (HH:mm)</Text>
-                <TextInput value={shiftStart} onChangeText={setShiftStart} placeholder="06:00" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>End (HH:mm)</Text>
-                <TextInput value={shiftEnd} onChangeText={setShiftEnd} placeholder="12:00" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
-              </View>
+            <View style={styles.shiftSummaryBox}>
+              <Text style={styles.shiftSummaryLabel}>Will save as</Text>
+              <Text style={styles.shiftSummaryVal}>
+                {shiftSaveName(shiftType, dateToMinutes(shiftStartTime), dateToMinutes(shiftEndTime))} ·{' '}
+                {minutesToHHMM(dateToMinutes(shiftStartTime))} – {minutesToHHMM(dateToMinutes(shiftEndTime))}
+              </Text>
             </View>
+
+            {shiftType === 'custom' ? (
+              <View style={styles.shiftTimePickCol}>
+                <Text style={styles.inputLabel}>Start time</Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.timePickBtn}
+                  onPress={() => {
+                    setShowShiftEndTimePicker(false);
+                    setShowShiftStartTimePicker((v) => !v);
+                  }}
+                >
+                  <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.timePickBtnTxt}>{minutesToHHMM(dateToMinutes(shiftStartTime))}</Text>
+                  <Ionicons name="chevron-down" size={18} color={theme.colors.mutedText} />
+                </TouchableOpacity>
+                {showShiftStartTimePicker ? (
+                  <DateTimePicker
+                    value={shiftStartTime}
+                    mode="time"
+                    is24Hour
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_e, d) => {
+                      if (Platform.OS === 'android') setShowShiftStartTimePicker(false);
+                      if (d) setShiftStartTime(d);
+                    }}
+                  />
+                ) : null}
+
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>End time</Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.timePickBtn}
+                  onPress={() => {
+                    setShowShiftStartTimePicker(false);
+                    setShowShiftEndTimePicker((v) => !v);
+                  }}
+                >
+                  <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.timePickBtnTxt}>{minutesToHHMM(dateToMinutes(shiftEndTime))}</Text>
+                  <Ionicons name="chevron-down" size={18} color={theme.colors.mutedText} />
+                </TouchableOpacity>
+                {showShiftEndTimePicker ? (
+                  <DateTimePicker
+                    value={shiftEndTime}
+                    mode="time"
+                    is24Hour
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_e, d) => {
+                      if (Platform.OS === 'android') setShowShiftEndTimePicker(false);
+                      if (d) setShiftEndTime(d);
+                    }}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.presetTimesBox}>
+                <Text style={styles.presetTimesTitle}>Fixed hours (library cannot change)</Text>
+                <Text style={styles.presetTimesVal}>
+                  {minutesToHHMM(dateToMinutes(shiftStartTime))} – {minutesToHHMM(dateToMinutes(shiftEndTime))}
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               activeOpacity={0.9}
               style={styles.primaryBtn}
               onPress={async () => {
-                const name = shiftName.trim();
-                if (!name) {
-                  showError('Shift name required', 'Please enter a shift name.');
+                const startMin = dateToMinutes(shiftStartTime);
+                const endMin = dateToMinutes(shiftEndTime);
+                if (shiftType === 'custom' && endMin <= startMin) {
+                  showError('Invalid times', 'End time must be after start time.');
                   return;
                 }
-                const res = await createShift({ name, type: shiftType, startTime: shiftStart, endTime: shiftEnd });
+                const name = shiftSaveName(shiftType, startMin, endMin);
+                const startStr = minutesToHHMM(startMin);
+                const endStr = minutesToHHMM(endMin);
+                if (editingShiftId) {
+                  const res = await updateShift(editingShiftId, {
+                    name,
+                    type: shiftType,
+                    startTime: startStr,
+                    endTime: endStr,
+                  });
+                  if (!res.ok) {
+                    showError('Could not update shift', res.message || 'Failed to update shift.');
+                    return;
+                  }
+                  await fetchShifts();
+                  setShiftFormOpen(false);
+                  setEditingShiftId(null);
+                  setShowShiftStartTimePicker(false);
+                  setShowShiftEndTimePicker(false);
+                  return;
+                }
+                const res = await createShift({ name, type: shiftType, startTime: startStr, endTime: endStr });
                 if (!res.ok) {
                   showError('Could not create shift', res.message || 'Failed to create shift.');
                   return;
                 }
                 await fetchShifts();
-                setAddShiftOpen(false);
+                setShiftFormOpen(false);
+                setShowShiftStartTimePicker(false);
+                setShowShiftEndTimePicker(false);
               }}
             >
-              <Text style={styles.primaryBtnTxt}>Create shift</Text>
+              <Text style={styles.primaryBtnTxt}>{editingShiftId ? 'Save changes' : 'Create shift'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.primaryBtn, { marginTop: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border }]}
-              onPress={async () => {
-                // Quick defaults
-                const defaults = [
-                  { name: 'Morning', type: 'morning' as const, startTime: '06:00', endTime: '12:00' },
-                  { name: 'Evening', type: 'evening' as const, startTime: '14:00', endTime: '20:00' },
-                  { name: 'Full Day', type: 'full_day' as const, startTime: '06:00', endTime: '20:00' },
-                  { name: 'Half Day', type: 'half_day' as const, startTime: '16:00', endTime: '20:00' },
-                ];
-                for (const d of defaults) {
-                  // eslint-disable-next-line no-await-in-loop
-                  await createShift(d);
-                }
-                await fetchShifts();
-                setAddShiftOpen(false);
-              }}
-            >
-              <Text style={[styles.primaryBtnTxt, { color: theme.colors.text }]}>Create default shifts</Text>
-            </TouchableOpacity>
+            {!editingShiftId ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.primaryBtn, { marginTop: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border }]}
+                onPress={async () => {
+                  const defaults = [
+                    { name: 'Morning', type: 'morning' as const, startTime: '06:00', endTime: '12:00' },
+                    { name: 'Evening', type: 'evening' as const, startTime: '14:00', endTime: '20:00' },
+                    { name: 'Full Day', type: 'full_day' as const, startTime: '06:00', endTime: '20:00' },
+                    { name: 'Half Day', type: 'half_day' as const, startTime: '16:00', endTime: '20:00' },
+                  ];
+                  for (const d of defaults) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await createShift(d);
+                  }
+                  await fetchShifts();
+                  setShiftFormOpen(false);
+                }}
+              >
+                <Text style={[styles.primaryBtnTxt, { color: theme.colors.text }]}>Create default shifts</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -681,6 +939,33 @@ export default function LibrarySeatsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={!!deleteShiftTarget}
+        tone="danger"
+        label="DELETE SHIFT"
+        title="Delete this shift?"
+        description={
+          deleteShiftTarget
+            ? `Remove "${deleteShiftTarget.name}"? Unassign all seats for this shift first.`
+            : undefined
+        }
+        cancelText="Cancel"
+        confirmText="Delete"
+        confirmIcon="trash-outline"
+        onCancel={() => setDeleteShiftTarget(null)}
+        onConfirm={async () => {
+          if (!deleteShiftTarget) return;
+          const id = deleteShiftTarget.id;
+          setDeleteShiftTarget(null);
+          const res = await deleteShift(id);
+          if (!res.ok) {
+            showError('Could not delete shift', res.message || 'Failed to delete shift.');
+            return;
+          }
+          await fetchShifts();
+        }}
+      />
 
       <ConfirmModal
         visible={!!occupiedPrompt}
@@ -785,6 +1070,28 @@ function makeStyles() {
     statVal: { fontSize: 16, fontWeight: '900', color: theme.colors.text },
     statLab: { marginTop: 3, fontSize: 11, fontWeight: '800', color: theme.colors.mutedText },
     selectorRow: { marginTop: 12 },
+    shiftSectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.lg,
+      marginTop: 12,
+    },
+    sectionLabel: { fontSize: 13, fontWeight: '900', color: theme.colors.text },
+    manageLink: { fontSize: 13, fontWeight: '900', color: theme.colors.primary },
+    manageShiftsCard: { maxHeight: 520 },
+    manageShiftList: { maxHeight: 280, marginTop: 8 },
+    manageShiftRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+      gap: 8,
+    },
+    manageShiftName: { fontSize: 15, fontWeight: '800', color: theme.colors.text },
+    manageShiftMeta: { marginTop: 3, fontSize: 12, fontWeight: '700', color: theme.colors.mutedText },
+    manageShiftIconBtn: { padding: 6 },
     chip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
     chipOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
     chipTxt: { fontSize: 12, fontWeight: '900', color: theme.colors.text },
@@ -907,6 +1214,39 @@ function makeStyles() {
     smallChipOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
     smallChipTxt: { fontSize: 12, fontWeight: '900', color: theme.colors.text },
     smallChipTxtOn: { color: theme.colors.surface },
+    shiftSummaryBox: {
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 12,
+    },
+    shiftSummaryLabel: { fontSize: 11, fontWeight: '800', color: theme.colors.mutedText, textTransform: 'uppercase', marginBottom: 4 },
+    shiftSummaryVal: { fontSize: 14, fontWeight: '900', color: theme.colors.text, lineHeight: 20 },
+    shiftTimePickCol: { marginBottom: 12 },
+    timePickBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    timePickBtnTxt: { flex: 1, fontSize: 16, fontWeight: '900', color: theme.colors.text },
+    presetTimesBox: {
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 12,
+    },
+    presetTimesTitle: { fontSize: 12, fontWeight: '800', color: theme.colors.mutedText, marginBottom: 6 },
+    presetTimesVal: { fontSize: 18, fontWeight: '900', color: theme.colors.text },
     shiftTimeRow: { flexDirection: 'row', gap: 10 },
     studentSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 14, paddingHorizontal: 12, minHeight: 46, marginBottom: 10 },
     studentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
