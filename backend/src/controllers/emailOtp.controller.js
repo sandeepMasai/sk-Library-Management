@@ -6,6 +6,8 @@ const {
   sendForgotPasswordEmailOtp,
   verifyForgotPasswordEmailOtp,
   completeForgotPasswordReset,
+  sendLibraryRegisterEmailOtp,
+  verifyLibraryRegisterEmailOtp,
 } = require("../services/emailOtp.service");
 const Library = require("../models/Library");
 const Student = require("../models/Student");
@@ -32,6 +34,14 @@ const sendEmailOtpHandler = asyncHandler(async (req, res) => {
 
   if (!email) {
     throw createHttpError(400, "Email is required");
+  }
+
+  const purposeNorm = String(purpose || "verification").trim();
+  if (purposeNorm === "library_register") {
+    const existingLibrary = await Library.findOne({ email: email.trim().toLowerCase() });
+    if (existingLibrary) {
+      throw createHttpError(409, "Email already registered");
+    }
   }
 
   // Check for duplicate email based on role
@@ -112,6 +122,14 @@ const resendEmailOtpHandler = asyncHandler(async (req, res) => {
 
   if (!email) {
     throw createHttpError(400, "Email is required");
+  }
+
+  const purposeNorm = String(purpose || "verification").trim();
+  if (purposeNorm === "library_register") {
+    const existingLibrary = await Library.findOne({ email: email.trim().toLowerCase() });
+    if (existingLibrary) {
+      throw createHttpError(409, "Email already registered");
+    }
   }
 
   const result = await resendEmailOtp({
@@ -357,10 +375,59 @@ const verifyStudentEmail = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * POST /api/auth/library-register/send-otp
+ * Send email OTP before library signup (email must not already be registered).
+ */
+const libraryRegisterSendOtpHandler = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const meta = getRequestMeta(req);
+  if (!email) {
+    throw createHttpError(400, "Email is required");
+  }
+  const result = await sendLibraryRegisterEmailOtp({
+    email: String(email).trim(),
+    ipAddress: meta.ip,
+    userAgent: meta.userAgent,
+    appName: "SmartLibDesk",
+  });
+  res.json({
+    ok: true,
+    message: result.message,
+    expiryMinutes: result.expiryMinutes,
+    resendAfterSeconds: result.resendAfterSeconds,
+  });
+});
+
+/**
+ * POST /api/auth/library-register/verify-otp
+ * Verify OTP; returns one-time registrationToken for POST /api/auth/register-library.
+ */
+const libraryRegisterVerifyOtpHandler = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+  const meta = getRequestMeta(req);
+  if (!email || !otp) {
+    throw createHttpError(400, "Email and OTP are required");
+  }
+  const result = await verifyLibraryRegisterEmailOtp({
+    email: String(email).trim(),
+    otp: String(otp).trim(),
+    ipAddress: meta.ip,
+    userAgent: meta.userAgent,
+  });
+  res.json({
+    ok: true,
+    registrationToken: result.registrationToken,
+    sessionExpiresMinutes: result.sessionExpiresMinutes,
+  });
+});
+
 module.exports = {
   sendEmailOtpHandler,
   verifyEmailOtpHandler,
   resendEmailOtpHandler,
+  libraryRegisterSendOtpHandler,
+  libraryRegisterVerifyOtpHandler,
   forgotPasswordSendOtpHandler,
   forgotPasswordVerifyOtpHandler,
   forgotPasswordResetPasswordHandler,

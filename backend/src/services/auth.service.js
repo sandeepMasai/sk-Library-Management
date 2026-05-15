@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const RefreshToken = require("../models/RefreshToken");
 const Student = require("../models/Student");
 const Library = require("../models/Library");
+const LibraryRegistrationSession = require("../models/LibraryRegistrationSession");
 const Subscription = require("../models/Subscription");
 const { logAction } = require("../utils/audit");
 const { writeLog } = require("../utils/logging");
@@ -10,7 +11,7 @@ const {
   resolveLibrarySubscriptionPeriod,
 } = require("../utils/subscription");
 const { createHttpError } = require("../utils/httpError");
-const { normalizeIndianMobile } = require("../utils/mobile");
+const { assertIndianMobileBody } = require("../utils/mobile");
 const { verifyBcryptPassword, hashPassword } = require("../utils/authCredentials");
 const { recordLibraryIdentity, recordStudentIdentity } = require("./authIdentity.service");
 const { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } = require("../utils/token");
@@ -409,13 +410,34 @@ async function registerLibrary({ body, metadata }) {
     throw createHttpError(400, "pincode must be exactly 6 digits");
   }
 
+  let phone = null;
   const phoneRaw = body?.phone ?? body?.mobile;
-  const phone =
-    phoneRaw != null && String(phoneRaw).trim() !== ""
-      ? normalizeIndianMobile(phoneRaw)
-      : null;
-  if (phoneRaw != null && String(phoneRaw).trim() !== "" && !phone) {
-    throw createHttpError(400, "Invalid phone number (optional 10-digit Indian mobile)");
+  if (phoneRaw != null && String(phoneRaw).trim() !== "") {
+    phone = assertIndianMobileBody(phoneRaw, "phone");
+  }
+
+  const existingBefore = await Library.findOne({ email });
+  if (existingBefore) {
+    throw createHttpError(409, "Email already registered");
+  }
+
+  const emailVerificationToken = String(body?.emailVerificationToken || "").trim();
+  if (!emailVerificationToken) {
+    throw createHttpError(
+      400,
+      "emailVerificationToken is required. Verify your email with the code we sent you."
+    );
+  }
+
+  const consumed = await LibraryRegistrationSession.consumeValidSession({
+    email,
+    rawToken: emailVerificationToken,
+  });
+  if (!consumed.ok) {
+    throw createHttpError(
+      401,
+      "Email verification is invalid or expired. Request a new code and verify again."
+    );
   }
 
   const passwordHash = await hashPassword(password, 10);
@@ -437,6 +459,8 @@ async function registerLibrary({ body, metadata }) {
     planStartDate: null,
     planExpiryDate: null,
     isActive: true,
+    isEmailVerified: true,
+    emailVerifiedAt: new Date(),
   });
 
   const user = libraryResponse(library);

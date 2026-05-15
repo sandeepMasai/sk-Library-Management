@@ -4,6 +4,8 @@ const {
   sendEmailOtpHandler,
   verifyEmailOtpHandler,
   resendEmailOtpHandler,
+  libraryRegisterSendOtpHandler,
+  libraryRegisterVerifyOtpHandler,
   forgotPasswordSendOtpHandler,
   forgotPasswordVerifyOtpHandler,
   forgotPasswordResetPasswordHandler,
@@ -57,10 +59,29 @@ const forgotPasswordResetLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const libraryRegisterVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) =>
+    res.status(429).json({
+      success: false,
+      data: null,
+      message: "Too many verification attempts. Try again later.",
+    }),
+});
+
 // Public endpoints
 router.post("/send-email-otp", emailOtpLimiter, sendEmailOtpHandler);
 router.post("/verify-email-otp", verifyEmailOtpHandler);
 router.post("/resend-email-otp", emailOtpLimiter, resendEmailOtpHandler);
+router.post("/library-register/send-otp", emailOtpLimiter, libraryRegisterSendOtpHandler);
+router.post(
+  "/library-register/verify-otp",
+  libraryRegisterVerifyLimiter,
+  libraryRegisterVerifyOtpHandler
+);
 router.post(
   "/forgot-password/send-otp",
   forgotPasswordSendOtpLimiter,

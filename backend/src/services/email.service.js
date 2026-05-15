@@ -15,6 +15,39 @@ const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@libdesk.in";
 const EMAIL_OTP_EXPIRY_MINUTES = Number.parseInt(process.env.EMAIL_OTP_EXPIRY_MINUTES || "5", 10) || 5;
 
 /**
+ * When true, OTP emails are not sent via Resend; the code is logged to the server console instead.
+ * Default: on in non-production unless EMAIL_OTP_DEV_LOG=false.
+ * Use this while Resend is in sandbox (only delivers to your Resend account email).
+ */
+function isOtpDevConsoleEnabled() {
+  const flag = String(process.env.EMAIL_OTP_DEV_LOG || "").trim().toLowerCase();
+  if (flag === "true" || flag === "1" || flag === "yes") return true;
+  if (flag === "false" || flag === "0" || flag === "no") return false;
+  return (process.env.NODE_ENV || "development") !== "production";
+}
+
+function isResendSandboxRecipientError(message) {
+  return /only send testing emails to your own email address/i.test(String(message || ""));
+}
+
+function logDevOtp({ to, otp, label }) {
+  const line = "=".repeat(56);
+  const body = [
+    line,
+    `[DEV OTP] ${label}`,
+    `  To:   ${to}`,
+    `  Code: ${otp}`,
+    "  (Set EMAIL_OTP_DEV_LOG=false and verify a domain on Resend to send real mail.)",
+    line,
+  ].join("\n");
+  logger.warn(body);
+  if ((process.env.NODE_ENV || "development") !== "production") {
+    // eslint-disable-next-line no-console
+    console.warn(`\n📧 ${body}\n`);
+  }
+}
+
+/**
  * Validate Resend configuration
  */
 function assertResendConfigured() {
@@ -364,7 +397,11 @@ async function sendEmail({ to, subject, html, text }) {
       stack: error.stack,
     });
 
-    throw new Error(`Failed to send email: ${error.message}`);
+    const err = new Error(`Failed to send email: ${error.message}`);
+    if (isResendSandboxRecipientError(error.message)) {
+      err.code = "RESEND_SANDBOX_RECIPIENT";
+    }
+    throw err;
   }
 }
 
@@ -372,8 +409,24 @@ async function sendEmail({ to, subject, html, text }) {
  * Send OTP email
  */
 async function sendOtpEmail({ to, otp, expiryMinutes = EMAIL_OTP_EXPIRY_MINUTES, appName }) {
+  if (isOtpDevConsoleEnabled()) {
+    logDevOtp({ to, otp, label: `Verification OTP (${appName || "SmartLibDesk"})` });
+    return { success: true, devMode: true };
+  }
   const { html, subject } = createOtpEmailTemplate({ otp, expiryMinutes, appName });
-  return sendEmail({ to, subject, html, text: `Your verification code is: ${otp}` });
+  try {
+    return await sendEmail({ to, subject, html, text: `Your verification code is: ${otp}` });
+  } catch (error) {
+    if (isResendSandboxRecipientError(error.message)) {
+      logDevOtp({
+        to,
+        otp,
+        label: `Verification OTP — Resend sandbox fallback (${appName || "SmartLibDesk"})`,
+      });
+      return { success: true, devMode: true, sandboxFallback: true };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -412,13 +465,29 @@ function createPasswordResetOtpEmailTemplate({ otp, expiryMinutes, appName = "Sm
 }
 
 async function sendPasswordResetOtpEmail({ to, otp, expiryMinutes = EMAIL_OTP_EXPIRY_MINUTES, appName }) {
+  if (isOtpDevConsoleEnabled()) {
+    logDevOtp({ to, otp, label: `Password reset OTP (${appName || "SmartLibDesk"})` });
+    return { success: true, devMode: true };
+  }
   const { html, subject } = createPasswordResetOtpEmailTemplate({ otp, expiryMinutes, appName });
-  return sendEmail({
-    to,
-    subject,
-    html,
-    text: `Your ${appName || "SmartLibDesk"} password reset OTP is ${otp}. It expires in ${expiryMinutes} minutes.`,
-  });
+  try {
+    return await sendEmail({
+      to,
+      subject,
+      html,
+      text: `Your ${appName || "SmartLibDesk"} password reset OTP is ${otp}. It expires in ${expiryMinutes} minutes.`,
+    });
+  } catch (error) {
+    if (isResendSandboxRecipientError(error.message)) {
+      logDevOtp({
+        to,
+        otp,
+        label: `Password reset OTP — Resend sandbox fallback (${appName || "SmartLibDesk"})`,
+      });
+      return { success: true, devMode: true, sandboxFallback: true };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -439,6 +508,8 @@ async function sendVerificationSuccessEmail({ to, appName }) {
 
 module.exports = {
   assertResendConfigured,
+  isOtpDevConsoleEnabled,
+  isResendSandboxRecipientError,
   sendEmail,
   sendOtpEmail,
   sendPasswordResetOtpEmail,

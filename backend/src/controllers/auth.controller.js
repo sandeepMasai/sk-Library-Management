@@ -1,7 +1,7 @@
 const authService = require("../services/auth.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
-const { normalizeIndianMobile } = require("../utils/mobile");
+const { assertIndianMobileBody } = require("../utils/mobile");
 const { sendSuccess } = require("../utils/response");
 
 const AUTH_ROLES = new Set(["admin", "library", "student"]);
@@ -70,12 +70,17 @@ function sanitizeRegisterLibraryBody(body = {}) {
   }
 
   const phoneRaw = body.phone ?? body.mobile;
-  const phone =
-    phoneRaw != null && String(phoneRaw).trim() !== ""
-      ? normalizeIndianMobile(phoneRaw)
-      : null;
-  if (phoneRaw != null && String(phoneRaw).trim() !== "" && !phone) {
-    throw createHttpError(400, "Invalid phone number (optional 10-digit Indian mobile)");
+  let phone = null;
+  if (phoneRaw != null && String(phoneRaw).trim() !== "") {
+    phone = assertIndianMobileBody(phoneRaw, "phone");
+  }
+
+  const emailVerificationToken = String(body.emailVerificationToken || "").trim();
+  if (!emailVerificationToken) {
+    throw createHttpError(
+      400,
+      "emailVerificationToken is required. Verify your email with the code we sent you."
+    );
   }
 
   return {
@@ -88,6 +93,7 @@ function sanitizeRegisterLibraryBody(body = {}) {
     place,
     pincode,
     phone,
+    emailVerificationToken,
   };
 }
 

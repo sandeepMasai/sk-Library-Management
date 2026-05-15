@@ -1,8 +1,14 @@
 const EmailOtp = require("../models/EmailOtp");
 const PasswordResetSession = require("../models/PasswordResetSession");
+const LibraryRegistrationSession = require("../models/LibraryRegistrationSession");
 const Library = require("../models/Library");
 const Student = require("../models/Student");
-const { sendOtpEmail, sendPasswordResetOtpEmail, sendVerificationSuccessEmail } = require("./email.service");
+const {
+  sendOtpEmail,
+  sendPasswordResetOtpEmail,
+  sendVerificationSuccessEmail,
+  isResendSandboxRecipientError,
+} = require("./email.service");
 const { hashPassword } = require("../utils/authCredentials");
 const logger = require("../utils/logger");
 const { createHttpError } = require("../utils/httpError");
@@ -14,6 +20,8 @@ const EMAIL_OTP_MAX_ATTEMPTS = Number.parseInt(process.env.EMAIL_OTP_MAX_ATTEMPT
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = Number.parseInt(process.env.EMAIL_OTP_RESEND_COOLDOWN_SECONDS || "60", 10) || 60;
 const PASSWORD_RESET_SESSION_TTL_MINUTES =
   Number.parseInt(process.env.PASSWORD_RESET_SESSION_TTL_MINUTES || "10", 10) || 10;
+const LIBRARY_REGISTRATION_SESSION_TTL_MINUTES =
+  Number.parseInt(process.env.LIBRARY_REGISTRATION_SESSION_TTL_MINUTES || "30", 10) || 30;
 
 const FORGOT_PASSWORD_GENERIC_OK =
   "If an account exists for this email, a reset code has been sent.";
@@ -128,7 +136,18 @@ async function sendEmailOtp({
       email: normalizedEmail,
       purpose,
       error: error.message,
+      code: error.code,
     });
+
+    if (error.code === "RESEND_SANDBOX_RECIPIENT" || isResendSandboxRecipientError(error.message)) {
+      throw createHttpError(
+        503,
+        "Email is in Resend sandbox mode: only your Resend account email can receive mail. " +
+          "For local testing set EMAIL_OTP_DEV_LOG=true (OTP prints in the server console), " +
+          "or verify a domain at resend.com/domains and use EMAIL_FROM on that domain.",
+        { code: "RESEND_SANDBOX_RECIPIENT" }
+      );
+    }
 
     throw createHttpError(500, "Failed to send OTP. Please try again later.");
   }
@@ -153,6 +172,7 @@ async function verifyEmailOtp({
   // Validate OTP format
   const normalizedOtp = String(otp).trim();
   const isPasswordReset = purpose === "password_reset";
+  const isLibraryRegister = purpose === "library_register";
   if (!otp || !(isPasswordReset ? /^\d{6}$/.test(normalizedOtp) : /^\d{4,8}$/.test(normalizedOtp))) {
     throw createHttpError(400, isPasswordReset ? "OTP must be exactly 6 digits" : "Invalid OTP format");
   }
@@ -195,7 +215,7 @@ async function verifyEmailOtp({
     throw createHttpError(400, "Invalid OTP");
   }
 
-  if (user && !isPasswordReset) {
+  if (user && !isPasswordReset && !isLibraryRegister) {
     applyEmailVerifiedToUser(user);
     await user.save();
   }
@@ -206,7 +226,7 @@ async function verifyEmailOtp({
     ipAddress,
   });
 
-  if (!isPasswordReset) {
+  if (!isPasswordReset && !isLibraryRegister) {
     // Send verification success email
     try {
       await sendVerificationSuccessEmail({
@@ -403,6 +423,86 @@ async function completeForgotPasswordReset({ email, resetSessionToken, newPasswo
   return { ok: true, message: "Password updated. Please sign in with your new password." };
 }
 
+async function sendLibraryRegisterEmailOtp({ email, ipAddress, userAgent, appName = "SmartLibDesk" }) {
+  if (!validateEmail(email)) {
+    throw createHttpError(400, "Invalid email address");
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await Library.findOne({ email: normalizedEmail });
+  if (existing) {
+    throw createHttpError(409, "Email already registered");
+  }
+  return sendEmailOtp({
+    email: normalizedEmail,
+    purpose: "library_register",
+    ipAddress,
+    userAgent,
+    appName,
+  });
+}
+
+async function verifyLibraryRegisterEmailOtp({ email, otp, ipAddress, userAgent }) {
+  if (!validateEmail(email)) {
+    throw createHttpError(400, "Invalid email address");
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await Library.findOne({ email: normalizedEmail });
+  if (existing) {
+    throw createHttpError(409, "Email already registered");
+  }
+
+  const otpStr = String(otp || "").trim();
+  const len = EMAIL_OTP_LENGTH;
+  if (!new RegExp(`^\\d{${len}}$`).test(otpStr)) {
+    throw createHttpError(400, `OTP must be exactly ${len} digits`);
+  }
+
+  const result = await EmailOtp.verifyEmailOtp({
+    email: normalizedEmail,
+    otp: otpStr,
+    purpose: "library_register",
+    ipAddress,
+    userAgent,
+  });
+
+  if (!result.success) {
+    logger.warn("Library register OTP verification failed", {
+      email: normalizedEmail,
+      reason: result.reason,
+      ipAddress,
+    });
+    if (result.reason === "not_found") {
+      throw createHttpError(400, "Invalid or expired OTP");
+    }
+    if (result.reason === "max_attempts_exceeded") {
+      throw createHttpError(429, "Too many failed attempts. Request a new code.");
+    }
+    if (result.reason === "invalid_otp") {
+      throw createHttpError(400, `Invalid OTP. ${result.attemptsRemaining} attempts remaining.`, {
+        attemptsRemaining: result.attemptsRemaining,
+      });
+    }
+    throw createHttpError(400, "Invalid OTP");
+  }
+
+  await LibraryRegistrationSession.deleteMany({ email: normalizedEmail, usedAt: null });
+  const session = await LibraryRegistrationSession.createSession({
+    email: normalizedEmail,
+    ttlMinutes: LIBRARY_REGISTRATION_SESSION_TTL_MINUTES,
+  });
+
+  logger.info("Library registration email verified; registration session issued", {
+    email: normalizedEmail,
+    ipAddress,
+  });
+
+  return {
+    ok: true,
+    registrationToken: session.rawToken,
+    sessionExpiresMinutes: LIBRARY_REGISTRATION_SESSION_TTL_MINUTES,
+  };
+}
+
 /**
  * Check if email is already verified
  */
@@ -441,6 +541,8 @@ module.exports = {
   sendForgotPasswordEmailOtp,
   verifyForgotPasswordEmailOtp,
   completeForgotPasswordReset,
+  sendLibraryRegisterEmailOtp,
+  verifyLibraryRegisterEmailOtp,
   checkEmailVerified,
   cleanupExpiredOtps,
   validateEmail,
@@ -448,4 +550,5 @@ module.exports = {
   EMAIL_OTP_EXPIRY_MINUTES,
   EMAIL_OTP_MAX_ATTEMPTS,
   EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+  LIBRARY_REGISTRATION_SESSION_TTL_MINUTES,
 };

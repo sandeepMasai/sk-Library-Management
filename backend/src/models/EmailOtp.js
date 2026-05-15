@@ -5,7 +5,7 @@ const crypto = require("crypto");
  * Email OTP Model
  * Stores one-time passwords for email verification, password reset, etc.
  */
-const EMAIL_OTP_PURPOSES = ["verification", "password_reset", "login"];
+const EMAIL_OTP_PURPOSES = ["verification", "password_reset", "login", "library_register"];
 
 const emailOtpSchema = new mongoose.Schema(
   {
