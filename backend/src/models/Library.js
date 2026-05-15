@@ -88,13 +88,17 @@ const librarySchema = new mongoose.Schema(
         message: "Invalid phone number",
       },
     },
-    /** Set true after successful MSG91 (or future) mobile OTP verification. */
-    isMobileVerified: { type: Boolean, default: false },
-    /** Failed OTP verify attempts (MSG91); reset on success. */
-    otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
-    /** When set and in the future, OTP send/verify is refused for this library. */
-    otpBlockedUntil: { type: Date, default: null },
-    // WhatsApp contact (international digits only, no + or spaces)
+    /** DEPRECATED: Mobile OTP verification removed - replaced with Email OTP */
+    // isMobileVerified: { type: Boolean, default: false },
+    /** Set true after successful email OTP verification. */
+    isEmailVerified: { type: Boolean, default: false },
+    /** Timestamp when email was verified. */
+    emailVerifiedAt: { type: Date, default: null },
+    /** Incremented on each forgot-password email and after a successful reset (single-use links). */
+    passwordResetNonce: { type: Number, default: 0, min: 0 },
+    /** DEPRECATED: Mobile OTP attempts removed - replaced with Email OTP */
+    // otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
+    // otpBlockedUntil: { type: Date, default: null },
     whatsappNumber: {
       type: String,
       default: null,

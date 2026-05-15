@@ -72,12 +72,27 @@ const studentSchema = new mongoose.Schema(
       match: /^[0-9]{10}$/,
     },
 
-    /** Set true after successful MSG91 mobile OTP verification. */
-    isMobileVerified: { type: Boolean, default: false },
-    /** Failed OTP verify attempts; reset on success. */
-    otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
-    /** When set and in the future, OTP send/verify is refused for this student. */
-    otpBlockedUntil: { type: Date, default: null },
+    /** DEPRECATED: Mobile OTP verification removed - replaced with Email OTP */
+    // isMobileVerified: { type: Boolean, default: false },
+    /** Email address for notifications and verification (optional for students). */
+    email: {
+      type: String,
+      default: null,
+      trim: true,
+      lowercase: true,
+      maxlength: 320,
+      validate: {
+        validator: (v) => v == null || v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim()),
+        message: "Invalid email address",
+      },
+    },
+    /** Set true after successful email OTP verification. */
+    isEmailVerified: { type: Boolean, default: false },
+    /** Incremented on each forgot-password email and after a successful reset (single-use links). */
+    passwordResetNonce: { type: Number, default: 0, min: 0 },
+    /** DEPRECATED: Mobile OTP attempts removed - replaced with Email OTP */
+    // otpAttempts: { type: Number, default: 0, min: 0, max: 1_000_000 },
+    // otpBlockedUntil: { type: Date, default: null },
 
     username: {
       type: String,

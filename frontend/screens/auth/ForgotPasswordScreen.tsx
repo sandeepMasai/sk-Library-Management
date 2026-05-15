@@ -23,39 +23,43 @@ import FlashToast from '../../components/auth/FlashToast';
 
 const BRAND_LOGO = require('../../assets/logo.png');
 
+function isValidEmail(raw: string): boolean {
+  const s = String(raw || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
 /**
- * Library forgot password — MSG91 OTP to registered mobile on the library profile.
+ * Forgot password — sends a 6-digit email code (POST /api/auth/forgot-password/send-otp).
  */
 export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { mode } = useTheme();
   const styles = useMemo(() => makeStyles(), [mode]);
-  const forgotSend = useAppStore((s) => s.forgotLibraryPasswordSendOtp);
+  const sendForgotPasswordOtp = useAppStore((s) => s.sendForgotPasswordOtp);
 
-  const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
 
   const onSend = async () => {
     Keyboard.dismiss();
-    const m = mobile.replace(/\D/g, '').slice(0, 10);
-    if (m.length !== 10) {
-      setToast({ msg: 'Enter the 10-digit registered mobile', tone: 'error' });
+    const e = email.trim().toLowerCase();
+    if (!isValidEmail(e)) {
+      setToast({ msg: 'Enter a valid email address', tone: 'error' });
       return;
     }
     setLoading(true);
-    const res = await forgotSend(m);
+    const res = await sendForgotPasswordOtp(e);
     setLoading(false);
     if (!res.ok) {
-      setToast({ msg: res.message || 'Could not send OTP', tone: 'error' });
+      setToast({ msg: res.message || 'Could not send code', tone: 'error' });
       return;
     }
-    setToast({ msg: 'OTP sent', tone: 'success' });
-    navigation.navigate('VerifyOTP', {
-      flow: 'forgot',
-      mobile: m,
-      resendAfterSeconds: 60,
+    navigation.navigate('ForgotPasswordOtp', {
+      email: e,
+      resendAfterSeconds: res.resendAfterSeconds ?? 60,
+      expiryMinutes: res.expiryMinutes,
     });
   };
 
@@ -67,28 +71,30 @@ export default function ForgotPasswordScreen() {
         </TouchableOpacity>
         <Image source={BRAND_LOGO} style={styles.logo} resizeMode="contain" />
         <Text style={styles.heroTitle}>Reset password</Text>
-        <Text style={styles.heroSub}>OTP will be sent to your library’s registered mobile number.</Text>
+        <Text style={styles.heroSub}>We will email you a one-time 6-digit code to verify it is you.</Text>
       </LinearGradient>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <Text style={styles.label}>REGISTERED MOBILE</Text>
+            <Text style={styles.label}>REGISTERED EMAIL</Text>
             <View style={styles.inputRow}>
-              <Ionicons name="call-outline" size={18} color="#64748b" />
+              <Ionicons name="mail-outline" size={18} color="#64748b" />
               <TextInput
-                value={mobile}
-                onChangeText={(t) => setMobile(t.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit mobile"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
                 placeholderTextColor={theme.colors.mutedText}
-                keyboardType="number-pad"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
                 style={styles.input}
               />
             </View>
 
             <TouchableOpacity style={styles.cta} onPress={onSend} disabled={loading} activeOpacity={0.9}>
               <LinearGradient colors={['#0f766e', '#14b8a6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaGrad}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Send OTP</Text>}
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Send code</Text>}
               </LinearGradient>
             </TouchableOpacity>
           </View>

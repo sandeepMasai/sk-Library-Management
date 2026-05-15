@@ -9,6 +9,7 @@ import { useAppStore } from '../../store';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { getLibraryContact, toApiErrorMessage as toLibraryErr } from '../../services/libraryContact';
 import { getGlobalSettings, isValidHttpUrl, toApiErrorMessage } from '../../services/globalSettings';
+import { APP_DISPLAY_NAME } from '../../constants/branding';
 
 export default function StudentSettingsScreen({ navigation }: { navigation: any }) {
   const { mode } = useTheme();
@@ -180,7 +181,9 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
             icon="information-circle-outline"
             title="About App"
             sub="Version & info"
-            onPress={() => setInfoModal({ title: 'About', description: 'libDesk (Student) v1.0.0' })}
+            onPress={() =>
+              setInfoModal({ title: 'About', description: `${APP_DISPLAY_NAME} (Student) v1.0.0` })
+            }
             last
           />
         </Section>

@@ -30,7 +30,7 @@ function libraryResponse(library, latestSub = null) {
     libraryCode: library.libraryCode,
     isActive: Boolean(library.isActive),
     phone: library.phone || "",
-    isMobileVerified: Boolean(library.isMobileVerified),
+    isEmailVerified: Boolean(library.isEmailVerified),
   };
 }
 

@@ -1,7 +1,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const authController = require("../controllers/auth.controller");
-const otpController = require("../controllers/otp.controller");
+const { requireAuth } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
@@ -18,25 +18,22 @@ const loginLimiter = rateLimit({
     }),
 });
 
-const otpAuthLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 40,
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) =>
     res.status(429).json({
       success: false,
       data: null,
-      message: "Too many requests. Try again later.",
+      message: "Too many password change attempts. Try again later.",
     }),
 });
 
 router.post("/login", loginLimiter, authController.login);
 router.post("/refresh", authController.refresh);
 router.post("/register-library", authController.registerLibrary);
-
-router.post("/forgot-password/send-otp", otpAuthLimiter, otpController.forgotPasswordSendOtp);
-router.post("/forgot-password/verify-otp", otpAuthLimiter, otpController.forgotPasswordVerifyOtp);
-router.post("/reset-password", otpAuthLimiter, otpController.resetPasswordWithToken);
+router.post("/change-password", requireAuth, changePasswordLimiter, authController.changePassword);
 
 module.exports = router;

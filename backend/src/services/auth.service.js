@@ -10,7 +10,7 @@ const {
   resolveLibrarySubscriptionPeriod,
 } = require("../utils/subscription");
 const { createHttpError } = require("../utils/httpError");
-const { assertIndianMobileBody } = require("../utils/mobile");
+const { normalizeIndianMobile } = require("../utils/mobile");
 const { verifyBcryptPassword, hashPassword } = require("../utils/authCredentials");
 const { recordLibraryIdentity, recordStudentIdentity } = require("./authIdentity.service");
 const { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } = require("../utils/token");
@@ -83,7 +83,8 @@ function studentResponse(student) {
     feeStatus: student.feeStatus,
     isBlocked: student.isBlocked,
     photoUrl: student.photoUrl || null,
-    isMobileVerified: Boolean(student.isMobileVerified),
+    email: student.email || null,
+    isEmailVerified: Boolean(student.isEmailVerified),
   };
 }
 
@@ -113,7 +114,8 @@ function libraryResponse(library, latestSub = null) {
     planExpiryDate: period.expiryDate,
     libraryCode: library.libraryCode,
     isActive: library.isActive,
-    isMobileVerified: Boolean(library.isMobileVerified),
+    isEmailVerified: Boolean(library.isEmailVerified),
+    emailVerifiedAt: library.emailVerifiedAt?.toISOString?.() || null,
   };
 }
 
@@ -152,6 +154,122 @@ async function safeRecordIdentity(fn) {
     logger.warn("Auth identity sync skipped", { message: error?.message });
     return null;
   }
+}
+
+/**
+ * @param {{ currentPassword?: string, newPassword?: string, confirmPassword?: string }} body
+ */
+function parseChangePasswordBody(body = {}) {
+  const currentPassword = String(body.currentPassword ?? body.currentPin ?? "").trim();
+  const newPassword = String(body.newPassword ?? body.newPin ?? "").trim();
+  const confirmPassword = String(
+    body.confirmPassword ?? body.confirmNewPassword ?? body.newPasswordConfirm ?? ""
+  ).trim();
+
+  if (!currentPassword) {
+    throw createHttpError(400, "Current password is required");
+  }
+  if (!newPassword) {
+    throw createHttpError(400, "New password is required");
+  }
+  if (!confirmPassword) {
+    throw createHttpError(400, "Confirm password is required");
+  }
+  if (newPassword !== confirmPassword) {
+    throw createHttpError(400, "New password and confirmation do not match");
+  }
+  if (newPassword === currentPassword) {
+    throw createHttpError(400, "New password must be different from your current password");
+  }
+
+  return { currentPassword, newPassword };
+}
+
+function assertStrongLibraryPassword(pw) {
+  if (pw.length < 8) {
+    throw createHttpError(400, "New password must be at least 8 characters long");
+  }
+  if (pw.length > 128) {
+    throw createHttpError(400, "New password is too long");
+  }
+  if (!/[a-zA-Z]/.test(pw)) {
+    throw createHttpError(400, "New password must contain at least one letter");
+  }
+  if (!/\d/.test(pw)) {
+    throw createHttpError(400, "New password must contain at least one number");
+  }
+}
+
+function assertStrongStudentPin(pin) {
+  if (!/^\d{4}$/.test(pin)) {
+    throw createHttpError(400, "New PIN must be exactly 4 digits");
+  }
+}
+
+/**
+ * Change password (library) or PIN (student) for the authenticated subject.
+ */
+async function changeAuthenticatedPassword({ authUser, body, metadata = {} }) {
+  const { userId, role } = authUser;
+  const { currentPassword, newPassword } = parseChangePasswordBody(body);
+
+  if (role === "admin" || role === "staff") {
+    throw createHttpError(403, "Password change is not available for this account type");
+  }
+
+  if (role === "library") {
+    assertStrongLibraryPassword(newPassword);
+    const library = await Library.findById(userId).select("+passwordHash");
+    if (!library) {
+      throw createHttpError(404, "User not found");
+    }
+    if (!library.isActive) {
+      throw createHttpError(403, "Library is inactive");
+    }
+    const ok = await verifyBcryptPassword(currentPassword, library.passwordHash);
+    if (!ok) {
+      throw createHttpError(401, "Current password is incorrect");
+    }
+    library.passwordHash = await hashPassword(newPassword, 10);
+    await library.save();
+    await logAction({
+      action: "password_changed",
+      userId,
+      role: "library",
+      libraryId: library._id,
+      ip: metadata?.ip,
+      userAgent: metadata?.userAgent,
+    });
+    return { ok: true, message: "Password updated successfully" };
+  }
+
+  if (role === "student") {
+    assertStrongStudentPin(newPassword);
+    const student = await Student.findOne({ _id: userId, isDeleted: false }).select("+pinHash");
+    if (!student) {
+      throw createHttpError(404, "User not found");
+    }
+    if (student.isBlocked) {
+      throw createHttpError(403, "Account is blocked");
+    }
+    const ok = await student.verifyPin(currentPassword);
+    if (!ok) {
+      throw createHttpError(401, "Current password is incorrect");
+    }
+    student.pinHash = await hashPassword(newPassword, 10);
+    await student.save();
+    await logAction({
+      action: "pin_changed",
+      userId,
+      role: "student",
+      libraryId: student.libraryId,
+      ip: metadata?.ip,
+      userAgent: metadata?.userAgent,
+    });
+    return { ok: true, message: "Password updated successfully" };
+  }
+
+  throw createHttpError(403, "Unsupported account type");
 }
 
 async function login({ body, metadata }) {
@@ -233,7 +351,7 @@ async function login({ body, metadata }) {
 }
 
 /**
- * Issue JWT + refresh after password-less verification (MSG91 OTP).
+ * Issue JWT + refresh after successful email OTP login (legacy name kept for callers).
  */
 async function issueLibrarySession(library, metadata) {
   await ensureLibraryNotExpired(library);
@@ -291,7 +409,14 @@ async function registerLibrary({ body, metadata }) {
     throw createHttpError(400, "pincode must be exactly 6 digits");
   }
 
-  const phone = assertIndianMobileBody(body?.phone || body?.mobile, "phone");
+  const phoneRaw = body?.phone ?? body?.mobile;
+  const phone =
+    phoneRaw != null && String(phoneRaw).trim() !== ""
+      ? normalizeIndianMobile(phoneRaw)
+      : null;
+  if (phoneRaw != null && String(phoneRaw).trim() !== "" && !phone) {
+    throw createHttpError(400, "Invalid phone number (optional 10-digit Indian mobile)");
+  }
 
   const passwordHash = await hashPassword(password, 10);
 
@@ -384,6 +509,7 @@ module.exports = {
   login,
   refresh,
   registerLibrary,
+  changeAuthenticatedPassword,
   issueLibrarySession,
   issueStudentSession,
 };

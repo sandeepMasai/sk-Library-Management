@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const { connectToMongo } = require("./src/config/db");
 const logger = require("./src/utils/logger");
 const { startSubscriptionExpiryJob } = require("./src/jobs/subscriptionExpiry.job");
+const { startEmailOtpCleanupJob } = require("./src/jobs/emailOtpCleanup.job");
 const app = require("./src/app");
 
 const PORT = Number(process.env.PORT);
@@ -26,6 +27,10 @@ async function start() {
     process.env.SUBSCRIPTION_CRON_ENABLED === "true"
   ) {
     startSubscriptionExpiryJob();
+  }
+
+  if (dbConnected && process.env.EMAIL_OTP_CRON_ENABLED === "true") {
+    startEmailOtpCleanupJob();
   }
 
   const server = app.listen(PORT, HOST, () => {

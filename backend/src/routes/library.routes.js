@@ -6,6 +6,10 @@ const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { normalizeIndianMobile, normalizeIndianMobileOptional, hasNonIndiaPlusPrefix } = require("../utils/mobile");
 const { toLibraryProfile } = require("./library.serialize");
+const {
+  sendLibraryVerificationEmail,
+  verifyLibraryEmail,
+} = require("../controllers/emailOtp.controller");
 
 const router = express.Router();
 
@@ -172,7 +176,8 @@ router.put("/profile", requireAuth, requireRole("library"), async (req, res) => 
         $set: {
           ownerName,
           phone: phoneValue,
-          ...(phoneChanged ? { isMobileVerified: false } : {}),
+          // DEPRECATED: Mobile OTP verification removed - no longer reset on phone change
+          // ...(phoneChanged ? { isMobileVerified: false } : {}),
           name: libraryName,
           address: address || null,
           city,
@@ -218,6 +223,38 @@ router.post("/logo", requireAuth, requireRole("library"), upload.single("logo"),
     return res.status(500).json({ message: "Failed to upload logo", error: error.message });
   }
 });
+
+/**
+ * POST /api/library/send-verification-email
+ *
+ * Send email OTP for library email verification
+ */
+router.post("/send-verification-email", requireAuth, requireRole("library"), async (req, res, next) => {
+  try {
+    const library = await Library.findById(req.user?.libraryId);
+    if (!library) return res.status(404).json({ message: "Library not found" });
+    req.library = library;
+    next();
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load library", error: error.message });
+  }
+}, sendLibraryVerificationEmail);
+
+/**
+ * POST /api/library/verify-email
+ *
+ * Verify email OTP for library
+ */
+router.post("/verify-email", requireAuth, requireRole("library"), async (req, res, next) => {
+  try {
+    const library = await Library.findById(req.user?.libraryId);
+    if (!library) return res.status(404).json({ message: "Library not found" });
+    req.library = library;
+    next();
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load library", error: error.message });
+  }
+}, verifyLibraryEmail);
 
 module.exports = router;
 

@@ -1,6 +1,7 @@
 {
   "expo": {
-    "name": "Library Manager",
+    "name": "SmartLibDesk",
+    "scheme": "smartlibdesk",
     "slug": "libdesk",
     "version": "1.0.0",
     "orientation": "portrait",

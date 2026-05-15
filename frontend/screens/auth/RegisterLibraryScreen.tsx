@@ -83,6 +83,8 @@ export default function RegisterLibraryScreen() {
   }, [pickerMode, pickerSearch, availableCities]);
 
   const canSubmit = useMemo(() => {
+    const phoneDigits = normalizeRegisterMobileDigits(mobile);
+    const phoneOk = phoneDigits.length === 0 || phoneDigits.length === 10;
     return Boolean(
       libraryName.trim() &&
         ownerName.trim() &&
@@ -92,7 +94,7 @@ export default function RegisterLibraryScreen() {
         place.trim() &&
         totalSeats.trim() &&
         email.trim() &&
-        /^\d{10}$/.test(normalizeRegisterMobileDigits(mobile)) &&
+        phoneOk &&
         password.trim()
     );
   }, [libraryName, ownerName, selectedState, selectedCity, pincode, place, totalSeats, email, mobile, password]);
@@ -130,8 +132,9 @@ export default function RegisterLibraryScreen() {
     const pinDigits = pincode.replace(/\D/g, '').slice(0, 6);
     if (!/^\d{6}$/.test(pinDigits)) nextErrors.pincode = 'Enter a valid 6-digit PIN code';
     if (!place.trim()) nextErrors.place = 'Please enter area or place';
-    if (!/^\d{10}$/.test(normalizeRegisterMobileDigits(mobile))) {
-      nextErrors.mobile = 'Enter a valid 10-digit mobile number';
+    const phoneDigits = normalizeRegisterMobileDigits(mobile);
+    if (phoneDigits.length > 0 && phoneDigits.length !== 10) {
+      nextErrors.mobile = 'Enter a valid 10-digit mobile, or leave blank';
     }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -155,6 +158,7 @@ export default function RegisterLibraryScreen() {
 
     setLoading(true);
     try {
+      const phoneDigits = normalizeRegisterMobileDigits(mobile);
       const response = await apiPost<
         RegisterLibraryResponse | { success: boolean; data: RegisterLibraryResponse; message?: string }
       >(`/api/auth/register-library`, {
@@ -166,7 +170,7 @@ export default function RegisterLibraryScreen() {
         state: selectedState,
         pincode: pincode.replace(/\D/g, '').slice(0, 6),
         place: place.trim(),
-        phone: normalizeRegisterMobileDigits(mobile),
+        ...(phoneDigits.length === 10 ? { phone: phoneDigits } : {}),
       });
       const data = 'success' in response ? response.data : response;
 
@@ -346,9 +350,7 @@ export default function RegisterLibraryScreen() {
               />
 
               <View style={styles.fieldWrap}>
-                <Text style={styles.fieldLabel}>
-                  MOBILE NUMBER <Text style={{ color: '#e24b4a' }}>*</Text>
-                </Text>
+                <Text style={styles.fieldLabel}>MOBILE NUMBER (OPTIONAL)</Text>
                 <View style={[styles.fieldRow, !!errors.mobile && styles.fieldRowError]}>
                   <Ionicons name="call-outline" size={18} color={stylesVars.icon} />
                   <TextInput
@@ -359,7 +361,7 @@ export default function RegisterLibraryScreen() {
                       setMobile(d.slice(0, 10));
                       setErrors((e) => ({ ...e, mobile: undefined }));
                     }}
-                    placeholder="10-digit mobile (e.g. 9876543210)"
+                    placeholder="10-digit mobile (optional)"
                     placeholderTextColor={theme.colors.mutedText}
                     style={[styles.input, { flex: 1 }]}
                     keyboardType="number-pad"

@@ -1,8 +1,5 @@
 /**
- * Indian mobile utilities for OTP (MSG91) and MongoDB persistence.
- *
- * Storage rule: persist exactly 10 digits (no +, no spaces, no leading 91).
- * MSG91 rule: send `mobile` as 12 digits with country code, e.g. 919529525004 (no +).
+ * Indian mobile normalization for profile and student records.
  */
 
 "use strict";
@@ -69,22 +66,6 @@ function normalizeIndianMobile(raw) {
 }
 
 /**
- * MSG91 `mobile` field: India country code + 10-digit subscriber number (no +).
- *
- * @param {unknown} mobile — raw or normalized 10-digit string
- * @returns {string} e.g. "919529525004"
- */
-function formatMsg91Mobile(mobile) {
-  const normalized = normalizeIndianMobile(mobile);
-  if (!normalized) {
-    throw createHttpError(400, "Valid 10-digit Indian mobile number is required.", {
-      code: "INVALID_INDIAN_MOBILE",
-    });
-  }
-  return `91${normalized}`;
-}
-
-/**
  * Validates request mobile fields with production-oriented HTTP errors.
  *
  * @param {unknown} raw
@@ -99,7 +80,7 @@ function assertIndianMobileBody(raw, fieldName = "mobile") {
     });
   }
   if (hasNonIndiaPlusPrefix(raw)) {
-    throw createHttpError(400, "Only Indian (+91) mobile numbers are supported for OTP.", {
+    throw createHttpError(400, "Only Indian (+91) mobile numbers are supported.", {
       code: "UNSUPPORTED_COUNTRY",
       field: fieldName,
     });
@@ -127,7 +108,6 @@ function normalizeIndianMobileOptional(raw) {
 
 module.exports = {
   normalizeIndianMobile,
-  formatMsg91Mobile,
   assertIndianMobileBody,
   normalizeIndianMobileOptional,
   hasNonIndiaPlusPrefix,

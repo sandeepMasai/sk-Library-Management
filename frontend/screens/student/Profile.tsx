@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { apiGet, apiPost, type ApiError } from '../../services/api';
 import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
+import { APP_DISPLAY_NAME } from '../../constants/branding';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -38,7 +39,7 @@ export default function StudentProfile() {
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
-  const [verifyMobileOpen, setVerifyMobileOpen] = useState(false);
+  const [verifyEmailOpen, setVerifyEmailOpen] = useState(false);
   const [verifyOtp, setVerifyOtp] = useState('');
   const [verifySendLoading, setVerifySendLoading] = useState(false);
   const [verifySubmitLoading, setVerifySubmitLoading] = useState(false);
@@ -178,24 +179,26 @@ export default function StudentProfile() {
     }
   };
 
-  const isMobileVerified = Boolean((currentUser as { isMobileVerified?: boolean }).isMobileVerified);
+  const isEmailVerified = Boolean((currentUser as { isEmailVerified?: boolean }).isEmailVerified);
+  const studentEmail = String((currentUser as { email?: string | null }).email || '').trim();
 
-  const openStudentVerifyMobile = () => {
-    const d = String(currentUser.mobile || '').replace(/\D/g, '');
-    const ten = d.length >= 12 && d.startsWith('91') ? d.slice(2, 12) : d.slice(0, 10);
-    if (!/^\d{10}$/.test(ten)) {
-      setInfoModal({ title: 'Mobile', description: 'Your account does not have a valid 10-digit mobile number.' });
+  const openStudentVerifyEmail = () => {
+    if (!studentEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentEmail)) {
+      setInfoModal({
+        title: 'Email required',
+        description: 'Ask your library to add an email address to your student profile before you can verify it.',
+      });
       return;
     }
     setVerifyOtp('');
-    setVerifyMobileOpen(true);
+    setVerifyEmailOpen(true);
   };
 
-  const sendStudentProfileMobileOtp = async () => {
+  const sendStudentProfileEmailOtp = async () => {
     setVerifySendLoading(true);
     try {
-      await apiPost('/api/student/me/send-mobile-verify-otp');
-      setInfoModal({ title: 'OTP sent', description: 'Enter the code we sent to your phone.' });
+      await apiPost('/api/student/me/send-verification-email');
+      setInfoModal({ title: 'OTP sent', description: 'Enter the code we sent to your email.' });
     } catch (e: any) {
       const err = e as ApiError;
       setInfoModal({ title: 'Could not send', description: err?.message || 'Failed to send OTP' });
@@ -204,31 +207,28 @@ export default function StudentProfile() {
     }
   };
 
-  const submitStudentProfileMobileOtp = async () => {
+  const submitStudentProfileEmailOtp = async () => {
     const digits = verifyOtp.replace(/\D/g, '');
-    if (digits.length < 4) {
-      setInfoModal({ title: 'OTP', description: 'Enter the verification code.' });
+    if (digits.length < 6) {
+      setInfoModal({ title: 'OTP', description: 'Enter the 6-digit verification code.' });
       return;
     }
     setVerifySubmitLoading(true);
     try {
-      const res = await apiPost<{ ok: boolean; student?: { isMobileVerified?: boolean; id?: string } }>(
-        '/api/student/me/verify-mobile-otp',
+      const res = await apiPost<{ ok: boolean; isEmailVerified?: boolean; student?: { id?: string } }>(
+        '/api/student/me/verify-email',
         { otp: digits }
       );
-      if (res.student?.id) {
+      const verified = Boolean(res.isEmailVerified);
+      if (currentUser?.id) {
         useAppStore.setState((s) => ({
-          currentUser: s.currentUser
-            ? { ...s.currentUser, ...res.student, isMobileVerified: Boolean(res.student?.isMobileVerified) }
-            : s.currentUser,
-          users: s.users.map((u) =>
-            u.id === res.student?.id ? { ...u, ...res.student, isMobileVerified: Boolean(res.student?.isMobileVerified) } : u
-          ),
+          currentUser: s.currentUser ? { ...s.currentUser, isEmailVerified: verified, email: studentEmail } : s.currentUser,
+          users: s.users.map((u) => (u.id === currentUser.id ? { ...u, isEmailVerified: verified, email: studentEmail } : u)),
         }));
       }
-      setVerifyMobileOpen(false);
+      setVerifyEmailOpen(false);
       setVerifyOtp('');
-      setInfoModal({ title: 'Verified', description: 'Your mobile number is verified.' });
+      setInfoModal({ title: 'Verified', description: 'Your email address is verified.' });
     } catch (e: any) {
       const err = e as ApiError;
       setInfoModal({ title: 'Verification failed', description: err?.message || 'Invalid or expired OTP' });
@@ -445,29 +445,35 @@ export default function StudentProfile() {
             <InfoRow icon="person-outline" label="Full Name" value={displayName} />
             <InfoRow icon="at-outline" label="Username" value={`@${String(currentUser.username || '').toUpperCase()}`} />
             <InfoRow icon="call-outline" label="Mobile" value={currentUser.mobile} last={false} />
-            {isMobileVerified ? (
+            <InfoRow
+              icon="mail-outline"
+              label="Email"
+              value={studentEmail || '—'}
+              last={false}
+            />
+            {isEmailVerified ? (
               <View style={[styles.infoRow, styles.infoRowLast]}>
                 <View style={styles.infoLeft}>
                   <View style={styles.infoIconBox}>
                     <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
                   </View>
-                  <Text style={styles.infoLabel}>Mobile status</Text>
+                  <Text style={styles.infoLabel}>Email status</Text>
                 </View>
                 <Text style={[styles.infoValue, { color: '#15803D' }]}>Verified</Text>
               </View>
             ) : (
               <TouchableOpacity
                 style={[styles.infoRow, styles.infoRowLast]}
-                onPress={openStudentVerifyMobile}
+                onPress={openStudentVerifyEmail}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Verify mobile number"
+                accessibilityLabel="Verify email address"
               >
                 <View style={styles.infoLeft}>
                   <View style={styles.infoIconBox}>
                     <Ionicons name="shield-checkmark-outline" size={14} color="#6366F1" />
                   </View>
-                  <Text style={styles.infoLabel}>Verification</Text>
+                  <Text style={styles.infoLabel}>Email verification</Text>
                 </View>
                 <Text style={{ fontSize: 14, fontWeight: '900', color: '#6366F1' }}>Verify</Text>
               </TouchableOpacity>
@@ -484,25 +490,25 @@ export default function StudentProfile() {
           <Ionicons name="chevron-forward" size={16} color="#FCA5A5" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
 
-        <Text style={styles.versionTxt}>libDesk v1.0.0</Text>
+        <Text style={styles.versionTxt}>{APP_DISPLAY_NAME} v1.0.0</Text>
 
       </ScrollView>
 
       <Modal
-        visible={verifyMobileOpen}
+        visible={verifyEmailOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+        onRequestClose={() => !verifySendLoading && !verifySubmitLoading && setVerifyEmailOpen(false)}
       >
         <View style={styles.verifyModalBackdrop}>
           <View style={styles.verifyModalCard}>
-            <Text style={styles.verifyModalTitle}>Verify mobile</Text>
+            <Text style={styles.verifyModalTitle}>Verify email</Text>
             <Text style={styles.verifyModalHint}>
-              We will text a code to {String(currentUser.mobile || '').trim() || 'your registered number'}.
+              We will email a code to {studentEmail || 'your address on file'}.
             </Text>
             <TouchableOpacity
               style={styles.verifyModalSendBtn}
-              onPress={sendStudentProfileMobileOtp}
+              onPress={sendStudentProfileEmailOtp}
               disabled={verifySendLoading || verifySubmitLoading}
             >
               <Text style={styles.verifyModalSendTxt}>{verifySendLoading ? 'Sending…' : 'Send OTP'}</Text>
@@ -511,23 +517,23 @@ export default function StudentProfile() {
               value={verifyOtp}
               onChangeText={setVerifyOtp}
               keyboardType="number-pad"
-              placeholder="Enter OTP"
+              placeholder="Enter 6-digit OTP"
               placeholderTextColor={theme.colors.mutedText}
               style={styles.verifyModalInput}
               editable={!verifySubmitLoading}
-              maxLength={8}
+              maxLength={6}
             />
             <View style={styles.verifyModalActions}>
               <TouchableOpacity
                 style={[styles.verifyModalBtn, styles.verifyModalBtnGhost]}
-                onPress={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+                onPress={() => !verifySendLoading && !verifySubmitLoading && setVerifyEmailOpen(false)}
                 disabled={verifySendLoading || verifySubmitLoading}
               >
                 <Text style={styles.verifyModalBtnGhostTxt}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.verifyModalBtn, styles.verifyModalBtnPrimary]}
-                onPress={submitStudentProfileMobileOtp}
+                onPress={submitStudentProfileEmailOtp}
                 disabled={verifySubmitLoading}
               >
                 <Text style={styles.verifyModalBtnPrimaryTxt}>{verifySubmitLoading ? 'Checking…' : 'Verify'}</Text>

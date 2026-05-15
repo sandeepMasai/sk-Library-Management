@@ -36,8 +36,8 @@ import { useTheme } from '../../theme/ThemeProvider';
  * - Uses backend:
  *   - GET  /api/library/profile
  *   - PUT  /api/library/profile
- *   - POST /api/library/profile/send-mobile-verify-otp
- *   - POST /api/library/profile/verify-mobile-otp
+ *   - POST /api/library/send-verification-email
+ *   - POST /api/library/verify-email
  *   - POST /api/library/logo (multipart)
  */
 export default function ProfileScreen() {
@@ -59,8 +59,8 @@ export default function ProfileScreen() {
   const [editSeatsOpen, setEditSeatsOpen] = useState(false);
   const [totalSeatsDraft, setTotalSeatsDraft] = useState('');
   const [seatsSaving, setSeatsSaving] = useState(false);
-  const [isMobileVerified, setIsMobileVerified] = useState(false);
-  const [verifyMobileOpen, setVerifyMobileOpen] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verifyEmailOpen, setVerifyEmailOpen] = useState(false);
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpFocusIndex, setOtpFocusIndex] = useState(0);
   const [resendSeconds, setResendSeconds] = useState(60);
@@ -103,7 +103,7 @@ export default function ProfileScreen() {
     try {
       const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
       const p = res.profile;
-      setIsMobileVerified(Boolean(p?.isMobileVerified));
+      setIsEmailVerified(Boolean(p?.isEmailVerified));
       setForm({
         name: p?.name || currentUser?.ownerName || currentUser?.name || '',
         email: p?.email || currentUser?.email || '',
@@ -179,7 +179,7 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    if (!verifyMobileOpen) return undefined;
+    if (!verifyEmailOpen) return undefined;
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(cursorBlink, { toValue: 0.25, duration: 450, useNativeDriver: true }),
@@ -191,10 +191,10 @@ export default function ProfileScreen() {
       anim.stop();
       cursorBlink.setValue(1);
     };
-  }, [verifyMobileOpen, cursorBlink]);
+  }, [verifyEmailOpen, cursorBlink]);
 
   useEffect(() => {
-    if (!verifyMobileOpen) return undefined;
+    if (!verifyEmailOpen) return undefined;
     setResendSeconds(60);
     setCanResend(false);
     let sec = 60;
@@ -209,16 +209,16 @@ export default function ProfileScreen() {
       setResendSeconds(sec);
     }, 1000);
     return () => clearInterval(id);
-  }, [verifyMobileOpen, resendTimerKey]);
+  }, [verifyEmailOpen, resendTimerKey]);
 
   useEffect(() => {
-    if (!verifyMobileOpen) return undefined;
+    if (!verifyEmailOpen) return undefined;
     const t = setTimeout(() => {
       otpInputRefs.current[0]?.focus();
       setOtpFocusIndex(0);
     }, 180);
     return () => clearTimeout(t);
-  }, [verifyMobileOpen]);
+  }, [verifyEmailOpen]);
 
   useEffect(() => {
     if (!verifySuccessModalOpen) return undefined;
@@ -296,7 +296,7 @@ export default function ProfileScreen() {
       Alert.alert('Saved', 'Profile updated.');
       // keep local form fresh
       const p = res.profile;
-      setIsMobileVerified(Boolean(p?.isMobileVerified));
+      setIsEmailVerified(Boolean(p?.isEmailVerified));
       setForm((s) => ({
         ...s,
         name: p?.name ?? s.name,
@@ -321,27 +321,26 @@ export default function ProfileScreen() {
     }
   };
 
-  const openVerifyMobile = () => {
-    const d = String(form.phone || '').replace(/\D/g, '');
-    const ten = d.length >= 12 && d.startsWith('91') ? d.slice(2, 12) : d.slice(0, 10);
-    if (!/^\d{10}$/.test(ten)) {
-      Alert.alert('Phone required', 'Save a valid 10-digit Indian mobile number first, then verify.');
+  const openVerifyEmail = () => {
+    const em = String(form.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      Alert.alert('Email required', 'Save a valid email on your profile first, then verify.');
       return;
     }
     setOtpDigits(['', '', '', '', '', '']);
     setOtpFocusIndex(0);
-    setVerifyMobileOpen(true);
+    setVerifyEmailOpen(true);
   };
 
-  const sendProfileMobileOtp = async () => {
+  const sendProfileEmailOtp = async () => {
     setVerifySendLoading(true);
     try {
-      await apiPost('/api/library/profile/send-mobile-verify-otp');
+      await apiPost('/api/library/send-verification-email');
       if (resendRestartNextSend.current) {
         resendRestartNextSend.current = false;
         setResendTimerKey((k) => k + 1);
       }
-      Alert.alert('OTP sent', 'Enter the code we sent to your registered phone.');
+      Alert.alert('OTP sent', 'Enter the code we sent to your library email.');
     } catch (e: any) {
       const err = e as ApiError;
       Alert.alert('Could not send', err?.message || 'Failed to send OTP');
@@ -350,7 +349,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const submitProfileMobileOtp = async () => {
+  const submitProfileEmailOtp = async () => {
     const digits = otpDigits.join('').replace(/\D/g, '');
     if (digits.length < 6) {
       Alert.alert('OTP', 'Enter the 6-digit verification code.');
@@ -358,16 +357,17 @@ export default function ProfileScreen() {
     }
     setVerifySubmitLoading(true);
     try {
-      const res = await apiPost<{ ok: boolean; profile?: { isMobileVerified?: boolean; phone?: string } }>(
-        '/api/library/profile/verify-mobile-otp',
+      const res = await apiPost<{ ok: boolean; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>(
+        '/api/library/verify-email',
         { otp: digits }
       );
-      setIsMobileVerified(Boolean(res.profile?.isMobileVerified));
+      setIsEmailVerified(Boolean(res.isEmailVerified));
       useAppStore.getState().patchCurrentUser({
-        isMobileVerified: Boolean(res.profile?.isMobileVerified),
-        phone: res.profile?.phone ?? useAppStore.getState().currentUser?.phone,
+        isEmailVerified: Boolean(res.isEmailVerified),
+        emailVerifiedAt: res.emailVerifiedAt ?? null,
+        email: form.email.trim() || useAppStore.getState().currentUser?.email,
       });
-      setVerifyMobileOpen(false);
+      setVerifyEmailOpen(false);
       setOtpDigits(['', '', '', '', '', '']);
       setVerifySuccessModalOpen(true);
     } catch (e: any) {
@@ -432,7 +432,7 @@ export default function ProfileScreen() {
 
   const onPressResendOtp = () => {
     resendRestartNextSend.current = true;
-    void sendProfileMobileOtp();
+    void sendProfileEmailOtp();
   };
 
   const openGoogleMaps = async () => {
@@ -576,24 +576,24 @@ export default function ProfileScreen() {
               keyboardType="phone-pad"
               editable={editingBasic}
             />
-            {!isMobileVerified ? (
+            {!isEmailVerified ? (
               <View style={styles.verifyRow}>
-                <Text style={styles.verifyHint}>Confirm your phone with a one-time code.</Text>
+                <Text style={styles.verifyHint}>Confirm your library email with a one-time code.</Text>
                 <TouchableOpacity
-                  onPress={openVerifyMobile}
+                  onPress={openVerifyEmail}
                   activeOpacity={0.85}
                   style={styles.verifyBtn}
                   accessibilityRole="button"
-                  accessibilityLabel="Verify mobile number"
+                  accessibilityLabel="Verify email address"
                 >
                   <Ionicons name="shield-checkmark-outline" size={16} color={theme.colors.primary} />
-                  <Text style={styles.verifyBtnTxt}>Verify mobile</Text>
+                  <Text style={styles.verifyBtnTxt}>Verify email</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.verifiedRow}>
                 <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-                <Text style={styles.verifiedRowTxt}>Mobile verified</Text>
+                <Text style={styles.verifiedRowTxt}>Email verified</Text>
               </View>
             )}
             <View style={styles.divider} />
@@ -773,33 +773,31 @@ export default function ProfileScreen() {
       </Modal>
 
       <Modal
-        visible={verifyMobileOpen}
+        visible={verifyEmailOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+        onRequestClose={() => !verifySendLoading && !verifySubmitLoading && setVerifyEmailOpen(false)}
       >
         <View style={styles.verifyMobileBackdrop}>
           <View style={styles.verifyMobileCard}>
             <View style={styles.verifyMobileHeaderRow}>
               <View style={styles.verifyMobileIconBox}>
-                <Ionicons name="phone-portrait-outline" size={22} color="#0d9488" />
+                <Ionicons name="mail-outline" size={22} color="#0d9488" />
               </View>
               <View style={styles.verifyMobileTitleCol}>
-                <Text style={styles.verifyMobileTitle}>Verify mobile</Text>
-                <Text style={styles.verifyMobileSubtitle}>
-                  {String(form.phone || '').trim() || '—'}
-                </Text>
+                <Text style={styles.verifyMobileTitle}>Verify email</Text>
+                <Text style={styles.verifyMobileSubtitle}>{String(form.email || '').trim() || '—'}</Text>
               </View>
             </View>
 
             <Text style={styles.verifyMobileDesc}>
-              Enter the 6-digit code we texted. If you edited the number, tap{' '}
+              Enter the 6-digit code we emailed you. If you changed your email, tap{' '}
               <Text style={styles.verifyMobileSaveHint}>Save Profile</Text> first.
             </Text>
 
             <TouchableOpacity
               style={styles.verifyMobileSendRow}
-              onPress={() => void sendProfileMobileOtp()}
+              onPress={() => void sendProfileEmailOtp()}
               disabled={verifySendLoading || verifySubmitLoading}
               activeOpacity={0.88}
             >
@@ -871,7 +869,7 @@ export default function ProfileScreen() {
             <View style={styles.verifyMobileActionsRow}>
               <TouchableOpacity
                 style={styles.verifyMobileCancelBtn}
-                onPress={() => !verifySendLoading && !verifySubmitLoading && setVerifyMobileOpen(false)}
+                onPress={() => !verifySendLoading && !verifySubmitLoading && setVerifyEmailOpen(false)}
                 disabled={verifySendLoading || verifySubmitLoading}
                 activeOpacity={0.88}
               >
@@ -883,7 +881,7 @@ export default function ProfileScreen() {
                   (otpDigits.join('').replace(/\D/g, '').length < 6 || verifySubmitLoading) &&
                     styles.verifyMobileVerifyBtnDisabled,
                 ]}
-                onPress={submitProfileMobileOtp}
+                onPress={submitProfileEmailOtp}
                 disabled={otpDigits.join('').replace(/\D/g, '').length < 6 || verifySubmitLoading}
                 activeOpacity={0.88}
               >
@@ -908,8 +906,8 @@ export default function ProfileScreen() {
             <View style={styles.verifySuccessIconCircle}>
               <Ionicons name="checkmark-circle-outline" size={40} color="#0d9488" />
             </View>
-            <Text style={styles.verifySuccessTitle}>Mobile verified!</Text>
-            <Text style={styles.verifySuccessDesc}>Your number has been verified successfully.</Text>
+            <Text style={styles.verifySuccessTitle}>Email verified!</Text>
+            <Text style={styles.verifySuccessDesc}>Your library email has been verified successfully.</Text>
             <TouchableOpacity
               style={styles.verifySuccessDoneBtn}
               onPress={() => setVerifySuccessModalOpen(false)}

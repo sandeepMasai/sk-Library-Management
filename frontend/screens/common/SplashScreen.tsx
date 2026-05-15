@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme/ThemeProvider';
+import { APP_DISPLAY_NAME } from '../../constants/branding';
 
 const BRAND_LOGO = require('../../assets/logo.png');
 
@@ -59,31 +60,34 @@ export default function SplashScreen({ navigation }: any) {
   React.useEffect(() => {
     let cancelled = false;
 
-    async function boot() {
-      // Keep splash visible for a consistent startup experience.
-      await new Promise((r) => setTimeout(r, 5000));
-      if (cancelled) return;
+    void (async () => {
+      async function boot() {
+        // Keep splash visible for a consistent startup experience.
+        await new Promise((r) => setTimeout(r, 5000));
+        if (cancelled) return;
 
-      if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-        return;
+        if (!token) {
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          return;
+        }
+
+        // Hydrate currentUser (so protected route guards + UI have the latest profile).
+        const target = resolveTarget(role);
+        const res = await fetchMyProfile();
+        if (cancelled) return;
+
+        if (!res?.ok) {
+          logout();
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          return;
+        }
+
+        navigation.reset({ index: 0, routes: [{ name: target }] });
       }
 
-      // Hydrate currentUser (so protected route guards + UI have the latest profile).
-      const target = resolveTarget(role);
-      const res = await fetchMyProfile();
-      if (cancelled) return;
+      void boot();
+    })();
 
-      if (!res?.ok) {
-        logout();
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-        return;
-      }
-
-      navigation.reset({ index: 0, routes: [{ name: target }] });
-    }
-
-    void boot();
     return () => {
       cancelled = true;
     };
@@ -113,11 +117,11 @@ export default function SplashScreen({ navigation }: any) {
             source={BRAND_LOGO}
             resizeMode="contain"
             style={{ width: logoSize, height: logoSize }}
-            accessibilityLabel="Library Manager"
+            accessibilityLabel={APP_DISPLAY_NAME}
           />
         </Animated.View>
 
-        <Animated.Text style={[styles.brandName, { opacity }]}>Library Manager</Animated.Text>
+        <Animated.Text style={[styles.brandName, { opacity }]}>{APP_DISPLAY_NAME}</Animated.Text>
         <Animated.Text style={[styles.tagline, { opacity }]}>Modern library operations, simplified.</Animated.Text>
 
         <View style={styles.loaderRow} accessibilityRole="progressbar" accessibilityLabel="Loading">

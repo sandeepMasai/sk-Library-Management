@@ -10,7 +10,8 @@ function toLibraryProfile(lib) {
     name: lib.ownerName,
     email: lib.email,
     phone: lib.phone || "",
-    isMobileVerified: Boolean(lib.isMobileVerified),
+    isEmailVerified: Boolean(lib.isEmailVerified),
+    emailVerifiedAt: lib.emailVerifiedAt?.toISOString?.() || null,
     whatsappNumber: lib.whatsappNumber || "",
     communication: {
       whatsapp: lib.communication?.whatsapp || "",

@@ -31,26 +31,8 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-const { requireAuth } = require("./middleware/auth.middleware");
-const { requireRole } = require("./middleware/role.middleware");
-const libraryProfileOtp = require("./controllers/libraryProfileOtp.controller");
-
-/** Absolute paths so profile OTP is never shadowed by the broader `/api/library` router. */
-app.post(
-  "/api/library/profile/send-mobile-verify-otp",
-  requireAuth,
-  requireRole("library"),
-  libraryProfileOtp.sendLibraryProfileMobileOtp
-);
-app.post(
-  "/api/library/profile/verify-mobile-otp",
-  requireAuth,
-  requireRole("library"),
-  libraryProfileOtp.verifyLibraryProfileMobileOtp
-);
-
 app.use("/api/auth", require("./routes/auth.routes"));
-app.use("/api/otp", require("./routes/otp.routes"));
+app.use("/api/auth", require("./routes/emailOtp.routes"));
 app.use("/api/students", require("./routes/student.routes"));
 app.use("/api/attendance", require("./routes/attendance.routes"));
 app.use("/api/qr", require("./routes/qr.routes"));
@@ -58,7 +40,6 @@ app.use("/api/notifications", require("./routes/notification.routes"));
 app.use("/api/seats", require("./routes/seat.routes"));
 app.use("/api/dashboard", require("./routes/dashboard.routes"));
 app.use("/api/student", require("./routes/student-me.routes"));
-// Hidden admin authentication (keeps /api/auth/login non-admin only)
 app.use("/api/admin", require("./routes/adminAuth.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
 app.use("/api/subscription", require("./routes/subscription.routes"));
@@ -72,16 +53,12 @@ app.use("/api/payment", require("./routes/payment.routes"));
 app.use("/api/plans", require("./routes/plans.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 
-// Health
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "backend",
     env: process.env.NODE_ENV || "development",
-    db:
-      process.env.NODE_ENV === "production"
-        ? undefined
-        : getMongoStatus(),
+    db: process.env.NODE_ENV === "production" ? undefined : getMongoStatus(),
     timestamp: new Date().toISOString(),
   });
 });

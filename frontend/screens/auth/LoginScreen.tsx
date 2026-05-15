@@ -23,6 +23,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Linking } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { APP_DISPLAY_NAME } from '../../constants/branding';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const IS_SMALL_DEVICE = SCREEN_H < 720;
@@ -183,12 +184,12 @@ export default function LoginScreen() {
               source={BRAND_LOGO}
               style={{ width: 75, height: 75 }}
               resizeMode="contain"
-              accessibilityLabel="LibDesk"
+              accessibilityLabel={APP_DISPLAY_NAME}
             />
           </TouchableOpacity>
         </View>
         <Text style={styles.secureLabel}>SECURE ACCESS</Text>
-        <Text style={styles.brandName}>Track My Library</Text>
+        <Text style={styles.brandName}>{APP_DISPLAY_NAME}</Text>
         <Text style={styles.brandTagline}>Experience the next generation of library management.</Text>
       </LinearGradient>
 
@@ -323,10 +324,6 @@ export default function LoginScreen() {
                     </>
                   )}
                 </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.otpLink} onPress={() => navigation.navigate('MobileLogin')} activeOpacity={0.85}>
-                <Text style={styles.otpLinkTxt}>Login with OTP (mobile)</Text>
               </TouchableOpacity>
 
               {loginType === 'library' ? (
@@ -570,8 +567,6 @@ function makeStyles(isSmall: boolean) {
       borderRadius: 14,
     },
     btnTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
-    otpLink: { marginTop: 14, alignItems: 'center' },
-    otpLinkTxt: { color: '#0F766E', fontWeight: '800', fontSize: 14 },
     createRow: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -14,9 +14,8 @@ import { ConfirmModal } from './components/ConfirmModal';
 // Screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterLibraryScreen from './screens/auth/RegisterLibraryScreen';
-import MobileLoginScreen from './screens/auth/MobileLoginScreen';
-import VerifyOTPScreen from './screens/auth/VerifyOTPScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import ForgotPasswordOtpScreen from './screens/auth/ForgotPasswordOtpScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import AdminLoginScreen from './screens/auth/AdminLoginScreen';
 import AdminDashboardScreen from './screens/admin/Dashboard.tsx';
@@ -60,58 +59,11 @@ import LibraryBrandingScreen from './screens/library/LibraryBranding';
 import LibraryChangePasswordScreen from './screens/library/ChangePassword';
 import PlaceholderScreen from './screens/common/PlaceholderScreen';
 import SplashScreen from './screens/common/SplashScreen';
+import { rootLinking } from './navigation/linking';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const navigationRef = createNavigationContainerRef();
-
-/**
- * Web path routing (deep links) + role guards:
- * - Native apps keep using screen-based navigation.
- * - On web, react-navigation uses this linking config to map URL paths to screens.
- * - AdminRoute/LibraryRoute/StudentRoute enforce auth + role constraints.
- */
-const linking = {
-  prefixes: ['/', 'libdesk://'],
-  config: {
-    screens: {
-      Login: '',
-      MobileLogin: 'mobile-login',
-      VerifyOTP: 'verify-otp',
-      ForgotPassword: 'forgot-password',
-      ResetPassword: 'reset-password',
-      AdminLogin: 'admin/login',
-      RegisterLibrary: 'register-library',
-      AdminRoot: {
-        path: 'admin',
-        screens: {
-          Dashboard: 'dashboard',
-          Subscriptions: 'subscriptions',
-          Plans: 'plans',
-          Notify: 'notify',
-          Libraries: 'libraries',
-          Settings: 'settings',
-        },
-      },
-      LibraryRoot: {
-        screens: {
-          Dashboard: 'dashboard',
-          Students: 'students',
-          Attendance: 'attendance',
-          Payments: 'payments',
-          Seats: 'seats',
-        },
-      },
-      StudentRoot: {
-        path: 'student',
-        screens: {
-          Dashboard: 'dashboard',
-          Attendance: 'attendance',
-        },
-      },
-    },
-  },
-} as const;
 
 function AdminTabs() {
   return (
@@ -485,7 +437,7 @@ function AppInner() {
   return (
     <NavigationContainer
       ref={navigationRef}
-      linking={linking as any}
+      linking={rootLinking as any}
       theme={{
         dark: mode === 'dark',
         colors: {
@@ -518,9 +470,8 @@ function AppInner() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
         <Stack.Screen name="RegisterLibrary" component={RegisterLibraryScreen} />
-        <Stack.Screen name="MobileLogin" component={MobileLoginScreen} />
-        <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="ForgotPasswordOtp" component={ForgotPasswordOtpScreen} />
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
 
         {/* Protected role roots */}

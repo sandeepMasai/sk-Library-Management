@@ -72,8 +72,10 @@ export interface User {
   cancelReason?: string | null;
   cancelNote?: string | null;
   libraryCode?: string;
-  /** True after successful mobile OTP verification (backend). */
-  isMobileVerified?: boolean;
+  /** True after successful email OTP verification. */
+  isEmailVerified?: boolean;
+  /** Timestamp when email was verified (library only). */
+  emailVerifiedAt?: string | null;
 }
 
 export interface Attendance {
@@ -183,6 +185,7 @@ interface AppState {
    */
   authToken: string | null; // kept for backwards compatibility with existing code paths
   token: string | null;
+  refreshToken: string | null;
   role: AuthRole | null;
   libraryId: string | null;
   libraryCode: string | null;
@@ -207,19 +210,46 @@ interface AppState {
   patchCurrentUser: (patch: Partial<User>) => void;
   fetchMyProfile: () => Promise<{ ok: boolean; message?: string }>;
 
-  // Library - Password / MSG91 OTP
-  requestLibraryPasswordReset: (email: string) => Promise<{ ok: boolean; message?: string }>;
-  forgotLibraryPasswordSendOtp: (mobile: string) => Promise<{ ok: boolean; message?: string }>;
-  forgotLibraryPasswordVerifyOtp: (mobile: string, otp: string) => Promise<{ ok: boolean; resetToken?: string; message?: string }>;
-  resetLibraryPassword: (token: string, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
-  changeLibraryPassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
-  sendLoginOtp: (p: { mobile: string; role: 'student' | 'library'; libraryCode?: string }) => Promise<{ ok: boolean; message?: string }>;
-  verifyLoginOtp: (p: {
-    mobile: string;
-    role: 'student' | 'library';
-    otp: string;
-    libraryCode?: string;
-  }) => Promise<{ ok: boolean; message?: string }>;
+  // Forgot password (email OTP — no reset links)
+  sendForgotPasswordOtp: (email: string) => Promise<{
+    ok: boolean;
+    message?: string;
+    expiryMinutes?: number;
+    resendAfterSeconds?: number;
+  }>;
+  verifyForgotPasswordOtp: (
+    email: string,
+    otp: string
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+    resetSessionToken?: string;
+    sessionExpiresMinutes?: number;
+    attemptsRemaining?: number;
+  }>;
+  completeForgotPasswordReset: (
+    email: string,
+    resetSessionToken: string,
+    newPassword: string
+  ) => Promise<{ ok: boolean; message?: string }>;
+  changeLibraryPassword: (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string
+  ) => Promise<{ ok: boolean; message?: string }>;
+  
+  // Email OTP
+  sendEmailOtp: (p: { email: string; purpose?: string; role?: string }) => Promise<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>;
+  verifyEmailOtp: (p: { email: string; otp: string; purpose?: string }) => Promise<{ ok: boolean; message?: string }>;
+  resendEmailOtp: (p: { email: string; purpose?: string }) => Promise<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>;
+  
+  // Library Email Verification
+  sendLibraryEmailVerification: () => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>;
+  verifyLibraryEmail: (otp: string) => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>;
+  
+  // Student Email Verification
+  sendStudentEmailVerification: () => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>;
+  verifyStudentEmail: (otp: string) => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean }>;
 
   // Helpers
   isAuthenticated: () => boolean;
@@ -262,6 +292,9 @@ interface AppState {
   // Student - Profile
   uploadMyPhoto: (localUri: string) => Promise<{ ok: boolean; message?: string }>;
   deleteMyAccount: () => Promise<{ ok: boolean; message?: string }>;
+  
+  // Student - Email
+  updateStudentEmail: (email: string) => Promise<{ ok: boolean; message?: string }>;
 
   // Admin - Attendance
   generateDailyQr: (opts?: { rotate?: boolean }) => Promise<QrTokenInfo | null>;
@@ -312,16 +345,17 @@ const initialAdmin: User = {
 };
 
 /**
- * Shared post-login hydration (password login + MSG91 OTP verify).
+ * Shared post-login hydration (password / PIN login success payloads).
  */
 async function hydrateSessionAfterAuth(
   get: () => AppState,
   set: (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void,
-  data: { user: User; authToken?: string | null; libraryCode?: string | null },
+  data: { user: User; authToken?: string | null; refreshToken?: string | null; libraryCode?: string | null },
   libraryCodeFromForm?: string | null
 ): Promise<{ ok: boolean; message?: string }> {
   const authenticatedUser = data.user;
   const token = data.authToken || null;
+  const refreshToken = data.refreshToken || null;
 
   if (authenticatedUser?.role === 'admin') {
     return { ok: false, message: 'Admin login is not available here.' };
@@ -343,6 +377,7 @@ async function hydrateSessionAfterAuth(
     currentUser: authenticatedUser,
     authToken: token,
     token,
+    refreshToken,
     role: authenticatedUser.role,
     libraryId: nextLibraryId,
     libraryCode: nextLibraryCode,
@@ -365,7 +400,7 @@ async function hydrateSessionAfterAuth(
     }
   }
 
-  if (authenticatedUser.role === 'admin') {
+  if ((authenticatedUser.role as AuthRole) === 'admin') {
     await get().fetchStudents();
   } else {
     await Promise.all([
@@ -453,6 +488,7 @@ const authStorage = createJSONStorage(() => {
           libraryId: legacyLibraryId,
           libraryCode: legacyLibraryCode,
           authToken: legacyToken, // keep in sync
+          refreshToken: null,
         },
         version: 1,
       };
@@ -494,6 +530,7 @@ export const useAppStore = create<AppState>()(
   currentUser: null,
   authToken: null,
   token: null,
+  refreshToken: null,
   role: null,
   libraryId: null,
   libraryCode: null,
@@ -503,7 +540,7 @@ export const useAppStore = create<AppState>()(
     {
       id: 'notif-1',
       title: 'Welcome!',
-      message: 'Welcome to the Library Management System.',
+      message: 'Welcome to SmartLibDesk.',
       date: new Date().toISOString(),
       targetId: 'all',
       category: 'general',
@@ -774,8 +811,8 @@ export const useAppStore = create<AppState>()(
        * - For login itself: we send credentials only (no token yet)
        */
       const response = await apiPost<
-        | { user: User; authToken?: string; libraryCode?: string }
-        | { success: boolean; data: { user: User; authToken?: string; libraryCode?: string }; message?: string }
+        | { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }
+        | { success: boolean; data: { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }; message?: string }
       >(`/api/auth/login`, {
         usernameOrMobile,
         ...(mode === 'password' ? { password: pinOrPassword } : { pin: pinOrPassword }),
@@ -798,12 +835,13 @@ export const useAppStore = create<AppState>()(
   adminLogin: async (username, pin) => {
     try {
       const response = await apiPost<
-        | { user: User; authToken?: string; libraryCode?: string }
-        | { success: boolean; data: { user: User; authToken?: string; libraryCode?: string }; message?: string }
+        | { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }
+        | { success: boolean; data: { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }; message?: string }
       >(`/api/admin/login`, { username, pin });
       const data = 'success' in response ? response.data : response;
       const authenticatedUser = data.user;
       const token = data.authToken || null;
+      const refreshToken = data.refreshToken || null;
       if (!authenticatedUser || authenticatedUser.role !== 'admin') {
         return { ok: false, message: 'Invalid admin credentials' };
       }
@@ -811,6 +849,7 @@ export const useAppStore = create<AppState>()(
         currentUser: authenticatedUser,
         authToken: token,
         token,
+        refreshToken,
         role: authenticatedUser.role,
         libraryId: null,
         libraryCode: null,
@@ -828,6 +867,7 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       authToken: null,
       token: null,
+      refreshToken: null,
       role: null,
       libraryId: null,
       libraryCode: null,
@@ -864,7 +904,8 @@ export const useAppStore = create<AppState>()(
             ownerName: p?.name ?? cu?.ownerName,
             email: p?.email ?? cu?.email,
             phone: p?.phone ?? cu?.phone,
-            isMobileVerified: Boolean(p?.isMobileVerified ?? (cu as any)?.isMobileVerified),
+            isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
+            emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
             address: p?.address ?? cu?.address,
             city: p?.city ?? cu?.city,
             logoUrl: p?.logoUrl ?? cu?.logoUrl,
@@ -896,95 +937,212 @@ export const useAppStore = create<AppState>()(
     }
   },
 
-  requestLibraryPasswordReset: async (email) => {
+  sendForgotPasswordOtp: async (email) => {
     try {
-      await apiPost<{ ok: boolean; message?: string }>(`/api/auth/forgot-password`, { email });
-      return { ok: true };
+      const response = await apiPost<{
+        ok: boolean;
+        message?: string;
+        expiryMinutes?: number;
+        resendAfterSeconds?: number;
+      }>(`/api/auth/forgot-password/send-otp`, { email });
+      return {
+        ok: true,
+        message: response.message,
+        expiryMinutes: response.expiryMinutes,
+        resendAfterSeconds: response.resendAfterSeconds,
+      };
     } catch (e) {
       const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+      return {
+        ok: false,
+        message: err?.message || `Backend unavailable (${API_URL})`,
+      };
     }
   },
 
-  forgotLibraryPasswordSendOtp: async (mobile) => {
+  verifyForgotPasswordOtp: async (email, otp) => {
     try {
-      await apiPost(`/api/auth/forgot-password/send-otp`, { mobile });
-      return { ok: true };
+      const response = await apiPost<{
+        ok: boolean;
+        resetSessionToken?: string;
+        sessionExpiresMinutes?: number;
+      }>(`/api/auth/forgot-password/verify-otp`, { email, otp });
+      return {
+        ok: true,
+        resetSessionToken: response.resetSessionToken,
+        sessionExpiresMinutes: response.sessionExpiresMinutes,
+      };
     } catch (e) {
       const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+      const attemptsRemaining =
+        typeof (e as ApiError).details?.attemptsRemaining === 'number'
+          ? ((e as ApiError).details!.attemptsRemaining as number)
+          : undefined;
+      return {
+        ok: false,
+        message: err?.message || `Backend unavailable (${API_URL})`,
+        attemptsRemaining,
+      };
     }
   },
 
-  forgotLibraryPasswordVerifyOtp: async (mobile, otp) => {
+  completeForgotPasswordReset: async (email, resetSessionToken, newPassword) => {
     try {
-      const response = await apiPost<{ success?: boolean; data: { resetToken: string } } | { resetToken: string }>(
-        `/api/auth/forgot-password/verify-otp`,
-        { mobile, otp }
-      );
-      const data = unwrapApiData(response);
-      return { ok: true, resetToken: data.resetToken };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  resetLibraryPassword: async (token, newPassword) => {
-    try {
-      await apiPost<{ ok: boolean; message?: string }>(`/api/auth/reset-password`, {
-        resetToken: token,
+      const response = await apiPost<{ ok: boolean; message?: string }>(`/api/auth/forgot-password/reset-password`, {
+        email,
+        resetSessionToken,
         newPassword,
       });
-      return { ok: true };
+      return { ok: true, message: response.message };
     } catch (e) {
       const err = e as ApiError;
       return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
     }
   },
 
-  sendLoginOtp: async ({ mobile, role, libraryCode }) => {
+  changeLibraryPassword: async (currentPassword, newPassword, confirmPassword) => {
     try {
-      await apiPost(`/api/otp/send-otp`, {
-        mobile,
-        role,
-        ...(role === 'student' && libraryCode ? { libraryCode } : {}),
-      });
-      return { ok: true };
+      const response = await apiPost<{ success?: boolean; data?: unknown; message?: string }>(
+        `/api/auth/change-password`,
+        { currentPassword, newPassword, confirmPassword }
+      );
+      const message =
+        typeof response?.message === 'string' && response.message.trim()
+          ? response.message.trim()
+          : 'Password updated successfully';
+      return { ok: true, message };
     } catch (e) {
       const err = e as ApiError;
       return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
     }
   },
 
-  verifyLoginOtp: async ({ mobile, role, otp, libraryCode }) => {
+  // Email OTP
+  sendEmailOtp: async ({ email, purpose = 'verification', role }) => {
     try {
-      const response = await apiPost<
-        | { user: User; authToken?: string; libraryCode?: string }
-        | { success: boolean; data: { user: User; authToken?: string; libraryCode?: string } }
-      >(`/api/otp/verify-otp`, {
-        mobile,
-        role,
-        otp,
-        ...(role === 'student' && libraryCode ? { libraryCode } : {}),
-      });
-      const data = 'success' in response ? response.data : response;
-      const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode ?? null);
-      if (!hydrated.ok) return hydrated;
-      return { ok: true };
+      const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
+        `/api/auth/send-email-otp`,
+        { email, purpose, role }
+      );
+      return response;
     } catch (e) {
       const err = e as ApiError;
-      const msg = err?.message || 'Network error';
-      if (/Network/i.test(msg)) {
-        return { ok: false, message: 'Please check your internet connection' };
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  verifyEmailOtp: async ({ email, otp, purpose = 'verification' }) => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string }>(
+        `/api/auth/verify-email-otp`,
+        { email, otp, purpose }
+      );
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  resendEmailOtp: async ({ email, purpose = 'verification' }) => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
+        `/api/auth/resend-email-otp`,
+        { email, purpose }
+      );
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  // Library Email Verification
+  sendLibraryEmailVerification: async () => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
+        `/api/library/send-verification-email`,
+        {}
+      );
+      if (response.isEmailVerified !== undefined) {
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+        }));
       }
-      return { ok: false, message: msg };
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
     }
   },
 
-  changeLibraryPassword: async (currentPassword, newPassword) => {
+  verifyLibraryEmail: async (otp: string) => {
     try {
-      await apiPost<{ ok: boolean; message?: string }>(`/api/auth/change-password`, { currentPassword, newPassword });
+      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>(
+        `/api/library/verify-email`,
+        { otp }
+      );
+      if (response.isEmailVerified !== undefined) {
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified, emailVerifiedAt: response.emailVerifiedAt } : state.currentUser,
+        }));
+      }
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  // Student Email Verification
+  sendStudentEmailVerification: async () => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
+        `/api/student/me/send-verification-email`,
+        {}
+      );
+      if (response.isEmailVerified !== undefined) {
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+        }));
+      }
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  verifyStudentEmail: async (otp: string) => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean }>(
+        `/api/student/me/verify-email`,
+        { otp }
+      );
+      if (response.isEmailVerified !== undefined) {
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+        }));
+      }
+      return response;
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  // Student - Email
+  updateStudentEmail: async (email: string) => {
+    try {
+      const response = await apiPost<{ ok: boolean; message?: string; student?: any }>(
+        `/api/student/me`,
+        { email }
+      );
+      if (response.student) {
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, email: response.student.email, isEmailVerified: response.student.isEmailVerified } : state.currentUser,
+        }));
+      }
       return { ok: true };
     } catch (e) {
       const err = e as ApiError;
@@ -1309,6 +1467,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         authToken: state.authToken,
         token: state.token,
+        refreshToken: state.refreshToken,
         role: state.role,
         libraryId: state.libraryId,
         libraryCode: state.libraryCode,

@@ -299,52 +299,6 @@ function verifyRefreshToken(token) {
   return decoded;
 }
 
-const PASSWORD_RESET_TTL = process.env.PASSWORD_RESET_TOKEN_TTL || "15m";
-
-/**
- * Short-lived JWT returned after forgot-password OTP verify.
- * Consumed only by POST /api/auth/reset-password (not a general access token).
- */
-function signPasswordResetToken({ userId, role = "library" }) {
-  const uid = String(userId || "").trim();
-  if (!uid) {
-    throw createHttpError(500, "Invalid password reset subject");
-  }
-  const body = {
-    userId: uid,
-    role: String(role || "library"),
-    tokenType: "password_reset",
-    typ: "password_reset",
-    token_use: "password_reset",
-  };
-  const opts = {
-    algorithm: getPrimaryAlgorithm(),
-    expiresIn: PASSWORD_RESET_TTL,
-  };
-  const issuer = getIssuerForSign("access");
-  if (issuer) opts.issuer = issuer;
-  const audience = getAudienceForSign("access");
-  if (audience) opts.audience = audience;
-  return jwt.sign(body, getAccessTokenSecret(), opts);
-}
-
-function verifyPasswordResetToken(token) {
-  const decoded = jwt.verify(token, getAccessTokenSecret(), getJwtVerifyOptions("access"));
-  if (
-    decoded?.tokenType !== "password_reset" &&
-    decoded?.typ !== "password_reset"
-  ) {
-    const err = createHttpError(401, "Invalid reset token");
-    throw err;
-  }
-  const userId = String(decoded.userId || "").trim();
-  const role = String(decoded.role || "library").trim();
-  if (!userId || userId.length > 128) {
-    throw createHttpError(401, "Invalid reset token");
-  }
-  return { userId, role };
-}
-
 function hashToken(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
 }
@@ -359,10 +313,8 @@ module.exports = {
   getRefreshTokenSecret,
   hashToken,
   signAccessToken,
-  signPasswordResetToken,
   signRefreshToken,
   validateTokenPayload,
   verifyAccessToken,
-  verifyPasswordResetToken,
   verifyRefreshToken,
 };

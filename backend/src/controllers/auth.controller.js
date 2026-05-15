@@ -1,7 +1,7 @@
 const authService = require("../services/auth.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
-const { assertIndianMobileBody } = require("../utils/mobile");
+const { normalizeIndianMobile } = require("../utils/mobile");
 const { sendSuccess } = require("../utils/response");
 
 const AUTH_ROLES = new Set(["admin", "library", "student"]);
@@ -69,7 +69,14 @@ function sanitizeRegisterLibraryBody(body = {}) {
     throw createHttpError(400, "pincode must be exactly 6 digits");
   }
 
-  const phone = assertIndianMobileBody(body.phone || body.mobile, "phone");
+  const phoneRaw = body.phone ?? body.mobile;
+  const phone =
+    phoneRaw != null && String(phoneRaw).trim() !== ""
+      ? normalizeIndianMobile(phoneRaw)
+      : null;
+  if (phoneRaw != null && String(phoneRaw).trim() !== "" && !phone) {
+    throw createHttpError(400, "Invalid phone number (optional 10-digit Indian mobile)");
+  }
 
   return {
     libraryName,
@@ -114,8 +121,18 @@ const registerLibrary = asyncHandler(async (req, res) => {
   return sendSuccess(res, result, "Library registered successfully", 201);
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const result = await authService.changeAuthenticatedPassword({
+    authUser: req.user,
+    body: req.body,
+    metadata: getRequestMeta(req),
+  });
+  return sendSuccess(res, { updated: true }, result.message || "Password updated successfully");
+});
+
 module.exports = {
   login,
   refresh,
   registerLibrary,
+  changePassword,
 };
