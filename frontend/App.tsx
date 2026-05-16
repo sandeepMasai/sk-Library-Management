@@ -18,22 +18,21 @@ import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import ForgotPasswordOtpScreen from './screens/auth/ForgotPasswordOtpScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import AdminLoginScreen from './screens/auth/AdminLoginScreen';
-import AdminDashboardScreen from './screens/admin/Dashboard.tsx';
-import AdminDashboardPage from './pages/AdminDashboardPage';
-import AdminStudentsPage from './pages/AdminStudentsPage';
-import AdminSubscriptionsPage from './pages/AdminSubscriptionsPage';
-import AdminNotifyLibrariesPage from './pages/AdminNotifyLibrariesPage';
-import AdminLibrariesPage from './pages/AdminLibrariesPage';
-import AdminLibraryDetailPage from './pages/AdminLibraryDetailPage';
-import AdminSubscriptionDetailPage from './pages/AdminSubscriptionDetailPage';
-import AdminPlansPage from './pages/AdminPlansPage';
-import AdminGlobalSettingsPage from './pages/AdminGlobalSettingsPage';
-import AdminStudents from './screens/admin/Students';
-import AdminStudentForm from './screens/admin/StudentForm';
-import AdminStudentDetail from './screens/admin/StudentDetail';
-import AdminAttendance from './screens/admin/Attendance';
-import AdminNotifications from './screens/admin/Notifications';
-import AdminFees from './screens/admin/Fees';
+import {
+  AdminDashboardScreen,
+  AdminStudents,
+  AdminStudentForm,
+  AdminStudentDetail,
+  AdminAttendance,
+  AdminNotifications,
+  AdminFees,
+} from './pages/libraryadmin';
+import {
+  AdminLibraryDetailPage,
+  AdminSubscriptionDetailPage,
+  AdminPlansPage,
+  AdminGlobalSettingsPage,
+} from './pages/superadmin';
 import SettingsScreen from './screens/common/SettingsScreen';
 import AppearanceScreen from './screens/common/AppearanceScreen';
 import StudentHome from './screens/student/Home';
@@ -59,54 +58,22 @@ import LibraryBrandingScreen from './screens/library/LibraryBranding';
 import LibraryChangePasswordScreen from './screens/library/ChangePassword';
 import PlaceholderScreen from './screens/common/PlaceholderScreen';
 import SplashScreen from './screens/common/SplashScreen';
+import { SuperAdminDrawerNavigator } from './components/superadmin/SuperAdminDrawerNavigator';
 import { rootLinking } from './navigation/linking';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const navigationRef = createNavigationContainerRef();
 
+/** Super Admin — SaaS drawer sidebar (web + native); see `SuperAdminDrawerNavigator`. */
 function AdminTabs() {
-  return (
-    <Tab.Navigator
-      tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName = '';
-          if (route.name === 'Dashboard') iconName = focused ? 'grid' : 'grid-outline';
-          else if (route.name === 'Subscriptions') iconName = focused ? 'card' : 'card-outline';
-          else if (route.name === 'Plans') iconName = focused ? 'pricetags' : 'pricetags-outline';
-          else if (route.name === 'Notify') iconName = focused ? 'megaphone' : 'megaphone-outline';
-          else if (route.name === 'Libraries') iconName = focused ? 'business' : 'business-outline';
-          else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
-          return <Ionicons name={iconName as any} size={size} color={color} />;
-        },
-        headerShown: true,
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-        headerTintColor: theme.colors.text,
-        headerShadowVisible: false,
-      })}
-    >
-      {/* Admin SaaS dashboard (charts + libraries + subscriptions + logs + notify) */}
-      <Tab.Screen name="Dashboard" component={AdminDashboardPage} />
-      {/* Subscription tracking list */}
-      <Tab.Screen name="Subscriptions" component={AdminSubscriptionsPage} />
-      {/* Admin plan pricing/discount management */}
-      <Tab.Screen name="Plans" component={AdminPlansPage} options={{ title: 'Plan Management' }} />
-      {/* Admin → Libraries notify form */}
-      <Tab.Screen name="Notify" component={AdminNotifyLibrariesPage} />
-      {/* Libraries list (10/page) */}
-      <Tab.Screen name="Libraries" component={AdminLibrariesPage} />
-      {/* Admin settings */}
-      <Tab.Screen name="Settings" component={SettingsScreen} />
-    </Tab.Navigator>
-  );
+  return <SuperAdminDrawerNavigator />;
 }
 
 function StudentTabs() {
-  const currentUser      = useAppStore((s) => s.currentUser);
-  const notifications    = useAppStore((s) => s.notifications);
-  const lastNotifSeenAt  = useAppStore((s) => s.lastNotifSeenAt);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const notifications = useAppStore((s) => s.notifications);
+  const lastNotifSeenAt = useAppStore((s) => s.lastNotifSeenAt);
 
   const unread = (() => {
     if (!currentUser) return 0;
@@ -370,12 +337,20 @@ function AppInner() {
     if (!currentUser) return;
 
     const studentRootTabs = ['Home', 'Scan Attendance', 'Calendar', 'Notifications'];
-    const adminRootTabs = ['Dashboard', 'Students', 'Attendance', 'Notifications'];
+    const adminLeafScreens = [
+      'Libraries',
+      'Subscriptions',
+      'Students',
+      'Plans',
+      'Payments',
+      'Notifications',
+      'Settings',
+    ];
 
     const handleBackPress = () => {
       if (!navigationRef.isReady()) return false;
 
-      const route = navigationRef.getCurrentRoute();
+      const route = navigationRef.getCurrentRoute() as { name?: string } | undefined;
       const routeName = route?.name ?? '';
 
       if (currentUser.role === 'student') {
@@ -405,8 +380,8 @@ function AppInner() {
       }
 
       if (currentUser.role === 'admin') {
-        if (routeName && routeName !== 'Dashboard' && adminRootTabs.includes(routeName)) {
-          (navigationRef as any).navigate('AdminMain', { screen: 'Dashboard' });
+        if (routeName && routeName !== 'Dashboard' && adminLeafScreens.includes(routeName)) {
+          (navigationRef as any).navigate('AdminRoot', { screen: 'Dashboard' });
           return true;
         }
         if (routeName === 'Dashboard') {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import AdminStudents from '../screens/admin/Students';
+import { AdminStudents } from './libraryadmin';
 import { useAppStore } from '../store';
 import { theme } from '../theme';
 

@@ -59,13 +59,27 @@ export const rootLinking = {
       AdminLogin: 'admin/login',
       RegisterLibrary: 'register-library',
       AdminRoot: {
-        path: 'admin',
+        path: 'superadmin',
         screens: {
           Dashboard: 'dashboard',
+          Libraries: {
+            path: 'libraries',
+            screens: {
+              LibrariesHub: '',
+              LibrariesFiltered: ':planType',
+            },
+          },
           Subscriptions: 'subscriptions',
+          Students: {
+            path: 'students',
+            screens: {
+              StudentsLibraryList: '',
+              LibraryStudents: ':libraryId',
+            },
+          },
           Plans: 'plans',
-          Notify: 'notify',
-          Libraries: 'libraries',
+          Payments: 'payments',
+          Notifications: 'notifications',
           Settings: 'settings',
         },
       },

@@ -1,34 +1,12 @@
 const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const compression = require("compression");
-const morgan = require("morgan");
 
 const { getMongoStatus } = require("./config/db");
+const { attachHttpMiddleware } = require("./config/httpStack");
 const { errorHandler } = require("./middleware/error.middleware");
 
 const app = express();
 
-// Security
-app.use(helmet());
-
-// Compression
-app.use(compression());
-
-// Logging
-app.use(morgan("dev"));
-
-// CORS
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
-    credentials: true,
-  })
-);
-
-// Parsers
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
+attachHttpMiddleware(app);
 
 // Routes
 app.use("/api/auth", require("./routes/auth.routes"));
@@ -42,6 +20,7 @@ app.use("/api/dashboard", require("./routes/dashboard.routes"));
 app.use("/api/student", require("./routes/student-me.routes"));
 app.use("/api/admin", require("./routes/adminAuth.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
+app.use("/api/superadmin", require("./routes/superadmin.routes"));
 app.use("/api/subscription", require("./routes/subscription.routes"));
 app.use("/api/library", require("./routes/library.routes"));
 app.use("/api/user", require("./routes/user.routes"));

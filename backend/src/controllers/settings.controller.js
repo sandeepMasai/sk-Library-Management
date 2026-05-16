@@ -1,20 +1,12 @@
 const settingsService = require("../services/settings.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
+const { isValidEmail, isValidHttpUrl } = require("../utils/inputValidation");
 const { sendSuccess } = require("../utils/response");
 
 function assertAdmin(user) {
   if (user?.role !== "admin") {
     throw createHttpError(403, "Forbidden");
-  }
-}
-
-function isValidHttpUrl(input) {
-  try {
-    const url = new URL(String(input || "").trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
   }
 }
 
@@ -37,7 +29,7 @@ function sanitizeCommunication(rawCommunication) {
   }
   if (rawCommunication?.email !== undefined) {
     communication.email = String(rawCommunication.email || "").trim().toLowerCase();
-    if (communication.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(communication.email)) {
+    if (communication.email && !isValidEmail(communication.email)) {
       throw createHttpError(400, "Invalid communication.email");
     }
   }

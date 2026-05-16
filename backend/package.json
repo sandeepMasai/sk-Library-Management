@@ -11,6 +11,7 @@
     "bcryptjs": "^3.0.2",
     "cloudinary": "^1.41.3",
     "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
@@ -23,6 +24,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^4.2.1",
     "razorpay": "^2.9.6",
-    "resend": "^6.12.3"
+    "resend": "^6.12.3",
+    "validator": "^13.15.35"
   }
 }

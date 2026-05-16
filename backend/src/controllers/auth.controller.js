@@ -2,6 +2,12 @@ const authService = require("../services/auth.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
 const { assertIndianMobileBody } = require("../utils/mobile");
+const {
+  getRefreshCookieResolvedName,
+  isRefreshCookieEnabled,
+  rotateRefreshCookie,
+  setRefreshCookie,
+} = require("../utils/refreshCookie");
 const { sendSuccess } = require("../utils/response");
 
 const AUTH_ROLES = new Set(["admin", "library", "student"]);
@@ -97,8 +103,17 @@ function sanitizeRegisterLibraryBody(body = {}) {
   };
 }
 
-function sanitizeRefreshBody(body = {}) {
-  const refreshToken = String(body.refreshToken || "").trim();
+function sanitizeRefreshBody(body = {}, req) {
+  const fromBody = String(body.refreshToken ?? "").trim();
+  const cookieEnabled = isRefreshCookieEnabled();
+  const cookieName = getRefreshCookieResolvedName();
+  const fromCookie =
+    cookieEnabled && req
+      ? String(
+          req.signedCookies?.[cookieName] ?? req.cookies?.[cookieName] ?? ""
+        ).trim()
+      : "";
+  const refreshToken = fromBody || fromCookie;
   if (!refreshToken) throw createHttpError(400, "refreshToken is required");
   return { refreshToken };
 }
@@ -108,14 +123,16 @@ const login = asyncHandler(async (req, res) => {
     body: sanitizeLoginBody(req.body),
     metadata: getRequestMeta(req),
   });
+  setRefreshCookie(res, result.refreshToken);
   return sendSuccess(res, result, "Login successful");
 });
 
 const refresh = asyncHandler(async (req, res) => {
   const result = await authService.refresh({
-    body: sanitizeRefreshBody(req.body),
+    body: sanitizeRefreshBody(req.body, req),
     metadata: getRequestMeta(req),
   });
+  rotateRefreshCookie(res, result.refreshToken);
   return sendSuccess(res, result, "Token refreshed successfully");
 });
 
@@ -124,6 +141,7 @@ const registerLibrary = asyncHandler(async (req, res) => {
     body: sanitizeRegisterLibraryBody(req.body),
     metadata: getRequestMeta(req),
   });
+  setRefreshCookie(res, result.refreshToken);
   return sendSuccess(res, result, "Library registered successfully", 201);
 });
 

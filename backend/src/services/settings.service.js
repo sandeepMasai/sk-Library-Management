@@ -77,8 +77,16 @@ function normalizeCommunication(rawCommunication) {
   };
 }
 
+const EMPTY_SETTINGS = {
+  privacyPolicyUrl: "",
+  termsUrl: "",
+  communication: { whatsapp: "", channel: "", email: "" },
+  updatedAt: null,
+};
+
 async function getSettings() {
   const doc = await GlobalSettings.findById("global").lean();
+  if (!doc) return { ...EMPTY_SETTINGS };
   return toUpdatedSettingsResponse(doc);
 }
 
@@ -93,11 +101,20 @@ async function updateSettings({ body }) {
   if (!isValidHttpUrl(termsUrl)) throw createHttpError(400, "Invalid termsUrl");
 
   const communication = normalizeCommunication(rawCommunication);
-  const doc = await GlobalSettings.findByIdAndUpdate(
-    "global",
-    { privacyPolicyUrl, termsUrl, ...(rawCommunication !== undefined ? { communication } : {}) },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).lean();
+  let doc;
+  try {
+    doc = await GlobalSettings.findByIdAndUpdate(
+      "global",
+      { privacyPolicyUrl, termsUrl, ...(rawCommunication !== undefined ? { communication } : {}) },
+      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+    ).lean();
+  } catch (err) {
+    if (err?.name === "ValidationError") {
+      const first = Object.values(err.errors || {})[0];
+      throw createHttpError(400, first?.message || "Invalid settings");
+    }
+    throw err;
+  }
 
   return toSettingsResponse(doc);
 }

@@ -299,6 +299,9 @@ studentSchema.index(
   { unique: true }
 );
 
+/** Tenant-wide email lookups (optional field; omit null/empty docs). */
+studentSchema.index({ email: 1 }, { sparse: true });
+
 studentSchema.index(
   { libraryId: 1, mobile: 1 },
   { unique: true }
@@ -317,6 +320,10 @@ studentSchema.index({
   membershipStatus: 1,
   expiryDate: 1,
 });
+
+/** Super Admin: tenant-scoped status filters (membershipStatus is canonical "status"). */
+studentSchema.index({ libraryId: 1 });
+studentSchema.index({ membershipStatus: 1 });
 
 /** Partial index: eligible members by expiry window (large SaaS collections). */
 studentSchema.index(

@@ -1,13 +1,15 @@
 ## Super Admin (Admin) Tabs
 
-Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/frontend/App.tsx`.
+Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `frontend/App.tsx`.
+
+All Super Admin **page components** live in **`frontend/pages/superadmin/`** (exported from [`frontend/pages/superadmin/index.ts`](pages/superadmin/index.ts)).
 
 ### Tabs (Bottom navigation)
 
 - **Dashboard**
   - **Route name**: `Dashboard`
   - **Component**: `AdminDashboardPage`
-  - **File**: `libDesk/frontend/pages/AdminDashboardPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminDashboardPage.tsx`](pages/superadmin/AdminDashboardPage.tsx)
   - **Backend APIs (common)**:
     - `GET /api/admin/dashboard`
     - `GET /api/admin/libraries`
@@ -17,7 +19,7 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
 - **Subscriptions**
   - **Route name**: `Subscriptions`
   - **Component**: `AdminSubscriptionsPage`
-  - **File**: `libDesk/frontend/pages/AdminSubscriptionsPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminSubscriptionsPage.tsx`](pages/superadmin/AdminSubscriptionsPage.tsx)
   - **Backend APIs (common)**:
     - `GET /api/admin/subscriptions?status=active|expired|cancelled`
 
@@ -25,7 +27,7 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
   - **Route name**: `Plans`
   - **Tab title**: `Plan Management`
   - **Component**: `AdminPlansPage`
-  - **File**: `libDesk/frontend/pages/AdminPlansPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminPlansPage.tsx`](pages/superadmin/AdminPlansPage.tsx)
   - **Backend APIs (common)**:
     - `GET /api/plans?all=1` (admin-only)
     - `POST /api/plans`
@@ -35,7 +37,7 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
 - **Notify**
   - **Route name**: `Notify`
   - **Component**: `AdminNotifyLibrariesPage`
-  - **File**: `libDesk/frontend/pages/AdminNotifyLibrariesPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminNotifyLibrariesPage.tsx`](pages/superadmin/AdminNotifyLibrariesPage.tsx)
   - **Backend APIs (common)**:
     - `POST /api/admin/notify`
     - (picker list) `GET /api/admin/libraries?page=1&limit=100`
@@ -43,7 +45,7 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
 - **Libraries**
   - **Route name**: `Libraries`
   - **Component**: `AdminLibrariesPage`
-  - **File**: `libDesk/frontend/pages/AdminLibrariesPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminLibrariesPage.tsx`](pages/superadmin/AdminLibrariesPage.tsx)
   - **Backend APIs (common)**:
     - `GET /api/admin/libraries?page=1&limit=10`
     - `PATCH /api/admin/libraries/:id/block`
@@ -54,7 +56,7 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
   - **Component**: `SettingsScreen`
   - **File**: `libDesk/frontend/screens/common/SettingsScreen.tsx`
   - **Related admin screens reachable from Settings**
-    - **Global URLs**: `AdminGlobalSettingsPage` → `libDesk/frontend/pages/AdminGlobalSettingsPage.tsx`
+    - **Global URLs**: `AdminGlobalSettingsPage` → [`frontend/pages/superadmin/AdminGlobalSettingsPage.tsx`](pages/superadmin/AdminGlobalSettingsPage.tsx)
     - **Appearance**: `AppearanceScreen` → `libDesk/frontend/screens/common/AppearanceScreen.tsx`
 
 ### Admin “detail” screens (not tabs, opened from tabs)
@@ -62,16 +64,16 @@ Super Admin UI is mounted under `AdminRoot` → `AdminTabs()` in `libDesk/fronte
 - **Library Detail**
   - **Route name**: `AdminLibraryDetail`
   - **Component**: `AdminLibraryDetailPage`
-  - **File**: `libDesk/frontend/pages/AdminLibraryDetailPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminLibraryDetailPage.tsx`](pages/superadmin/AdminLibraryDetailPage.tsx)
 
 - **Subscription Detail**
   - **Route name**: `AdminSubscriptionDetail`
   - **Component**: `AdminSubscriptionDetailPage`
-  - **File**: `libDesk/frontend/pages/AdminSubscriptionDetailPage.tsx`
+  - **File**: [`frontend/pages/superadmin/AdminSubscriptionDetailPage.tsx`](pages/superadmin/AdminSubscriptionDetailPage.tsx)
 
 ### Notes
 
 - Admin tabs are defined here:
-  - `libDesk/frontend/App.tsx` → `function AdminTabs()`
-- There is also a legacy dashboard screen (`libDesk/frontend/screens/admin/Dashboard.tsx`) that is currently reused in `LibraryTabs()`. The Super Admin tab uses `pages/AdminDashboardPage.tsx`.
+  - [`frontend/App.tsx`](App.tsx) → `function AdminTabs()`
+- Library-owner tabs (`LibraryRoot`) use [`frontend/pages/libraryadmin/index.ts`](pages/libraryadmin/index.ts) (e.g. `Dashboard.tsx`). The Super Admin dashboard tab uses `frontend/pages/superadmin/AdminDashboardPage.tsx`.
 

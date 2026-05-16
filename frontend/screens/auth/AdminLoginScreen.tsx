@@ -45,7 +45,7 @@ export default function AdminLoginScreen() {
   useEffect(() => {
     if (role !== 'admin') return;
     if (Platform.OS === 'web') {
-      Linking.openURL('/admin/dashboard');
+      Linking.openURL('/superadmin/dashboard');
       return;
     }
     navigation.navigate('AdminRoot');

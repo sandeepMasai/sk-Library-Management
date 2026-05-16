@@ -1,5 +1,5 @@
 import React from 'react';
-import AdminStudentForm from '../screens/admin/StudentForm';
+import { AdminStudentForm } from './libraryadmin';
 
 /**
  * AddStudentPage

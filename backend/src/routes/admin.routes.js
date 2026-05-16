@@ -16,12 +16,48 @@ const {
   invalidatePlanConfigCache,
 } = require("../utils/paymentPlans");
 const { resolveLibrarySubscriptionPeriod } = require("../utils/subscription");
+const { paiseToRupees, sumLibraryPaymentRevenueRupees, sumPaidPaymentRevenueRupees } = require("../utils/money");
 const { requireAdminAuth } = require("../middleware/admin.middleware");
 
 const router = express.Router();
 
 function escapeRegex(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLibraryPlanFilter(planKeyRaw) {
+  const key = String(planKeyRaw || "all").trim().toLowerCase();
+  if (!key || key === "all") return {};
+  if (key === "pro") return { plan: "pro" };
+  if (key === "trial") return { currentPlanKey: "trial" };
+  if (key === "none") return { currentPlanKey: "none", plan: "none" };
+  if (key === "free") return { plan: "none" };
+  return {};
+}
+
+function matchesSubscriptionPlanFilter(lib, rowPlan, planKeyRaw) {
+  const key = String(planKeyRaw || "all").trim().toLowerCase();
+  if (!key || key === "all") return true;
+
+  const plan = String(rowPlan || "none").toLowerCase();
+  const libPlan = String(lib.plan || "none").toLowerCase();
+  const currentPlanKey = String(
+    lib.currentPlanKey || (libPlan === "pro" ? "monthly" : "none")
+  ).toLowerCase();
+
+  if (key === "pro") {
+    return libPlan === "pro" || ["monthly", "6month", "yearly", "pro"].includes(plan);
+  }
+  if (key === "trial") {
+    return plan === "trial" || currentPlanKey === "trial";
+  }
+  if (key === "none") {
+    return currentPlanKey === "none" && libPlan === "none";
+  }
+  if (key === "free") {
+    return plan === "none";
+  }
+  return true;
 }
 
 function toLibraryRow(lib) {
@@ -31,6 +67,7 @@ function toLibraryRow(lib) {
     ownerName: lib.ownerName,
     email: lib.email,
     plan: lib.plan,
+    currentPlanKey: lib.currentPlanKey || (lib.plan === "pro" ? "monthly" : "none"),
     subscriptionStatus: lib.subscriptionStatus || "inactive",
     cancelledAt: lib.cancelledAt?.toISOString?.() || null,
     cancelReason: lib.cancelReason || null,
@@ -56,21 +93,16 @@ function parsePagination(req) {
  * Admin SaaS overview:
  * - Total libraries / active libraries
  * - Total students (across tenants)
- * - Revenue (simple placeholder: sum of student feeAmount where feeStatus === "paid")
+ * - Revenue: total paid library subscription payments (Razorpay)
  */
 router.get("/dashboard", requireAdminAuth, async (req, res) => {
   try {
-    const [totalLibraries, activeLibraries, totalStudents, revenueAgg] = await Promise.all([
+    const [totalLibraries, activeLibraries, totalStudents, revenue] = await Promise.all([
       Library.countDocuments({}),
       Library.countDocuments({ isActive: true }),
       Student.countDocuments({ isDeleted: false }),
-      Student.aggregate([
-        { $match: { isDeleted: false, feeStatus: "paid" } },
-        { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
-      ]),
+      sumPaidPaymentRevenueRupees(),
     ]);
-
-    const revenue = Number(revenueAgg?.[0]?.revenue || 0);
 
     return res.json({
       ok: true,
@@ -160,11 +192,17 @@ router.get("/libraries", requireAdminAuth, async (req, res) => {
     const search = searchRaw.trim();
     const searchUpper = search.toUpperCase();
     const isCodeSearch = Boolean(search) && /^[A-Z0-9]{5,12}$/.test(searchUpper);
-    const filter = !search
+    const searchFilter = !search
       ? {}
       : isCodeSearch
         ? { libraryCode: searchUpper }
         : { $or: [{ name: { $regex: escapeRegex(search), $options: "i" } }, { ownerName: { $regex: escapeRegex(search), $options: "i" } }] };
+    const planFilter = buildLibraryPlanFilter(req.query.planKey || req.query.planType);
+    const filterParts = [];
+    if (Object.keys(searchFilter).length) filterParts.push(searchFilter);
+    if (Object.keys(planFilter).length) filterParts.push(planFilter);
+    const filter =
+      filterParts.length === 0 ? {} : filterParts.length === 1 ? filterParts[0] : { $and: filterParts };
 
     const includeCounts =
       String(req.query.includeCounts || "").trim() === "1" ||
@@ -289,7 +327,7 @@ router.get("/library/:id", requireAdminAuth, async (req, res) => {
     const latestSubForLib = await Subscription.findOne({ libraryId }).sort({ createdAt: -1 }).lean();
     const libPeriod = resolveLibrarySubscriptionPeriod(lib, latestSubForLib);
 
-    const [totalSeats, totalStudents, activeStudents, revenueAgg] = await Promise.all([
+    const [totalSeats, totalStudents, activeStudents, revenue] = await Promise.all([
       Seat.countDocuments({ libraryId }),
       Student.countDocuments({ libraryId, isDeleted: false }),
       Student.countDocuments({
@@ -298,13 +336,8 @@ router.get("/library/:id", requireAdminAuth, async (req, res) => {
         isBlocked: false,
         expiryDate: { $gte: now },
       }),
-      Student.aggregate([
-        { $match: { libraryId, isDeleted: false, feeStatus: "paid" } },
-        { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
-      ]),
+      sumLibraryPaymentRevenueRupees(libraryId),
     ]);
-
-    const revenue = Number(revenueAgg?.[0]?.revenue || 0);
 
     return res.json({
       ok: true,
@@ -377,7 +410,7 @@ router.get("/library/:id/subscription", requireAdminAuth, async (req, res) => {
 
     const pay = latestSub?.paymentStatus || "paid";
 
-    const [totalSeats, totalStudents, activeStudents, revenueAgg, recentPayments] = await Promise.all([
+    const [totalSeats, totalStudents, activeStudents, revenue, recentPayments] = await Promise.all([
       Seat.countDocuments({ libraryId }),
       Student.countDocuments({ libraryId, isDeleted: false }),
       Student.countDocuments({
@@ -386,18 +419,13 @@ router.get("/library/:id/subscription", requireAdminAuth, async (req, res) => {
         isBlocked: false,
         expiryDate: { $gte: now },
       }),
-      Student.aggregate([
-        { $match: { libraryId, isDeleted: false, feeStatus: "paid" } },
-        { $group: { _id: null, revenue: { $sum: "$feeAmount" } } },
-      ]),
+      sumLibraryPaymentRevenueRupees(libraryId),
       Payment.find({ libraryId })
         .sort({ createdAt: -1 })
         .limit(8)
         .select("plan amount currency status orderId paymentId createdAt")
         .lean(),
     ]);
-
-    const revenue = Number(revenueAgg?.[0]?.revenue || 0);
 
     return res.json({
       ok: true,
@@ -427,7 +455,7 @@ router.get("/library/:id/subscription", requireAdminAuth, async (req, res) => {
       payments: (recentPayments || []).map((p) => ({
         id: String(p._id),
         plan: p.plan,
-        amount: Number(p.amount || 0),
+        amount: paiseToRupees(p.amount),
         currency: p.currency || "INR",
         status: p.status || "paid",
         orderId: p.orderId,
@@ -638,6 +666,7 @@ router.get("/subscriptions", requireAdminAuth, async (req, res) => {
   try {
     const status = String(req.query.status || "all").trim().toLowerCase(); // all|active|expired|cancelled
     const paymentStatus = String(req.query.paymentStatus || "all").trim().toLowerCase(); // all|paid|pending
+    const planType = String(req.query.planType || req.query.planKey || "all").trim().toLowerCase();
     const searchRaw = String(req.query.search || "").trim();
     const search = searchRaw.trim();
     const searchUpper = search.toUpperCase();
@@ -689,6 +718,7 @@ router.get("/subscriptions", requireAdminAuth, async (req, res) => {
           ownerName: 1,
           email: 1,
           plan: 1,
+          currentPlanKey: 1,
           planStartDate: 1,
           planExpiryDate: 1,
           createdAt: 1,
@@ -732,6 +762,7 @@ router.get("/subscriptions", requireAdminAuth, async (req, res) => {
           isActive: Boolean(lib.isActive),
         };
       })
+      .filter((r, idx) => matchesSubscriptionPlanFilter(list[idx], r.plan, planType))
       .filter((r) => (status === "all" ? true : r.status === status))
       .filter((r) => (paymentStatus === "all" ? true : r.paymentStatus === paymentStatus));
 

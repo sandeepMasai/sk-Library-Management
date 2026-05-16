@@ -1,5 +1,6 @@
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
+const { setRefreshCookie } = require("../utils/refreshCookie");
 const { sendSuccess } = require("../utils/response");
 const adminAuthService = require("../services/adminAuth.service");
 
@@ -22,6 +23,7 @@ const login = asyncHandler(async (req, res) => {
     body: sanitizeAdminLoginBody(req.body),
     metadata: getRequestMeta(req),
   });
+  setRefreshCookie(res, result.refreshToken);
   return sendSuccess(res, result, "Admin login successful");
 });
 

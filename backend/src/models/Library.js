@@ -233,6 +233,9 @@ librarySchema.index(
   { partialFilterExpression: { subscriptionStatus: "active", isActive: true } }
 );
 
+/** Optional phone lookups (field is `phone`, not mobile). */
+librarySchema.index({ phone: 1 }, { sparse: true });
+
 librarySchema.pre("validate", async function preValidate(next) {
   try {
     // Subscription date safety

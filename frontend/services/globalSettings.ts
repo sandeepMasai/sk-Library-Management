@@ -9,9 +9,33 @@ export type GlobalSettings = {
 };
 
 type GlobalSettingsDto = {
-  ok: boolean;
-  settings: GlobalSettings;
+  ok?: boolean;
+  success?: boolean;
+  settings?: GlobalSettings;
+  data?: GlobalSettings;
 };
+
+/** Normalize GET/PUT payloads: public GET uses `{ ok, settings }`, admin PUT uses `{ success, data }`. */
+export function parseGlobalSettingsPayload(body: unknown): GlobalSettings {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Invalid settings response');
+  }
+  const b = body as GlobalSettingsDto & GlobalSettings;
+  const raw = b.settings ?? b.data ?? (b.privacyPolicyUrl !== undefined ? b : null);
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Settings payload missing');
+  }
+  return {
+    privacyPolicyUrl: String(raw.privacyPolicyUrl || '').trim(),
+    termsUrl: String(raw.termsUrl || '').trim(),
+    communication: {
+      whatsapp: String(raw.communication?.whatsapp || '').trim(),
+      channel: String(raw.communication?.channel || '').trim(),
+      email: String(raw.communication?.email || '').trim(),
+    },
+    updatedAt: raw.updatedAt ?? null,
+  };
+}
 
 const STORAGE_KEY = 'global_settings_v1';
 const TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -45,16 +69,7 @@ export async function getGlobalSettings(opts?: { force?: boolean }): Promise<Glo
   }
 
   const data = await apiGet<GlobalSettingsDto>('/api/settings');
-  const settings = {
-    privacyPolicyUrl: String(data.settings?.privacyPolicyUrl || '').trim(),
-    termsUrl: String(data.settings?.termsUrl || '').trim(),
-    communication: {
-      whatsapp: String((data.settings as any)?.communication?.whatsapp || '').trim(),
-      channel: String((data.settings as any)?.communication?.channel || '').trim(),
-      email: String((data.settings as any)?.communication?.email || '').trim(),
-    },
-    updatedAt: data.settings?.updatedAt ?? null,
-  };
+  const settings = parseGlobalSettingsPayload(data);
 
   mem = { settings, fetchedAt: now };
   try {
@@ -77,5 +92,32 @@ export function isValidHttpUrl(input: string) {
 export function toApiErrorMessage(e: unknown) {
   const err = e as ApiError;
   return err?.message || 'Request failed';
+}
+
+/** Call after admin saves global settings so library/student screens fetch fresh email & URLs. */
+export async function clearGlobalSettingsCache() {
+  mem = null;
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function formatSettingsUpdatedAt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
 }
 

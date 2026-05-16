@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import AdminAttendance from '../screens/admin/Attendance';
+import { AdminAttendance } from './libraryadmin';
 import { useAppStore } from '../store';
 import { theme } from '../theme';
 

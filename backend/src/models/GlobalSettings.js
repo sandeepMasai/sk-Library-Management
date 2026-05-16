@@ -2,6 +2,23 @@ const mongoose = require("mongoose");
 
 const urlRegex = /^https?:\/\/.+/i;
 const phoneRegex = /^\+?[1-9]\d{7,14}$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function optionalUrl(v) {
+  if (v == null || v === "") return true;
+  return urlRegex.test(String(v).trim());
+}
+
+function optionalPhone(v) {
+  if (v == null || v === "") return true;
+  const s = String(v).trim();
+  return phoneRegex.test(s) || /^\d{10,15}$/.test(s.replace(/\D/g, ""));
+}
+
+function optionalEmail(v) {
+  if (v == null || v === "") return true;
+  return emailRegex.test(String(v).trim().toLowerCase());
+}
 
 const GlobalSettingsSchema = new mongoose.Schema(
   {
@@ -31,14 +48,14 @@ const GlobalSettingsSchema = new mongoose.Schema(
           type: String,
           default: null,
           trim: true,
-          match: phoneRegex,
+          validate: { validator: optionalPhone, message: "Invalid WhatsApp number" },
         },
 
         channel: {
           type: String,
           default: null,
           trim: true,
-          match: urlRegex,
+          validate: { validator: optionalUrl, message: "Channel link must be http(s) URL" },
         },
 
         email: {
@@ -46,6 +63,7 @@ const GlobalSettingsSchema = new mongoose.Schema(
           default: null,
           trim: true,
           lowercase: true,
+          validate: { validator: optionalEmail, message: "Invalid support email" },
         },
       },
 

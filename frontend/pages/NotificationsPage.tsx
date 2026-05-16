@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import AdminNotifications from '../screens/admin/Notifications';
+import { AdminNotifications } from './libraryadmin';
 import { useAppStore } from '../store';
 import { theme } from '../theme';
 

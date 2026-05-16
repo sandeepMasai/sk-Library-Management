@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { useAppStore } from '../store';
-import AdminDashboard from '../screens/admin/Dashboard';
+import { AdminDashboardScreen as AdminDashboard } from './libraryadmin';
 import StudentDashboardPage from './StudentDashboardPage';
 import { theme } from '../theme';
 import { apiGet, type ApiError } from '../services/api';

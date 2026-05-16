@@ -9,6 +9,7 @@ const Subscription = require("../models/Subscription");
 const Plan = require("../models/Plan");
 const { activatePaidSubscription } = require("../utils/subscription");
 const { invalidateLibrarySubscriptionCache } = require("../utils/subscriptionCache");
+const { paiseToRupees } = require("../utils/money");
 
 const router = express.Router();
 
@@ -121,7 +122,9 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     const paymentId = String(req.body?.paymentId || "").trim();
     const signature = String(req.body?.signature || "").trim();
 
-    const plan = await Plan.findById(planId).select("key name price discount finalPrice duration isActive isTrial").lean();
+    const plan = await Plan.findById(planId)
+      .select("key name price discount finalPrice finalPricePaise duration isActive isTrial")
+      .lean();
     if (!plan || !plan.isActive) return res.status(400).json({ message: "Invalid plan" });
     if (!orderId || !paymentId) return res.status(400).json({ message: "Missing payment fields" });
 
@@ -224,10 +227,15 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     // Idempotent save (unique index on orderId+paymentId).
     // IMPORTANT: only ignore duplicate key. Other errors must fail (otherwise plan may activate without a saved payment record).
     try {
+      const amountPaise =
+        Number.isInteger(plan.finalPricePaise) && plan.finalPricePaise > 0
+          ? plan.finalPricePaise
+          : Math.round(Number(plan.finalPrice || 0) * 100);
+
       await Payment.create({
         libraryId,
         plan: plan.key,
-        amount: plan.finalPrice,
+        amount: amountPaise,
         currency: "INR",
         orderId,
         paymentId,
@@ -319,7 +327,7 @@ router.get("/history", requireAuth, requireRole("library"), async (req, res) => 
       items.push({
         id: `payment-${String(p._id)}`,
         type: "payment",
-        amount: Number(p.amount || 0),
+        amount: paiseToRupees(p.amount),
         plan: p.plan,
         status: p.status || "paid",
         method: "razorpay",

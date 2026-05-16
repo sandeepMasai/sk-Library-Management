@@ -8,6 +8,8 @@ const {
   formatNotificationForClient,
   markNotificationRead,
 } = require("../services/notification.service");
+const asyncHandler = require("../utils/asyncHandler");
+const { createHttpError } = require("../utils/httpError");
 
 const router = express.Router();
 
@@ -34,9 +36,7 @@ function parsePagination(req) {
 
 function requireLibraryIdForAdmin(req, res) {
   if (req.user?.role === "admin") {
-    const libraryId = String(
-      req.query.libraryId || req.body?.libraryId || ""
-    ).trim();
+    const libraryId = String(req.query.libraryId || req.body?.libraryId || "").trim();
     if (!libraryId || !mongoose.Types.ObjectId.isValid(libraryId)) {
       res.status(400).json({ message: "libraryId is required for admin" });
       return null;
@@ -46,14 +46,17 @@ function requireLibraryIdForAdmin(req, res) {
   return req.user?.libraryId;
 }
 
-router.get("/", requireAuth, requireRole("admin", "library", "student"), async (req, res) => {
-  try {
+router.get(
+  "/",
+  requireAuth,
+  requireRole("admin", "library", "student"),
+  asyncHandler(async (req, res) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const libraryId = requireLibraryIdForAdmin(req, res);
     if (!libraryId) return;
 
-    const { limit, skip } = parsePagination(req);
+    const { page, limit, skip } = parsePagination(req);
 
     const base = { libraryId, date: { $gte: thirtyDaysAgo } };
     const role = req.user.role;
@@ -107,27 +110,29 @@ router.get("/", requireAuth, requireRole("admin", "library", "student"), async (
     if (unreadOnly && userId) {
       const unreadFrag = Notification.unreadReceiptFilter(userId);
       query =
-        Object.keys(unreadFrag).length > 0
-          ? { $and: [query, unreadFrag] }
-          : query;
+        Object.keys(unreadFrag).length > 0 ? { $and: [query, unreadFrag] } : query;
     }
 
-    const list = await Notification.find(query)
-      .sort({ date: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const [total, list] = await Promise.all([
+      Notification.countDocuments(query),
+      Notification.find(query)
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select(
+          "libraryId title message date targetId targetType category isRead readAt readReceipts"
+        )
+        .lean(),
+    ]);
 
-    res.json(
-      list.map((n) => formatNotificationForClient(n, userId))
-    );
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch notifications",
-      error: error.message,
-    });
-  }
-});
+    res.setHeader("X-Total-Count", String(total));
+    res.setHeader("X-Page", String(page));
+    res.setHeader("X-Page-Limit", String(limit));
+    res.setHeader("X-Has-More", String(skip + list.length < total));
+
+    res.json(list.map((n) => formatNotificationForClient(n, userId)));
+  })
+);
 
 /**
  * PATCH /api/notifications/:id/read
@@ -137,37 +142,30 @@ router.patch(
   "/:id/read",
   requireAuth,
   requireRole("admin", "library", "student"),
-  async (req, res) => {
-    try {
-      const libraryId = requireLibraryIdForAdmin(req, res);
-      if (!libraryId) return;
+  asyncHandler(async (req, res) => {
+    const libraryId = requireLibraryIdForAdmin(req, res);
+    if (!libraryId) return;
 
-      const userId = String(req.user.userId || "").trim();
-      const role = req.user.role;
+    const userId = String(req.user.userId || "").trim();
+    const role = req.user.role;
 
-      const result = await markNotificationRead({
-        notificationId: req.params.id,
-        libraryId,
-        userId,
-        role,
-      });
+    const result = await markNotificationRead({
+      notificationId: req.params.id,
+      libraryId,
+      userId,
+      role,
+    });
 
-      return res.json(result);
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 400 && status < 500) {
-        return res.status(status).json({ message: error.message });
-      }
-      return res.status(500).json({
-        message: "Failed to mark notification read",
-        error: error.message,
-      });
-    }
-  }
+    res.json(result);
+  })
 );
 
-router.post("/", requireAuth, requireRole("admin", "library"), async (req, res) => {
-  try {
+router.post(
+  "/",
+  requireAuth,
+  requireRole("admin", "library"),
+  requireNotExpiredSubscription,
+  asyncHandler(async (req, res) => {
     const {
       title,
       message,
@@ -176,7 +174,7 @@ router.post("/", requireAuth, requireRole("admin", "library"), async (req, res) 
       targetType: rawTargetType,
     } = req.body || {};
     if (!title || !message) {
-      return res.status(400).json({ message: "title and message are required" });
+      throw createHttpError(400, "title and message are required");
     }
 
     const category = normalizeCategory(rawCategory);
@@ -190,13 +188,6 @@ router.post("/", requireAuth, requireRole("admin", "library"), async (req, res) 
     const libraryId = requireLibraryIdForAdmin(req, res);
     if (!libraryId) return;
 
-    if (req.user?.role === "library") {
-      await new Promise((resolve, reject) =>
-        requireNotExpiredSubscription(req, res, (err) => (err ? reject(err) : resolve()))
-      );
-      if (res.headersSent) return;
-    }
-
     const created = await Notification.create({
       libraryId,
       title,
@@ -207,20 +198,17 @@ router.post("/", requireAuth, requireRole("admin", "library"), async (req, res) 
       date: new Date(),
     });
 
+    const createdLean =
+      typeof created?.toJSON === "function"
+        ? created.toJSON()
+        : created.toObject?.() ?? created;
+
     return res
       .status(201)
       .json(
-        formatNotificationForClient(
-          created.toObject ? created.toObject() : created,
-          String(req.user.userId || "")
-        )
+        formatNotificationForClient(createdLean, String(req.user.userId || ""))
       );
-  } catch (error) {
-    return res.status(500).json({
-      message: "Failed to send notification",
-      error: error.message,
-    });
-  }
-});
+  })
+);
 
 module.exports = router;

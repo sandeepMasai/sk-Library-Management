@@ -133,6 +133,11 @@ notificationSchema.index(
 // Query optimization
 notificationSchema.index({
   libraryId: 1,
+  date: -1,
+});
+
+notificationSchema.index({
+  libraryId: 1,
   createdAt: -1,
 });
 
