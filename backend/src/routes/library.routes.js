@@ -1,5 +1,6 @@
 const express = require("express");
 const Library = require("../models/Library");
+const Seat = require("../models/Seat");
 const upload = require("../middleware/upload.middleware");
 const { uploadBuffer, isCloudinaryConfigured } = require("../utils/cloudinary");
 const { requireAuth } = require("../middleware/auth.middleware");
@@ -23,7 +24,15 @@ const router = express.Router();
 router.get("/profile", requireAuth, requireRole("library", "student"), async (req, res) => {
   try {
     const id = req.user?.libraryId;
-    const lib = await Library.findById(id).lean();
+    if (!id) return res.status(400).json({ message: "libraryId missing" });
+
+    const libPromise = Library.findById(id).lean();
+    const seatCountPromise =
+      req.user?.role === "library"
+        ? Seat.countDocuments({ libraryId: id })
+        : Promise.resolve(0);
+
+    const [lib, totalSeats] = await Promise.all([libPromise, seatCountPromise]);
     if (!lib) return res.status(404).json({ message: "Library not found" });
     if (req.user?.role === "student") {
       const whatsapp = String(lib.communication?.whatsapp || lib.whatsappNumber || "").trim();
@@ -37,7 +46,7 @@ router.get("/profile", requireAuth, requireRole("library", "student"), async (re
         },
       });
     }
-    return res.json({ ok: true, profile: toLibraryProfile(lib) });
+    return res.json({ ok: true, profile: toLibraryProfile(lib, { totalSeats }) });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load profile", error: error.message });
   }

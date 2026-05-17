@@ -1003,8 +1003,39 @@ export const useAppStore = create<AppState>()(
     if (!effectiveRole) return { ok: false, message: 'Not logged in' };
     try {
       if (effectiveRole === 'library') {
-        // IMPORTANT: for library, prefer /api/subscription/me as it includes subscriptionStatus/currentPlanKey
-        // which drives access gating (LibraryRoot tabs vs Subscription screen).
+        const hasSubscriptionMeta = Boolean(
+          cu?.subscriptionStatus && (cu?.plan !== undefined || (cu as any)?.currentPlanKey !== undefined)
+        );
+
+        // Fast path: profile only (avoids heavy subscription/me on Profile/Settings open).
+        if (hasSubscriptionMeta && cu?.ownerName && cu?.email) {
+          const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
+          const p = res.profile;
+          set({
+            role: 'library',
+            libraryId: cu?.id || libraryId || p?.id || null,
+            currentUser: {
+              ...(cu || ({} as any)),
+              id: cu?.id || libraryId || p?.id || '',
+              role: 'library',
+              name: p?.libraryName ?? cu?.name,
+              ownerName: p?.name ?? cu?.ownerName,
+              email: p?.email ?? cu?.email,
+              phone: p?.phone ?? cu?.phone,
+              isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
+              emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
+              address: p?.address ?? cu?.address,
+              city: p?.city ?? cu?.city,
+              logoUrl: p?.logoUrl ?? cu?.logoUrl,
+              plan: p?.plan ?? cu?.plan,
+              planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
+              subscriptionStatus: p?.subscriptionStatus ?? cu?.subscriptionStatus,
+            } as any,
+          });
+          return { ok: true };
+        }
+
+        // Full path: subscription/me (expiry sync + plan gating fields).
         const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
         if (me?.user) {
           set({
@@ -1015,7 +1046,6 @@ export const useAppStore = create<AppState>()(
           return { ok: true };
         }
 
-        // Fallback (older servers): hydrate from profile.
         const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
         const p = res.profile;
         set({

@@ -74,6 +74,8 @@ export default function ProfileScreen() {
   const resendRestartNextSend = useRef(false);
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [totalSeats, setTotalSeats] = useState(0);
+  const [seatsLoading, setSeatsLoading] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -92,65 +94,74 @@ export default function ProfileScreen() {
 
   const initial = useMemo(() => (form.name || currentUser?.ownerName || currentUser?.name || 'U').trim().slice(0, 1).toUpperCase(), [form.name, currentUser]);
 
-  const currentSeatTotal = useMemo(() => {
-    if (!seats?.length) return 0;
-    return Math.max(...seats.map((s) => s.number));
-  }, [seats]);
+  const applyProfilePayload = (p: any) => {
+    setIsEmailVerified(Boolean(p?.isEmailVerified));
+    if (typeof p?.totalSeats === 'number' && Number.isFinite(p.totalSeats)) {
+      setTotalSeats(p.totalSeats);
+    }
+    setForm({
+      name: p?.name || currentUser?.ownerName || currentUser?.name || '',
+      email: p?.email || currentUser?.email || '',
+      phone: p?.phone || currentUser?.phone || '',
+      whatsappNumber: p?.communication?.whatsapp || p?.whatsappNumber || '',
+      channelLink: p?.communication?.channel || p?.communityLinks?.whatsappChannel || '',
+      libraryName: p?.libraryName || currentUser?.name || '',
+      address: p?.address || currentUser?.address || '',
+      city: p?.city || currentUser?.city || '',
+      mapUrl: p?.mapUrl || '',
+      whatsappGroup: p?.communityLinks?.whatsappGroup || '',
+      whatsappChannel: p?.communityLinks?.whatsappChannel || '',
+      telegram: p?.communityLinks?.telegram || '',
+      logoUrl: p?.logoUrl || currentUser?.logoUrl || null,
+    });
+  };
+
+  const hydrateFromStore = () => {
+    if (!currentUser) return false;
+    applyProfilePayload({
+      name: currentUser.ownerName || currentUser.name,
+      email: currentUser.email,
+      phone: currentUser.phone,
+      libraryName: currentUser.name,
+      address: currentUser.address,
+      city: currentUser.city,
+      logoUrl: currentUser.logoUrl,
+      isEmailVerified: (currentUser as any)?.isEmailVerified,
+    });
+    return true;
+  };
 
   const load = async () => {
-    setLoading(true);
+    const hasCache = hydrateFromStore();
+    if (hasCache) setLoading(false);
+
     setError(null);
     try {
       const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
-      const p = res.profile;
-      setIsEmailVerified(Boolean(p?.isEmailVerified));
-      setForm({
-        name: p?.name || currentUser?.ownerName || currentUser?.name || '',
-        email: p?.email || currentUser?.email || '',
-        phone: p?.phone || currentUser?.phone || '',
-        whatsappNumber: p?.communication?.whatsapp || p?.whatsappNumber || '',
-        channelLink: p?.communication?.channel || p?.communityLinks?.whatsappChannel || '',
-        libraryName: p?.libraryName || currentUser?.name || '',
-        address: p?.address || currentUser?.address || '',
-        city: p?.city || currentUser?.city || '',
-        mapUrl: p?.mapUrl || '',
-        whatsappGroup: p?.communityLinks?.whatsappGroup || '',
-        whatsappChannel: p?.communityLinks?.whatsappChannel || '',
-        telegram: p?.communityLinks?.telegram || '',
-        logoUrl: p?.logoUrl || currentUser?.logoUrl || null,
-      });
+      applyProfilePayload(res.profile);
     } catch (e: any) {
       const err = e as ApiError;
       setError(err?.message || 'Failed to load profile');
-      // Fallback to existing user data if available
-      setForm((prev) => ({
-        ...prev,
-        name: currentUser?.ownerName || currentUser?.name || prev.name,
-        email: currentUser?.email || prev.email,
-        phone: currentUser?.phone || prev.phone,
-        whatsappNumber: prev.whatsappNumber,
-        channelLink: prev.channelLink,
-        whatsappGroup: prev.whatsappGroup,
-        whatsappChannel: prev.whatsappChannel,
-        telegram: prev.telegram,
-        libraryName: currentUser?.name || prev.libraryName,
-        address: currentUser?.address || prev.address,
-        city: currentUser?.city || prev.city,
-        logoUrl: currentUser?.logoUrl || prev.logoUrl,
-      }));
+      if (!hasCache) hydrateFromStore();
     } finally {
-      try {
-        await fetchSeats();
-      } catch {
-        // Seats may be blocked until subscription is active; ignore.
-      }
       setLoading(false);
     }
   };
 
-  const openEditSeats = () => {
-    setTotalSeatsDraft(String(currentSeatTotal > 0 ? currentSeatTotal : 50));
+  const openEditSeats = async () => {
+    const count = totalSeats > 0 ? totalSeats : seats?.length ? Math.max(...seats.map((s) => s.number)) : 50;
+    setTotalSeatsDraft(String(count));
     setEditSeatsOpen(true);
+    if (!seats?.length) {
+      setSeatsLoading(true);
+      try {
+        await fetchSeats();
+      } catch {
+        // ignore
+      } finally {
+        setSeatsLoading(false);
+      }
+    }
   };
 
   const saveSeatTotal = async () => {
@@ -167,6 +178,7 @@ export default function ProfileScreen() {
         return;
       }
       setEditSeatsOpen(false);
+      setTotalSeats(n);
       Alert.alert('Updated', `Library now has ${n} seats (numbered 1–${n}).`);
     } finally {
       setSeatsSaving(false);
@@ -535,10 +547,12 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.card}>
             <Text style={styles.fieldLabel}>Total seats</Text>
-            <Text style={styles.seatTotalBig}>{currentSeatTotal > 0 ? currentSeatTotal : '—'}</Text>
+            <Text style={styles.seatTotalBig}>
+              {seatsLoading ? '…' : totalSeats > 0 ? totalSeats : '—'}
+            </Text>
             <Text style={styles.seatTotalHint}>
-              {currentSeatTotal > 0
-                ? `Seats are numbered 1–${currentSeatTotal}. Lowering the count removes high-number seats only when they have no active assignments.`
+              {totalSeats > 0
+                ? `Seats are numbered 1–${totalSeats}. Lowering the count removes high-number seats only when they have no active assignments.`
                 : 'Set how many numbered seats your library has. You can change this anytime.'}
             </Text>
           </View>

@@ -4,7 +4,7 @@
 
 "use strict";
 
-function toLibraryProfile(lib) {
+function toLibraryProfile(lib, extras = {}) {
   return {
     id: lib._id.toString(),
     name: lib.ownerName,
@@ -36,6 +36,7 @@ function toLibraryProfile(lib) {
     cancelReason: lib.cancelReason || null,
     cancelNote: lib.cancelNote || null,
     planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
+    totalSeats: typeof extras.totalSeats === "number" ? extras.totalSeats : undefined,
   };
 }
 
