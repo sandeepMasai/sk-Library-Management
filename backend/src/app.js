@@ -8,6 +8,19 @@ const app = express();
 
 attachHttpMiddleware(app);
 
+// Health check — registered before all other routes so it is always reachable
+app.get("/health", (_req, res) => {
+  const dbStatus = getMongoStatus();
+  const dbOk = dbStatus === "connected";
+  res.status(200).json({
+    ok: dbOk,
+    service: "backend",
+    env: process.env.NODE_ENV || "development",
+    db: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Routes
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/auth", require("./routes/emailOtp.routes"));
@@ -33,18 +46,6 @@ app.use("/api/allocations", require("./routes/allocation.routes"));
 app.use("/api/payment", require("./routes/payment.routes"));
 app.use("/api/plans", require("./routes/plans.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
-
-app.get("/health", (_req, res) => {
-  const dbStatus = getMongoStatus();
-  const dbOk = dbStatus === "connected";
-  res.json({
-    ok: dbOk,
-    service: "backend",
-    env: process.env.NODE_ENV || "development",
-    db: dbStatus,
-    timestamp: new Date().toISOString(),
-  });
-});
 
 // 404 fallback
 app.use((req, res) => {
