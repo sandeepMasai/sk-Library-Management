@@ -8,8 +8,9 @@ const { startSubscriptionExpiryJob } = require("./src/jobs/subscriptionExpiry.jo
 const { startEmailOtpCleanupJob } = require("./src/jobs/emailOtpCleanup.job");
 const app = require("./src/app");
 
+/** Railway injects PORT; bind all interfaces in cloud (0.0.0.0). */
 const PORT = Number(process.env.PORT);
-const HOST = process.env.HOST;
+const HOST = process.env.HOST
 
 async function start() {
   const dbConnected = await connectToMongo();

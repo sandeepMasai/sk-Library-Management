@@ -4,6 +4,8 @@
 ## env / secrets
 **/.env
 **/.env.*
+!**/.env.example
+**/.railway-deploy.env
 
 ## logs
 **/npm-debug.log*
