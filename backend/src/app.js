@@ -1,5 +1,6 @@
 const express = require("express");
 
+const { getMongoStatus } = require("./config/db");
 const { attachHttpMiddleware } = require("./config/httpStack");
 const { errorHandler } = require("./middleware/error.middleware");
 
@@ -7,12 +8,15 @@ const app = express();
 
 attachHttpMiddleware(app);
 
-// Health check — registered before all other routes so it is always reachable
+/** Railway / load-balancer liveness — always 200 while process is up */
 app.get("/health", (_req, res) => {
+  const db = getMongoStatus();
   res.status(200).json({
     ok: true,
-    service: "backend",
+    alive: true,
+    service: "smartlibdesk-backend",
     env: process.env.NODE_ENV || "development",
+    db,
     timestamp: new Date().toISOString(),
   });
 });

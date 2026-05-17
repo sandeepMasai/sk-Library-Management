@@ -27,14 +27,15 @@
 
 `PORT` **mat** set karo — Railway khud deta hai.
 
-**502 "Application failed to respond":**
-1. Variables se `PORT=1998` **delete** karo
-2. Networking → domain → **Target port: remove / leave default** (1998 mat rakho)
-3. `MONGODB_URI` + `HOST=0.0.0.0` set karo
-4. **Redeploy** → Deploy logs me `Starting HTTP server {"port":...}` dekho
-5. Domain target port = wahi number jo logs me `port` hai
+**502 / SIGTERM:**
+1. Start command: `npm start` only (not `node server.js server.js`)
+2. Variables se `PORT=1998` **delete** karo — Railway injects `PORT`
+3. Networking → domain → **Target port: default** (custom 1998 mat rakho)
+4. `MONGODB_URI` + `HOST=0.0.0.0` set karo
+5. Logs: `HTTP server listening` then `Bootstrap complete — process ready`
+6. SIGTERM = normal Railway shutdown; app handles it gracefully
 
-Root Directory: repo root **ya** `backend` dono chalenge (root `package.json` backend start karta hai).
+**Structure:** `src/app.js` (Express) → `server.js` (entry) → `src/server/bootstrap.js` (listen + DB + jobs)
 
 Secrets generate:
 
