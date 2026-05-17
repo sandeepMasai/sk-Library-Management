@@ -34,6 +34,7 @@
       "eas": {
         "projectId": "552f0665-e30d-4f11-9ea9-97bc22a22809"
       },
+      "apiUrl": "https://sk-library-management-production.up.railway.app",
       "apiPort": 1998
     },
     "updates": {

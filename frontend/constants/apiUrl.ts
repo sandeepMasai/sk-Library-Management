@@ -59,11 +59,23 @@ export function getApiPort(): number {
   return 1998;
 }
 
-/** Base URL for API (no trailing slash). Set EXPO_PUBLIC_API_URL to override host+port entirely. */
+function getConfiguredApiUrl(): string | null {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim().replace(/\/$/, '');
+
+  const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
+  const fromExtra = extra?.apiUrl;
+  if (fromExtra && String(fromExtra).trim()) {
+    return String(fromExtra).trim().replace(/\/$/, '');
+  }
+  return null;
+}
+
+/** Base URL for API (no trailing slash). Set EXPO_PUBLIC_API_URL or expo.extra.apiUrl. */
 export function resolveApiBaseUrl(): string {
-  const full = process.env.EXPO_PUBLIC_API_URL;
+  const full = getConfiguredApiUrl();
   if (full) {
-    return full.replace(/\/$/, '');
+    return full;
   }
 
   const overrideHost = getApiHostOverride();
