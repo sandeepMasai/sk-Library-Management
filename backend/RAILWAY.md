@@ -27,6 +27,12 @@
 
 `PORT` **mat** set karo — Railway khud deta hai.
 
+**502 "Application failed to respond":**
+1. Variables se `PORT=1998` hatao (agar hai)
+2. Networking → domain **Target port** = deploy logs wala port (ya blank/auto)
+3. `MONGODB_URI` + `HOST=0.0.0.0` set karo
+4. Redeploy
+
 Secrets generate:
 
 ```bash

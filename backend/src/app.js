@@ -35,11 +35,13 @@ app.use("/api/plans", require("./routes/plans.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 
 app.get("/health", (_req, res) => {
+  const dbStatus = getMongoStatus();
+  const dbOk = dbStatus === "connected";
   res.json({
-    ok: true,
+    ok: dbOk,
     service: "backend",
     env: process.env.NODE_ENV || "development",
-    db: process.env.NODE_ENV === "production" ? undefined : getMongoStatus(),
+    db: dbStatus,
     timestamp: new Date().toISOString(),
   });
 });
