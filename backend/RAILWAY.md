@@ -28,10 +28,13 @@
 `PORT` **mat** set karo — Railway khud deta hai.
 
 **502 "Application failed to respond":**
-1. Variables se `PORT=1998` hatao (agar hai)
-2. Networking → domain **Target port** = deploy logs wala port (ya blank/auto)
+1. Variables se `PORT=1998` **delete** karo
+2. Networking → domain → **Target port: remove / leave default** (1998 mat rakho)
 3. `MONGODB_URI` + `HOST=0.0.0.0` set karo
-4. Redeploy
+4. **Redeploy** → Deploy logs me `Starting HTTP server {"port":...}` dekho
+5. Domain target port = wahi number jo logs me `port` hai
+
+Root Directory: repo root **ya** `backend` dono chalenge (root `package.json` backend start karta hai).
 
 Secrets generate:
 

@@ -18,6 +18,13 @@ async function start() {
     process.exit(1);
   }
 
+  logger.info("Starting HTTP server", {
+    port: PORT,
+    host: HOST,
+    nodeEnv: process.env.NODE_ENV || "development",
+    hasMongoUri: Boolean(process.env.MONGODB_URI || process.env.MONGO_URI),
+  });
+
   // Listen first so Railway health/proxy gets a response (avoids 502 while DB connects).
   const server = app.listen(PORT, HOST, () => {
     logger.info("Backend server started", {
