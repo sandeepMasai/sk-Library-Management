@@ -58,6 +58,7 @@ const studentPaymentSchema = new mongoose.Schema(
 
 studentPaymentSchema.index({ libraryId: 1, paymentDate: -1 });
 studentPaymentSchema.index({ studentId: 1, paymentDate: -1 });
+studentPaymentSchema.index({ libraryId: 1, studentId: 1, paymentDate: -1 });
 studentPaymentSchema.index({ libraryId: 1, invoiceNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model("StudentPayment", studentPaymentSchema);

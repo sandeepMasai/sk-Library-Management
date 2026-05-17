@@ -14,15 +14,16 @@ const {
 
 async function getStudentSeatAndTiming(libraryId, studentId) {
   const [seat, allocation] = await Promise.all([
-    Seat.findOne({ libraryId, studentId, status: "occupied" }).lean(),
+    Seat.findOne({ libraryId, studentId, status: "occupied" }).select("number").lean(),
     SeatAllocation.findOne({ libraryId, studentId, status: "active" })
+      .select("shiftId")
       .sort({ endDate: -1 })
       .lean(),
   ]);
 
   let shift = null;
   if (allocation?.shiftId) {
-    shift = await Shift.findById(allocation.shiftId).lean();
+    shift = await Shift.findById(allocation.shiftId).select("name").lean();
   }
 
   return {

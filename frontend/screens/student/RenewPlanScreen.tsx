@@ -45,13 +45,13 @@ export default function RenewPlanScreen() {
   const isDark = mode === 'dark';
   const styles = useMemo(() => makeStyles(isDark), [isDark]);
   const currentUser = useAppStore((s) => s.currentUser);
-  const fetchRenewContext = useAppStore((s) => s.fetchRenewContext);
+  const fetchRenewDashboard = useAppStore((s) => s.fetchRenewDashboard);
   const submitRenewalRequest = useAppStore((s) => s.submitRenewalRequest);
   const fetchMyRenewalRequests = useAppStore((s) => s.fetchMyRenewalRequests);
   const renewalRequests = useAppStore((s) => s.renewalRequests);
 
   const [context, setContext] = useState<RenewContext | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => renewalRequests.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [duration, setDuration] = useState<30 | 90 | 180 | 365>(30);
@@ -61,31 +61,36 @@ export default function RenewPlanScreen() {
 
   const hasPending = renewalRequests.some((r) => r.status === 'pending');
 
-  const load = useCallback(async () => {
-    const [ctxRes, reqRes] = await Promise.all([fetchRenewContext(), fetchMyRenewalRequests()]);
-    if (ctxRes.ok && ctxRes.context) {
-      setContext(ctxRes.context);
-      setShiftId((prev) => {
-        if (prev) return prev;
-        if (ctxRes.context!.currentShiftId) return ctxRes.context!.currentShiftId;
-        if (ctxRes.context!.shifts[0]) return ctxRes.context!.shifts[0].id;
-        return null;
-      });
-    }
-    if (!reqRes.ok && reqRes.message) setModal({ title: 'Error', description: reqRes.message });
-  }, [fetchRenewContext, fetchMyRenewalRequests]);
+  const applyContext = useCallback((ctx: RenewContext) => {
+    setContext(ctx);
+    setShiftId((prev) => {
+      if (prev) return prev;
+      if (ctx.currentShiftId) return ctx.currentShiftId;
+      if (ctx.shifts[0]) return ctx.shifts[0].id;
+      return null;
+    });
+  }, []);
+
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const hasCache = renewalRequests.length > 0;
+      if (!opts?.silent && !hasCache) setLoading(true);
+      const res = await fetchRenewDashboard();
+      if (res.ok && res.context) applyContext(res.context);
+      else if (res.message) setModal({ title: 'Error', description: res.message });
+      setLoading(false);
+    },
+    [applyContext, fetchRenewDashboard, renewalRequests.length]
+  );
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await load();
-      setLoading(false);
-    })();
+    void load({ silent: renewalRequests.length > 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await load({ silent: true });
     setRefreshing(false);
   };
 

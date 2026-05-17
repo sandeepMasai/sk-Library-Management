@@ -17,20 +17,65 @@ const {
 
 const router = express.Router();
 
+function parseStudentAuth(req, res) {
+  const userId = String(req.user?.userId || "").trim();
+  const libraryId = String(req.user?.libraryId || "").trim();
+  if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
+    res.status(400).json({ message: "Invalid auth payload" });
+    return null;
+  }
+  return { userId, libraryId };
+}
+
+/**
+ * GET /api/student/renew-dashboard
+ * Single round-trip: renewal form context + request history.
+ */
+router.get("/renew-dashboard", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const auth = parseStudentAuth(req, res);
+    if (!auth) return;
+    const { userId, libraryId } = auth;
+
+    const [shifts, seatTiming, library, requestRows] = await Promise.all([
+      Shift.find({ libraryId }).select("name type startTime endTime").sort({ startTime: 1 }).lean(),
+      getStudentSeatAndTiming(libraryId, userId),
+      Library.findById(libraryId).select("name").lean(),
+      RenewalRequest.find({ libraryId, studentId: userId }).sort({ createdAt: -1 }).limit(50).lean(),
+    ]);
+
+    return res.json({
+      ok: true,
+      libraryName: library?.name || "",
+      seatNumber: seatTiming.seatNumber,
+      currentTiming: seatTiming.currentTiming,
+      currentShiftId: seatTiming.currentShiftId?.toString?.() || null,
+      shifts: shifts.map((s) => ({
+        id: s._id.toString(),
+        name: s.name,
+        type: s.type,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+      requests: requestRows.map(formatRequest),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load renewal dashboard", error: error.message });
+  }
+});
+
 /**
  * GET /api/student/renew-context
  * Shifts + current seat/timing for renewal form.
  */
 router.get("/renew-context", requireAuth, requireRole("student"), async (req, res) => {
   try {
-    const userId = String(req.user?.userId || "").trim();
-    const libraryId = String(req.user?.libraryId || "").trim();
-    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
-      return res.status(400).json({ message: "Invalid auth payload" });
-    }
+    const auth = parseStudentAuth(req, res);
+    if (!auth) return;
+    const { userId, libraryId } = auth;
 
     const [shifts, seatTiming, library] = await Promise.all([
-      Shift.find({ libraryId }).sort({ startTime: 1 }).lean(),
+      Shift.find({ libraryId }).select("name type startTime endTime").sort({ startTime: 1 }).lean(),
       getStudentSeatAndTiming(libraryId, userId),
       Library.findById(libraryId).select("name").lean(),
     ]);
@@ -92,11 +137,9 @@ router.post("/renew-request", requireAuth, requireRole("student"), async (req, r
  */
 router.get("/renew-requests", requireAuth, requireRole("student"), async (req, res) => {
   try {
-    const userId = String(req.user?.userId || "").trim();
-    const libraryId = String(req.user?.libraryId || "").trim();
-    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
-      return res.status(400).json({ message: "Invalid auth payload" });
-    }
+    const auth = parseStudentAuth(req, res);
+    if (!auth) return;
+    const { userId, libraryId } = auth;
 
     const rows = await RenewalRequest.find({ libraryId, studentId: userId })
       .sort({ createdAt: -1 })
@@ -116,24 +159,14 @@ router.get("/payments", requireAuth, requireRole("student"), async (req, res) =>
   try {
     res.set("Cache-Control", "no-store");
 
-    const userId = String(req.user?.userId || "").trim();
-    const libraryId = String(req.user?.libraryId || "").trim();
-    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
-      return res.status(400).json({ message: "Invalid auth payload" });
-    }
-
-    // Self-heal legacy rows: any renewal-linked payment is a completed charge.
-    await StudentPayment.updateMany(
-      {
-        libraryId,
-        studentId: userId,
-        renewalRequestId: { $ne: null },
-        status: { $ne: "paid" },
-      },
-      { $set: { status: "paid" } }
-    );
+    const auth = parseStudentAuth(req, res);
+    if (!auth) return;
+    const { userId, libraryId } = auth;
 
     const rows = await StudentPayment.find({ libraryId, studentId: userId })
+      .select(
+        "studentName amount durationDays paymentDate startDate expiryDate status feeMethod timing seatNumber invoiceNumber note renewalRequestId createdAt libraryId studentId"
+      )
       .sort({ paymentDate: -1 })
       .limit(100)
       .lean();

@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import { useFocusEffect } from '@react-navigation/native';
 import { apiGet, type ApiError } from '../../services/api';
 import { useAppStore, type StudentPaymentRecord } from '../../store';
 import { theme } from '../../theme';
@@ -39,28 +38,25 @@ export default function PaymentHistoryScreen() {
   const fetchMyStudentPayments = useAppStore((s) => s.fetchMyStudentPayments);
   const payments = useAppStore((s) => s.studentPayments);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => payments.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [invoice, setInvoice] = useState<InvoicePayload | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    await fetchMyStudentPayments();
-  }, [fetchMyStudentPayments]);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const hasCache = useAppStore.getState().studentPayments.length > 0;
+      if (!opts?.silent && !hasCache) setLoading(true);
+      await fetchMyStudentPayments();
+      setLoading(false);
+    },
+    [fetchMyStudentPayments]
+  );
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await load();
-      setLoading(false);
-    })();
+    void load({ silent: payments.length > 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load])
-  );
 
   const openInvoice = async (id: string) => {
     setInvoiceLoading(true);
@@ -151,7 +147,7 @@ export default function PaymentHistoryScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await load();
+              await load({ silent: true });
               setRefreshing(false);
             }}
             tintColor={theme.colors.primary}

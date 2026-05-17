@@ -387,6 +387,12 @@ interface AppState {
 
   // Renewal requests
   fetchRenewContext: () => Promise<{ ok: boolean; context?: RenewContext; message?: string }>;
+  fetchRenewDashboard: () => Promise<{
+    ok: boolean;
+    context?: RenewContext;
+    requests?: RenewalRequest[];
+    message?: string;
+  }>;
   submitRenewalRequest: (payload: {
     requestedDuration: 30 | 90 | 180 | 365;
     requestedTiming?: string;
@@ -1550,6 +1556,23 @@ export const useAppStore = create<AppState>()(
     } catch (e) {
       const err = e as ApiError;
       return { ok: false, message: err?.message || 'Failed to load renewal options' };
+    }
+  },
+
+  fetchRenewDashboard: async () => {
+    if (get().role !== 'student') return { ok: false, message: 'Students only' };
+    try {
+      const res = await apiGet<{
+        ok: boolean;
+        requests: RenewalRequest[];
+      } & RenewContext>(`/api/student/renew-dashboard`);
+      const { requests, ...ctx } = res;
+      const context: RenewContext = ctx;
+      set({ renewalRequests: requests || [] });
+      return { ok: true, context, requests: requests || [] };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to load renewal data' };
     }
   },
 
