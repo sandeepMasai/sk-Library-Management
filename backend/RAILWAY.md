@@ -35,7 +35,13 @@
 5. Logs: `HTTP server listening` then `Bootstrap complete — process ready`
 6. SIGTERM = normal Railway shutdown; app handles it gracefully
 
-**Structure:** `src/app.js` (Express) → `server.js` (entry) → `src/server/bootstrap.js` (listen + DB + jobs)
+**Structure:** `app.js` / `src/app.js` (Express only) → `server.js` (`app.listen` + lifecycle)
+
+**Start command:** `npm start` (runs `node server.js` — not nodemon)
+
+**SIGTERM:** Normal on Railway redeploy; server handles graceful shutdown. `npm error signal SIGTERM` during deploy is often the *old* container stopping.
+
+**Port:** Do not set `PORT=1998` in Variables. Networking target port = Railway `PORT` (usually 8080).
 
 Secrets generate:
 
