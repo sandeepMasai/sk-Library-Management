@@ -252,30 +252,36 @@ export default function StudentHome() {
         ───────────────────────────────────────── */}
         {(isExpired || isExpiringSoon) && (
           <View style={styles.px}>
-            <LinearGradient
-              colors={isExpired ? ['#991B1B', '#B91C1C'] : ['#92400E', '#B45309']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.alert}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => navigation.getParent()?.navigate('RenewPlan')}
             >
-              <View style={styles.alertIcon}>
-                <Ionicons
-                  name={isExpired ? 'alert-circle' : 'hourglass-outline'}
-                  size={22}
-                  color="#fff"
-                />
-              </View>
-              <View style={styles.alertBody}>
-                <Text style={styles.alertTitle}>
-                  {isExpired ? 'Membership Expired' : `Expiring in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
-                </Text>
-                <Text style={styles.alertSub}>
-                  {isExpired
-                    ? 'Please visit the library to renew.'
-                    : 'Contact library to renew before expiry.'}
-                </Text>
-              </View>
-            </LinearGradient>
+              <LinearGradient
+                colors={isExpired ? ['#991B1B', '#B91C1C'] : ['#92400E', '#B45309']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.alert}
+              >
+                <View style={styles.alertIcon}>
+                  <Ionicons
+                    name={isExpired ? 'alert-circle' : 'hourglass-outline'}
+                    size={22}
+                    color="#fff"
+                  />
+                </View>
+                <View style={styles.alertBody}>
+                  <Text style={styles.alertTitle}>
+                    {isExpired ? 'Membership Expired' : `Expiring in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
+                  </Text>
+                  <Text style={styles.alertSub}>
+                    {isExpired
+                      ? 'Tap to request plan renewal from your library.'
+                      : 'Tap to renew or extend before expiry.'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.85)" />
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         )}
 

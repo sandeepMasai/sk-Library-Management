@@ -10,5 +10,6 @@ export { default as AdminStudentDetail } from './StudentDetail';
 export { default as AdminAttendance } from './Attendance';
 export { default as AdminNotifications } from './Notifications';
 export { default as AdminFees } from './Fees';
+export { default as RenewalRequestsScreen } from './RenewalRequests';
 /** Legacy / optional — not wired in App today; retained for completeness. */
 export { default as LibraryAdminSettingsLegacy } from './Settings';

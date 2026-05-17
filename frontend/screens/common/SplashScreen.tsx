@@ -72,7 +72,6 @@ export default function SplashScreen({ navigation }: any) {
         }
 
         // Hydrate currentUser (so protected route guards + UI have the latest profile).
-        const target = resolveTarget(role);
         const res = await fetchMyProfile();
         if (cancelled) return;
 
@@ -82,6 +81,9 @@ export default function SplashScreen({ navigation }: any) {
           return;
         }
 
+        const sessionRole =
+          useAppStore.getState().role ?? useAppStore.getState().currentUser?.role;
+        const target = resolveTarget(sessionRole);
         navigation.reset({ index: 0, routes: [{ name: target }] });
       }
 

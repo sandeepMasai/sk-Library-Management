@@ -9,6 +9,7 @@ import { theme } from '../../theme';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { resetAfterAuth } from '../../navigation/rootNavigation';
 
 export default function AdminLoginScreen() {
   const insets = useSafeAreaInsets();
@@ -38,18 +39,30 @@ export default function AdminLoginScreen() {
     const res = await adminLogin(u, p);
     setLoading(false);
     if (!res.ok) {
-      setInfoModal({ title: "Couldn't sign in", description: res.message || 'Invalid credentials' });
+      setInfoModal({
+        title: "Couldn't sign in",
+        description:
+          res.message ||
+          'Check ADMIN_USERNAME and ADMIN_PIN in backend/.env (default PIN in docs may differ).',
+      });
+      return;
     }
-  };
 
-  useEffect(() => {
-    if (role !== 'admin') return;
     if (Platform.OS === 'web') {
       Linking.openURL('/superadmin/dashboard');
       return;
     }
-    navigation.navigate('AdminRoot');
-  }, [role, navigation]);
+    resetAfterAuth('admin');
+  };
+
+  useEffect(() => {
+    if (role !== 'admin' || !useAppStore.getState().isAuthenticated()) return;
+    if (Platform.OS === 'web') {
+      Linking.openURL('/superadmin/dashboard');
+      return;
+    }
+    resetAfterAuth('admin');
+  }, [role]);
 
   return (
     <View style={styles.root}>
@@ -85,13 +98,13 @@ export default function AdminLoginScreen() {
             />
           </View>
 
-          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PIN</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PASSWORD / PIN</Text>
           <View style={[styles.fieldRow, pFocus && styles.fieldRowFocus]}>
             <Ionicons name="key-outline" size={18} color={pFocus ? stylesVars.accent : stylesVars.icon} />
             <TextInput
               value={pin}
               onChangeText={setPin}
-              placeholder="Enter PIN"
+              placeholder="From backend .env ADMIN_PIN"
               placeholderTextColor={stylesVars.placeholder}
               secureTextEntry
               autoCapitalize="none"

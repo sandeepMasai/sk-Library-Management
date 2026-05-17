@@ -1,11 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   Platform,
-  Alert,
   ScrollView,
   Vibration,
   useWindowDimensions,
@@ -26,6 +25,8 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeProvider';
 import { theme } from '../../theme';
 import { useAppStore } from '../../store';
+import { SignOutConfirmModal } from '../SignOutConfirmModal';
+import { resetAuthNavigation } from '../../navigation/rootNavigation';
 import {
   SUPERADMIN_INSIGHT_ITEMS,
   SUPERADMIN_NAV_ITEMS,
@@ -256,6 +257,7 @@ export function SuperAdminDrawerContent(props: SuperAdminDrawerContentProps) {
   const { mode } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const logout = useAppStore((s) => s.logout);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const collapsed = railCollapsed;
   const showRailToggle = Platform.OS === 'web' && windowWidth >= 1024;
 
@@ -280,23 +282,17 @@ export function SuperAdminDrawerContent(props: SuperAdminDrawerContentProps) {
     [navigation, shouldCloseDrawer]
   );
 
-  const confirmLogout = useCallback(() => {
-    Alert.alert('Sign out', 'Leave the Super Admin session?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          logout();
-          try {
-            (navigation as any).getParent?.()?.reset?.({ index: 0, routes: [{ name: 'Login' }] });
-          } catch {
-            /* ignore */
-          }
-        },
-      },
-    ]);
-  }, [logout, navigation]);
+  const openLogoutModal = useCallback(() => {
+    tryHaptic();
+    setShowLogoutModal(true);
+  }, []);
+
+  const handleLogoutConfirm = useCallback(() => {
+    setShowLogoutModal(false);
+    logout();
+    resetAuthNavigation('Login');
+    if (shouldCloseDrawer) navigation.closeDrawer();
+  }, [logout, navigation, shouldCloseDrawer]);
 
   const renderInsightIcon = (item: SuperAdminInsightItem, color: string, size = 17) => {
     const p = { color, size, strokeWidth: 2.1 };
@@ -634,7 +630,7 @@ export function SuperAdminDrawerContent(props: SuperAdminDrawerContentProps) {
               <Pressable style={styles.iconOnlyBtn} onPress={() => navigation.navigate('Settings' as never)}>
                 <Settings2 size={18} color={tokens.textMuted} strokeWidth={2} />
               </Pressable>
-              <Pressable style={[styles.iconOnlyBtn, styles.actionBtnDanger]} onPress={confirmLogout}>
+              <Pressable style={[styles.iconOnlyBtn, styles.actionBtnDanger]} onPress={openLogoutModal}>
                 <LogOut size={18} color={theme.colors.danger} strokeWidth={2} />
               </Pressable>
             </View>
@@ -647,13 +643,20 @@ export function SuperAdminDrawerContent(props: SuperAdminDrawerContentProps) {
               <Settings2 size={16} color={tokens.textMuted} strokeWidth={2} />
               <Text style={styles.actionTxt}>Settings</Text>
             </Pressable>
-            <Pressable style={[styles.actionBtn, styles.actionBtnDanger]} onPress={confirmLogout}>
+            <Pressable style={[styles.actionBtn, styles.actionBtnDanger]} onPress={openLogoutModal}>
               <LogOut size={16} color={theme.colors.danger} strokeWidth={2} />
               <Text style={[styles.actionTxt, styles.actionTxtDanger]}>Logout</Text>
             </Pressable>
           </View>
         ) : null}
       </View>
+
+      <SignOutConfirmModal
+        visible={showLogoutModal}
+        preset="superAdmin"
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+      />
     </View>
   );
 }

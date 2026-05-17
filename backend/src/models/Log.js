@@ -49,7 +49,7 @@ const logSchema = new mongoose.Schema(
     actorModel: { type: String, enum: ACTOR_MODEL_ENUM, default: null, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, refPath: "actorModel", default: null, index: true },
     role: { type: String, enum: ROLE_ENUM, default: null, trim: true, index: true },
-    libraryId: { type: mongoose.Schema.Types.ObjectId, ref: "Library", default: null, index: true },
+    libraryId: { type: mongoose.Schema.Types.ObjectId, ref: "Library", default: null },
     timestamp: { type: Date, required: true, default: Date.now, immutable: true },
     severity: { type: String, enum: SEVERITY_ENUM, default: "info", index: true },
     retainForever: { type: Boolean, default: false, index: true },

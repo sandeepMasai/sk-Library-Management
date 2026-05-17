@@ -208,7 +208,6 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Library",
       default: null,
-      index: true,
     },
 
     studentId: {

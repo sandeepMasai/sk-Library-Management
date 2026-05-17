@@ -106,12 +106,155 @@ async function upgradeLibraryPlan({ libraryId, planKey }) {
   return { library, planDef };
 }
 
+/**
+ * Same rules as GET /api/admin/subscriptions row status (active / expired / cancelled).
+ */
+function computeLibrarySubscriptionStatus(lib, latestSub = null, now = new Date()) {
+  const endMs = latestSub?.expiryDate
+    ? new Date(latestSub.expiryDate).getTime()
+    : lib.planExpiryDate
+      ? new Date(lib.planExpiryDate).getTime()
+      : null;
+  const isCancelled =
+    latestSub?.status === "cancelled" || lib.subscriptionStatus === "cancelled";
+  if (isCancelled) return "cancelled";
+  if (endMs && Number.isFinite(endMs) && endMs < now.getTime()) return "expired";
+  return "active";
+}
+
+const PLAN_LABELS = {
+  none: "Free",
+  trial: "Trial",
+  monthly: "Monthly",
+  "6month": "6-Month",
+  yearly: "Yearly",
+  pro: "Pro",
+};
+
+async function fetchLibrariesWithLatestSub() {
+  return Library.aggregate([
+    {
+      $lookup: {
+        from: Subscription.collection.name,
+        let: { libraryId: "$_id" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$libraryId", "$$libraryId"] } } },
+          { $sort: { createdAt: -1 } },
+          { $limit: 1 },
+        ],
+        as: "sub",
+      },
+    },
+    { $addFields: { sub: { $arrayElemAt: ["$sub", 0] } } },
+    {
+      $project: {
+        name: 1,
+        ownerName: 1,
+        email: 1,
+        libraryCode: 1,
+        plan: 1,
+        planStartDate: 1,
+        planExpiryDate: 1,
+        subscriptionStatus: 1,
+        cancelledAt: 1,
+        cancelReason: 1,
+        cancelNote: 1,
+        isActive: 1,
+        createdAt: 1,
+        sub: 1,
+      },
+    },
+  ]);
+}
+
+function formatLibraryPlanLabel(plan) {
+  const key = String(plan || "none").trim().toLowerCase();
+  return PLAN_LABELS[key] || key;
+}
+
+function formatCancelledLibraryRow(lib, sub) {
+  const plan = sub?.plan || (lib.plan === "pro" ? "monthly" : "none");
+  const { expiryDate } = resolveLibrarySubscriptionPeriod(lib, sub);
+  const cancelledAt = sub?.cancelledAt || lib.cancelledAt || null;
+  return {
+    id: lib._id.toString(),
+    libraryId: lib._id.toString(),
+    name: lib.name,
+    ownerName: lib.ownerName || "",
+    email: lib.email || "",
+    libraryCode: lib.libraryCode || null,
+    plan,
+    planLabel: formatLibraryPlanLabel(plan),
+    expiryDate,
+    cancelledAt: cancelledAt?.toISOString?.() || null,
+    cancelReason: lib.cancelReason || sub?.cancelReason || null,
+    cancelNote: lib.cancelNote || sub?.cancelNote || null,
+    isActive: Boolean(lib.isActive),
+  };
+}
+
+/**
+ * Platform-wide library plan counts for super-admin dashboards.
+ */
+async function countLibrarySubscriptionOverview() {
+  const now = new Date();
+  const soonMs = 7 * 24 * 60 * 60 * 1000;
+  const list = await fetchLibrariesWithLatestSub();
+
+  let activePlans = 0;
+  let expiringSoon = 0;
+  let expired = 0;
+  let cancelled = 0;
+
+  for (const lib of list) {
+    const sub = lib.sub || null;
+    const status = computeLibrarySubscriptionStatus(lib, sub, now);
+    if (status === "expired") {
+      expired += 1;
+      continue;
+    }
+    if (status === "cancelled") {
+      cancelled += 1;
+      continue;
+    }
+    activePlans += 1;
+    const { expiryDate } = resolveLibrarySubscriptionPeriod(lib, sub);
+    if (expiryDate) {
+      const t = new Date(expiryDate).getTime();
+      if (Number.isFinite(t) && t - now.getTime() <= soonMs) expiringSoon += 1;
+    }
+  }
+
+  return { activePlans, expiringSoon, expired, cancelled };
+}
+
+/**
+ * Libraries whose latest subscription status is cancelled.
+ */
+async function listCancelledLibraries() {
+  const now = new Date();
+  const list = await fetchLibrariesWithLatestSub();
+  const rows = [];
+
+  for (const lib of list) {
+    const sub = lib.sub || null;
+    if (computeLibrarySubscriptionStatus(lib, sub, now) !== "cancelled") continue;
+    rows.push(formatCancelledLibraryRow(lib, sub));
+  }
+
+  rows.sort((a, b) => String(b.cancelledAt || "").localeCompare(String(a.cancelledAt || "")));
+  return rows;
+}
+
 module.exports = {
   PLAN_CATALOG,
   planKeyToAdminPlan,
   addDays,
   ensureLibraryNotExpired,
   resolveLibrarySubscriptionPeriod,
+  computeLibrarySubscriptionStatus,
+  countLibrarySubscriptionOverview,
+  listCancelledLibraries,
   toIsoDateOrNull,
   upgradeLibraryPlan,
   /**

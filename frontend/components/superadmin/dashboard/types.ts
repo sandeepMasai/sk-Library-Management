@@ -36,6 +36,7 @@ export type RevenueOverview = {
   monthlyRevenue: number;
   todayRevenue: number;
   activeSubscriptions: number;
+  cancelledSubscriptions?: number;
   pendingRenewals: number;
   growthPercent: number;
   sparkline: { date: string; revenue: number }[];

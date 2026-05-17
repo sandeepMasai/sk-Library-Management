@@ -1,18 +1,23 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../../store';
 import { theme } from '../../theme';
+import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
+import { resetAuthNavigation } from '../../navigation/rootNavigation';
 
 export default function AdminSettingsScreen() {
   const currentUser = useAppStore((s) => s.currentUser);
   const logout = useAppStore((s) => s.logout);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const onLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: logout },
-    ]);
+  const onLogout = () => setShowLogoutModal(true);
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    logout();
+    resetAuthNavigation('Login');
   };
 
   return (
@@ -32,10 +37,25 @@ export default function AdminSettingsScreen() {
         </View>
 
         <TouchableOpacity style={styles.btn} activeOpacity={0.85} onPress={onLogout}>
-          <Ionicons name="log-out-outline" size={18} color="#fff" />
-          <Text style={styles.btnTxt}>Logout</Text>
+          <LinearGradient
+            colors={['#EF4444', '#B91C1C']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.btnGrad}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#fff" />
+            <Text style={styles.btnTxt}>Sign out</Text>
+          </LinearGradient>
         </TouchableOpacity>
+        <Text style={styles.logoutHint}>You can sign in again anytime.</Text>
       </View>
+
+      <SignOutConfirmModal
+        visible={showLogoutModal}
+        preset="libraryAdmin"
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={confirmLogout}
+      />
     </View>
   );
 }
@@ -57,15 +77,23 @@ const styles = StyleSheet.create({
   rowSub: { marginTop: 2, fontSize: 14, fontWeight: '900', color: theme.colors.text },
   btn: {
     marginTop: 18,
-    backgroundColor: '#0F172A',
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    overflow: 'hidden',
+  },
+  btnGrad: {
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  btnTxt: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  btnTxt: { color: '#fff', fontWeight: '900', fontSize: 15 },
+  logoutHint: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.mutedText,
+    textAlign: 'center',
+  },
 });
 

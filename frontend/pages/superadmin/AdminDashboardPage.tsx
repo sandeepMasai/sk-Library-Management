@@ -18,12 +18,15 @@ import {
 } from 'lucide-react-native';
 import {
   AnalyticsMetricCard,
+  CancelledLibrariesModal,
   NewLibrariesWidget,
   RecentActivityWidget,
   RevenueOverviewWidget,
   useSuperAdminDashboardAnalytics,
+  type CancelledLibraryRow,
   type DashboardInsightSection,
 } from '../../components/superadmin/dashboard';
+import { navigateToAdminLibraryDetail } from '../../components/superadmin/navigateToAdminLibraryDetail';
 import { apiGet, type ApiError } from '../../services/api';
 import { useAppStore } from '../../store';
 import { theme } from '../../theme';
@@ -38,17 +41,6 @@ type AdminStats = {
   activeLibraries: number;
   totalStudents: number;
   revenue: number;
-};
-
-type SubscriptionRow = {
-  id: string;
-  name: string;
-  ownerName: string;
-  email: string;
-  plan: 'none' | 'pro';
-  expiryDate: string | null;
-  status: 'active' | 'expired';
-  isActive: boolean;
 };
 
 /**
@@ -90,11 +82,16 @@ export default function AdminDashboardPage() {
   } = useSuperAdminDashboardAnalytics(analyticsEnabled);
   const [subOverviewLoading, setSubOverviewLoading] = useState(false);
   const [subOverviewError, setSubOverviewError] = useState<string | null>(null);
-  const [subOverview, setSubOverview] = useState<{ active: number; expiringSoon: number; expired: number }>({
+  const [subOverview, setSubOverview] = useState({
     active: 0,
     expiringSoon: 0,
     expired: 0,
+    cancelled: 0,
   });
+  const [cancelledModalOpen, setCancelledModalOpen] = useState(false);
+  const [cancelledLoading, setCancelledLoading] = useState(false);
+  const [cancelledError, setCancelledError] = useState<string | null>(null);
+  const [cancelledLibraries, setCancelledLibraries] = useState<CancelledLibraryRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,25 +111,17 @@ export default function AdminDashboardPage() {
     setSubOverviewLoading(true);
     setSubOverviewError(null);
     try {
-      const res = await apiGet<{ ok: boolean; rows: SubscriptionRow[] }>(`/api/admin/subscriptions`, { status: 'all' });
-      const rows = res.rows || [];
-      const now = Date.now();
-      const soonMs = 7 * 24 * 60 * 60 * 1000;
-      let active = 0;
-      let expiringSoon = 0;
-      let expired = 0;
-      for (const r of rows) {
-        if (r.status === 'expired') {
-          expired += 1;
-          continue;
-        }
-        active += 1;
-        if (r.expiryDate) {
-          const t = new Date(r.expiryDate).getTime();
-          if (Number.isFinite(t) && t - now <= soonMs) expiringSoon += 1;
-        }
-      }
-      setSubOverview({ active, expiringSoon, expired });
+      const res = await apiGet<{
+        ok: boolean;
+        overview: { active: number; expiringSoon: number; expired: number; cancelled: number };
+      }>(`/api/superadmin/subscription-overview`);
+      const o = res.overview;
+      setSubOverview({
+        active: o?.active ?? 0,
+        expiringSoon: o?.expiringSoon ?? 0,
+        expired: o?.expired ?? 0,
+        cancelled: o?.cancelled ?? 0,
+      });
     } catch (e: any) {
       const err = e as ApiError;
       setSubOverviewError(err?.message || 'Failed to load subscription overview');
@@ -140,6 +129,28 @@ export default function AdminDashboardPage() {
       setSubOverviewLoading(false);
     }
   }, []);
+
+  const loadCancelledLibraries = useCallback(async () => {
+    setCancelledLoading(true);
+    setCancelledError(null);
+    try {
+      const res = await apiGet<{ ok: boolean; count: number; libraries: CancelledLibraryRow[] }>(
+        `/api/superadmin/cancelled-libraries`
+      );
+      setCancelledLibraries(res.libraries || []);
+    } catch (e: any) {
+      const err = e as ApiError;
+      setCancelledError(err?.message || 'Failed to load cancelled libraries');
+      setCancelledLibraries([]);
+    } finally {
+      setCancelledLoading(false);
+    }
+  }, []);
+
+  const openCancelledModal = useCallback(() => {
+    setCancelledModalOpen(true);
+    void loadCancelledLibraries();
+  }, [loadCancelledLibraries]);
 
   useEffect(() => {
     if (!isAuthenticated()) return;
@@ -216,7 +227,7 @@ export default function AdminDashboardPage() {
     () => (isStacked ? { width: '100%' as const, flex: undefined, minWidth: undefined } : { flex: 1, minWidth: 0, maxWidth: '50%' as const }),
     [isStacked]
   );
-  const donutValues = [subOverview.active, subOverview.expiringSoon, subOverview.expired];
+  const donutValues = [subOverview.active, subOverview.expiringSoon, subOverview.expired, subOverview.cancelled];
 
   if (!isAuthenticated()) return <LoginScreen />;
   if (role && role !== 'admin') return <ForbiddenScreen message="This page is only for admin accounts." />;
@@ -320,6 +331,7 @@ export default function AdminDashboardPage() {
           loading={revenueSlice.loading}
           error={revenueSlice.error}
           onRetry={retryRevenue}
+          onViewCancelled={openCancelledModal}
           borderColor={theme.colors.border}
           surfaceColor={theme.colors.surface}
           textColor={theme.colors.text}
@@ -412,7 +424,7 @@ export default function AdminDashboardPage() {
                 size={168}
                 thickness={14}
                 values={donutValues}
-                colors={[theme.colors.success, theme.colors.warning, theme.colors.danger]}
+                colors={[theme.colors.success, theme.colors.warning, theme.colors.danger, '#94A3B8']}
               />
               <View style={{ marginTop: 16, alignSelf: 'stretch' }}>
                 <View style={styles.legendRow}>
@@ -425,16 +437,46 @@ export default function AdminDashboardPage() {
                   <Text style={[styles.legendTxt, { color: theme.colors.mutedText }]}>Expiring ≤7 days</Text>
                   <Text style={[styles.legendVal, { color: theme.colors.text }]}>{subOverview.expiringSoon}</Text>
                 </View>
-                <View style={[styles.legendRow, { marginBottom: 0 }]}>
+                <View style={styles.legendRow}>
                   <View style={[styles.legendSwatch, { backgroundColor: theme.colors.danger }]} />
                   <Text style={[styles.legendTxt, { color: theme.colors.mutedText }]}>Expired</Text>
                   <Text style={[styles.legendVal, { color: theme.colors.text }]}>{subOverview.expired}</Text>
                 </View>
+                <TouchableOpacity
+                  style={[styles.legendRow, styles.legendRowTap, { marginBottom: 0 }]}
+                  onPress={openCancelledModal}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="View cancelled libraries"
+                >
+                  <View style={[styles.legendSwatch, { backgroundColor: '#94A3B8' }]} />
+                  <Text style={[styles.legendTxt, { color: theme.colors.mutedText }]}>Cancelled</Text>
+                  <View style={styles.legendRight}>
+                    <Text style={[styles.legendVal, { color: theme.colors.text }]}>{subOverview.cancelled}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={theme.colors.primary} />
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
           )}
         </View>
       </View>
+      <CancelledLibrariesModal
+        visible={cancelledModalOpen}
+        loading={cancelledLoading}
+        error={cancelledError}
+        libraries={cancelledLibraries}
+        onClose={() => setCancelledModalOpen(false)}
+        onRetry={loadCancelledLibraries}
+        onSelectLibrary={(libraryId) => {
+          setCancelledModalOpen(false);
+          navigateToAdminLibraryDetail(navigation, libraryId);
+        }}
+        borderColor={theme.colors.border}
+        surfaceColor={theme.colors.surface}
+        textColor={theme.colors.text}
+        mutedColor={theme.colors.mutedText}
+      />
     </ScrollView>
   );
 }
@@ -702,6 +744,12 @@ function makeStyles(mode: 'light' | 'dark') {
     retryGhostTxt: { fontSize: 13, fontWeight: '900' },
 
     legendRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+    legendRowTap: {
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 6,
+      marginHorizontal: -6,
+    },
+    legendRight: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
     legendSwatch: { width: 10, height: 10, borderRadius: 4, marginRight: 10 },
     legendTxt: { flex: 1, fontSize: 13, fontWeight: '600' },
     legendVal: { fontSize: 13, fontWeight: '900' },

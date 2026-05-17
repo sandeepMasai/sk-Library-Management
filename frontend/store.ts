@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, apiDelete, apiGet, apiPatch, apiPost, apiPut, type ApiError } from './services/api';
 import { isNotificationUnread } from './utils/notificationRead';
+import { normalizeAuthRole, unwrapAuthLoginPayload } from './utils/authRole';
 
 export type Role = 'admin' | 'student';
 export type FeeStatus = 'Paid' | 'Half Paid' | 'Pending';
@@ -103,7 +104,63 @@ export type NotificationCategory =
   | 'closure'
   | 'hours'
   | 'rules'
-  | 'event';
+  | 'event'
+  | 'renewal';
+
+export type RenewalRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface RenewalRequest {
+  id: string;
+  libraryId: string | null;
+  studentId: string | null;
+  studentName: string;
+  mobile: string;
+  seatNumber: number | null;
+  currentExpiryDate: string | null;
+  currentFeeAmount: number;
+  currentTiming: string;
+  requestedDuration: 30 | 90 | 180 | 365;
+  requestedDurationLabel: string;
+  requestedTiming: string;
+  note: string;
+  status: RenewalRequestStatus;
+  rejectReason: string | null;
+  newExpiryDate: string | null;
+  paymentId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+}
+
+export interface StudentPaymentRecord {
+  id: string;
+  libraryId: string | null;
+  studentId: string | null;
+  studentName: string;
+  amount: number;
+  durationDays: 30 | 90 | 180 | 365;
+  durationLabel: string;
+  paymentDate: string | null;
+  startDate: string | null;
+  expiryDate: string | null;
+  status: 'paid' | 'partial' | 'pending' | 'refunded';
+  feeMethod: FeeMethod;
+  timing: string;
+  seatNumber: number | null;
+  invoiceNumber: string;
+  note: string;
+  renewalRequestId: string | null;
+  createdAt: string | null;
+}
+
+export interface RenewContext {
+  libraryName: string;
+  seatNumber: number | null;
+  currentTiming: string;
+  currentShiftId: string | null;
+  shifts: { id: string; name: string; type: string; startTime: number; endTime: number }[];
+}
 
 export interface Notification {
   id: string;
@@ -210,6 +267,9 @@ interface AppState {
   spaces: Space[];
   shifts: Shift[];
   allocations: SeatAllocation[];
+  renewalRequests: RenewalRequest[];
+  pendingRenewalCount: number;
+  studentPayments: StudentPaymentRecord[];
 
   // Auth
   login: (
@@ -325,6 +385,28 @@ interface AppState {
   markNotificationRead: (id: string) => Promise<{ ok: boolean }>;
   markAllNotificationsRead: (studentId: string) => Promise<{ ok: boolean; count: number }>;
 
+  // Renewal requests
+  fetchRenewContext: () => Promise<{ ok: boolean; context?: RenewContext; message?: string }>;
+  submitRenewalRequest: (payload: {
+    requestedDuration: 30 | 90 | 180 | 365;
+    requestedTiming?: string;
+    requestedShiftId?: string;
+    note?: string;
+  }) => Promise<{ ok: boolean; request?: RenewalRequest; message?: string }>;
+  fetchMyRenewalRequests: () => Promise<{ ok: boolean; requests?: RenewalRequest[]; message?: string }>;
+  fetchMyStudentPayments: () => Promise<{ ok: boolean; payments?: StudentPaymentRecord[]; message?: string }>;
+  fetchLibraryRenewalRequests: (status?: string) => Promise<{
+    ok: boolean;
+    requests?: RenewalRequest[];
+    pendingCount?: number;
+    message?: string;
+  }>;
+  approveRenewalRequest: (
+    id: string,
+    data?: { amount?: number; feeStatus?: string; feeMethod?: FeeMethod }
+  ) => Promise<{ ok: boolean; message?: string }>;
+  rejectRenewalRequest: (id: string, reason?: string) => Promise<{ ok: boolean; message?: string }>;
+
   // Library - Subscription
   // Legacy (no-payment) upgrade endpoint is disabled on backend now.
   upgradeSubscription: (planKey: 'free_trial' | 'pro_monthly' | 'pro_6_month' | 'pro_yearly') => Promise<{ ok: boolean; message?: string }>;
@@ -369,38 +451,45 @@ async function hydrateSessionAfterAuth(
   const authenticatedUser = data.user;
   const token = data.authToken || null;
   const refreshToken = data.refreshToken || null;
+  const sessionRole = normalizeAuthRole(authenticatedUser?.role);
 
-  if (authenticatedUser?.role === 'admin') {
+  if (!sessionRole) {
+    return { ok: false, message: 'Invalid login response from server' };
+  }
+
+  if (sessionRole === 'admin') {
     return { ok: false, message: 'Admin login is not available here.' };
   }
 
   const nextLibraryCode =
-    authenticatedUser.role === 'library'
+    sessionRole === 'library'
       ? (authenticatedUser.libraryCode ?? data.libraryCode ?? null)
       : (libraryCodeFromForm ?? null);
 
   let nextLibraryId: string | null =
-    authenticatedUser.role === 'library'
+    sessionRole === 'library'
       ? authenticatedUser.id
-      : authenticatedUser.role === 'student'
+      : sessionRole === 'student'
         ? (authenticatedUser.libraryId ?? null)
         : null;
 
+  const userWithRole = { ...authenticatedUser, role: sessionRole };
+
   set((state) => ({
-    currentUser: authenticatedUser,
+    currentUser: userWithRole,
     authToken: token,
     token,
     refreshToken,
-    role: authenticatedUser.role,
+    role: sessionRole,
     libraryId: nextLibraryId,
     libraryCode: nextLibraryCode,
     users:
-      authenticatedUser.role === 'admin'
-        ? [authenticatedUser, ...state.users.filter((u) => u.role !== 'student')]
-        : [initialAdmin, authenticatedUser, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
+      sessionRole === 'admin'
+        ? [userWithRole, ...state.users.filter((u) => u.role !== 'student')]
+        : [initialAdmin, userWithRole, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
   }));
 
-  if (authenticatedUser.role === 'student' && !nextLibraryId && token) {
+  if (sessionRole === 'student' && !nextLibraryId && token) {
     try {
       const me = await apiGet<{ ok: boolean; student?: { libraryId?: string | null } }>(`/api/student/me`);
       const hydratedLibraryId = me?.student?.libraryId ?? null;
@@ -413,13 +502,15 @@ async function hydrateSessionAfterAuth(
     }
   }
 
-  if ((authenticatedUser.role as AuthRole) === 'admin') {
+  if (sessionRole === 'admin') {
     await get().fetchStudents();
-  } else {
+  } else if (sessionRole === 'student') {
     await Promise.all([
       get().fetchNotifications(authenticatedUser.id),
       get().fetchStudentAttendance(authenticatedUser.id),
     ]);
+  } else if (sessionRole === 'library') {
+    await Promise.all([get().fetchNotifications(), get().fetchLibraryRenewalRequests('pending')]);
   }
 
   return { ok: true };
@@ -565,6 +656,9 @@ export const useAppStore = create<AppState>()(
   spaces: [],
   shifts: [],
   allocations: [],
+  renewalRequests: [],
+  pendingRenewalCount: 0,
+  studentPayments: [],
 
   isAuthenticated: () => Boolean(get().token),
   isAdmin: () => get().role === 'admin',
@@ -823,15 +917,16 @@ export const useAppStore = create<AppState>()(
        * - Axios service attaches Authorization automatically on future requests
        * - For login itself: we send credentials only (no token yet)
        */
-      const response = await apiPost<
-        | { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }
-        | { success: boolean; data: { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }; message?: string }
-      >(`/api/auth/login`, {
+      const response = await apiPost<unknown>(`/api/auth/login`, {
         usernameOrMobile,
         ...(mode === 'password' ? { password: pinOrPassword } : { pin: pinOrPassword }),
+        ...(mode === 'password' ? { role: 'library' } : { role: 'student' }),
         ...(libraryCode ? { libraryCode } : {}),
       });
-      const data = 'success' in response ? response.data : response;
+      const data = unwrapAuthLoginPayload(response);
+      if (!data) {
+        return { ok: false, message: 'Invalid login response from server' };
+      }
       const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode);
       if (!hydrated.ok) return hydrated;
       return { ok: true };
@@ -847,23 +942,20 @@ export const useAppStore = create<AppState>()(
 
   adminLogin: async (username, pin) => {
     try {
-      const response = await apiPost<
-        | { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }
-        | { success: boolean; data: { user: User; authToken?: string; refreshToken?: string; libraryCode?: string }; message?: string }
-      >(`/api/admin/login`, { username, pin });
-      const data = 'success' in response ? response.data : response;
-      const authenticatedUser = data.user;
+      const response = await apiPost<unknown>(`/api/admin/login`, { username, pin });
+      const data = unwrapAuthLoginPayload(response);
+      if (!data?.user) {
+        return { ok: false, message: 'Invalid login response from server' };
+      }
+      const authenticatedUser = { ...data.user, role: 'admin' as const };
       const token = data.authToken || null;
       const refreshToken = data.refreshToken || null;
-      if (!authenticatedUser || authenticatedUser.role !== 'admin') {
-        return { ok: false, message: 'Invalid admin credentials' };
-      }
       set((state) => ({
         currentUser: authenticatedUser,
         authToken: token,
         token,
         refreshToken,
-        role: authenticatedUser.role,
+        role: 'admin',
         libraryId: null,
         libraryCode: null,
         users: [authenticatedUser, ...state.users.filter((u) => u.role === 'student')],
@@ -875,7 +967,7 @@ export const useAppStore = create<AppState>()(
     }
   },
 
-  logout: () =>
+  logout: () => {
     set({
       currentUser: null,
       authToken: null,
@@ -884,7 +976,21 @@ export const useAppStore = create<AppState>()(
       role: null,
       libraryId: null,
       libraryCode: null,
-    }),
+      studentPayments: [],
+      renewalRequests: [],
+      pendingRenewalCount: 0,
+      attendances: [],
+      notifications: [],
+      lastNotifSeenAt: null,
+    });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { resetAuthNavigation } = require('./navigation/rootNavigation');
+      resetAuthNavigation('Login');
+    } catch {
+      /* navigation not mounted yet */
+    }
+  },
 
   patchCurrentUser: (patch) =>
     set((state) => ({
@@ -901,7 +1007,11 @@ export const useAppStore = create<AppState>()(
         // which drives access gating (LibraryRoot tabs vs Subscription screen).
         const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
         if (me?.user) {
-          set({ currentUser: me.user });
+          set({
+            currentUser: { ...me.user, role: 'library' },
+            role: 'library',
+            libraryId: me.user.id || libraryId || cu?.id || null,
+          });
           return { ok: true };
         }
 
@@ -909,6 +1019,8 @@ export const useAppStore = create<AppState>()(
         const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
         const p = res.profile;
         set({
+          role: 'library',
+          libraryId: cu?.id || libraryId || p?.id || null,
           currentUser: {
             ...(cu || ({} as any)),
             id: cu?.id || libraryId || p?.id || '',
@@ -1400,7 +1512,151 @@ export const useAppStore = create<AppState>()(
     return { ok: failed === 0, count: unreadIds.length };
   },
 
+  fetchRenewContext: async () => {
+    if (get().role !== 'student') return { ok: false, message: 'Students only' };
+    try {
+      const res = await apiGet<{ ok: boolean } & RenewContext>(`/api/student/renew-context`);
+      return { ok: true, context: res };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to load renewal options' };
+    }
+  },
+
+  submitRenewalRequest: async (payload) => {
+    try {
+      const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(`/api/student/renew-request`, payload);
+      const request = res.request;
+      set((s) => ({
+        renewalRequests: [request, ...s.renewalRequests.filter((r) => r.id !== request.id)],
+      }));
+      return { ok: true, request };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to submit request' };
+    }
+  },
+
+  fetchMyRenewalRequests: async () => {
+    if (get().role !== 'student') return { ok: true, requests: [] };
+    try {
+      const res = await apiGet<{ ok: boolean; requests: RenewalRequest[] }>(`/api/student/renew-requests`);
+      set({ renewalRequests: res.requests || [] });
+      return { ok: true, requests: res.requests || [] };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to load requests' };
+    }
+  },
+
+  fetchMyStudentPayments: async () => {
+    try {
+      const res = await apiGet<{ ok: boolean; payments: StudentPaymentRecord[] }>(
+        `/api/student/payments`,
+        { _: Date.now() }
+      );
+      set({ studentPayments: res.payments || [] });
+      return { ok: true, payments: res.payments || [] };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to load payments' };
+    }
+  },
+
+  fetchLibraryRenewalRequests: async (status = 'pending') => {
+    try {
+      const res = await apiGet<{
+        ok: boolean;
+        requests: RenewalRequest[];
+        pendingCount: number;
+      }>(`/api/library/renew-requests`, { status });
+      set({
+        renewalRequests: res.requests || [],
+        pendingRenewalCount: res.pendingCount ?? 0,
+      });
+      return {
+        ok: true,
+        requests: res.requests || [],
+        pendingCount: res.pendingCount ?? 0,
+      };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to load renewal requests' };
+    }
+  },
+
+  approveRenewalRequest: async (id, data) => {
+    try {
+      const res = await apiPost<{
+        ok: boolean;
+        request: RenewalRequest;
+        student?: { id: string; expiryDate: string; feeStatus: string; feeAmount: number };
+      }>(`/api/library/renew-requests/${id}/approve`, data || {});
+      set((s) => ({
+        renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
+        pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
+        users: res.student
+          ? s.users.map((u) =>
+              u.id === res.student!.id
+                ? {
+                    ...u,
+                    expiryDate: res.student!.expiryDate,
+                    feeStatus:
+                      res.student!.feeStatus === 'paid'
+                        ? 'Paid'
+                        : res.student!.feeStatus === 'partial'
+                          ? 'Half Paid'
+                          : 'Pending',
+                    feeAmount: res.student!.feeAmount,
+                  }
+                : u
+            )
+          : s.users,
+      }));
+      if (res.student && get().currentUser?.id === res.student.id) {
+        set((s) => ({
+          currentUser: s.currentUser
+            ? {
+                ...s.currentUser,
+                expiryDate: res.student!.expiryDate,
+                feeAmount: res.student!.feeAmount,
+                feeStatus:
+                  res.student!.feeStatus === 'paid'
+                    ? 'Paid'
+                    : res.student!.feeStatus === 'partial'
+                      ? 'Half Paid'
+                      : 'Pending',
+              }
+            : s.currentUser,
+        }));
+      }
+      await get().fetchNotifications();
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to approve request' };
+    }
+  },
+
+  rejectRenewalRequest: async (id, reason) => {
+    try {
+      const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(
+        `/api/library/renew-requests/${id}/reject`,
+        { reason }
+      );
+      set((s) => ({
+        renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
+        pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
+      }));
+      return { ok: true };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || 'Failed to reject request' };
+    }
+  },
+
   fetchStudentAttendance: async (studentId, year, month) => {
+    if (get().role !== 'student') return;
     try {
       const now = new Date();
       const y = year ?? now.getFullYear();

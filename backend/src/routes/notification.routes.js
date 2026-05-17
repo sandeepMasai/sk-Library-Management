@@ -20,6 +20,7 @@ const ALLOWED_CATEGORIES = new Set([
   "hours",
   "rules",
   "event",
+  "renewal",
 ]);
 
 function normalizeCategory(value) {

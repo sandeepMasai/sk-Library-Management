@@ -23,7 +23,9 @@ import { apiGet, type ApiError } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
 import { theme } from '../../theme';
 import { AttendanceCard } from '../../components/AttendanceSummaryCard';
-import { ConfirmModal } from '../../components/ConfirmModal';
+import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
+import { resetAuthNavigation } from '../../navigation/rootNavigation';
+import { APP_HEADER_BG } from '../../constants/appHeader';
 
 type DashboardApiResponse = {
   ok: boolean;
@@ -31,6 +33,7 @@ type DashboardApiResponse = {
   students: { total: number; active: number; expired: number; blocked: number };
   payments: { feeDueCount: number; collectedAmount: number; dueAmount: number; totalFeeAmount: number };
   attendance: { date: string; todayCount: number; attendancePct: number };
+  renewalRequests?: { pending: number };
 };
 
 type ActivityItem = {
@@ -70,7 +73,7 @@ export default function AdminDashboard() {
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(mode), [mode]);
   const insets = useSafeAreaInsets();
-  const headerTopBg = '#064E3B'; // deep green for status bar contrast
+  const headerTopBg = APP_HEADER_BG;
 
   const currentUser = useAppStore((s) => s.currentUser);
   const users = useAppStore((s) => s.users);
@@ -142,27 +145,47 @@ export default function AdminDashboard() {
     };
   }, [dashboard]);
 
-  // ── Recent activity feed ──────────────────────────────────────────────────
+  const RECENT_ACTIVITY_LIMIT = 5;
+
+  // ── Recent activity feed (newest 5 only) ───────────────────────────────────
   const activityFeed: ActivityItem[] = useMemo(() => {
     const items: ActivityItem[] = [];
 
-    // Recent notifications (uses already-available list in store)
-    for (const n of notifications.slice(0, 5)) {
+    for (const a of todayList) {
+      const student = students.find((s) => s.id === a.studentId);
+      if (!student) continue;
+      items.push({
+        id: `att-${a.id}`,
+        type: 'checkin',
+        label: `${student.name} checked in`,
+        sub: 'Attendance marked today',
+        date: a.date,
+        photoUrl: student.photoUrl ?? null,
+        initial: student.name.charAt(0).toUpperCase(),
+        iconColor: '#059669',
+        iconBg: '#ECFDF5',
+        icon: 'checkmark-circle',
+      });
+    }
+
+    for (const n of notifications) {
+      const isRenewal = n.category === 'renewal' || n.targetType === 'library';
       items.push({
         id: `notif-${n.id}`,
         type: 'notification',
         label: n.title,
-        sub: 'Notification sent to students',
+        sub: isRenewal ? 'Renewal / library alert' : 'Notification sent to students',
         date: n.date,
-        icon: 'megaphone',
-        iconColor: '#F59E0B',
-        iconBg: '#FFFBEB',
+        icon: isRenewal ? 'refresh' : 'megaphone',
+        iconColor: isRenewal ? '#0F766E' : '#F59E0B',
+        iconBg: isRenewal ? '#F0FDFA' : '#FFFBEB',
       });
     }
 
-    // Sort newest first, take top 8
-    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
-  }, [notifications]);
+    return items
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, RECENT_ACTIVITY_LIMIT);
+  }, [notifications, todayList, students]);
 
   const parentNav = () => navigation.getParent?.();
   const goForm = (id?: string) => parentNav()?.navigate?.('AdminStudentForm', id ? { studentId: id } : undefined);
@@ -172,6 +195,7 @@ export default function AdminDashboard() {
   const confirmLogout = () => {
     setShowLogoutModal(false);
     logout();
+    resetAuthNavigation('Login');
   };
 
   const hour = new Date().getHours();
@@ -266,10 +290,17 @@ export default function AdminDashboard() {
           <QuickAction2 icon="qr-code-outline" label="Attendance" sub="Open QR" tone="violet" onPress={() => navigation.navigate('Attendance')} />
           <QuickAction2 icon="megaphone-outline" label="Notify" sub="Send update" tone="amber" onPress={() => navigation.navigate('Notifications')} />
           <QuickAction2 icon="wallet-outline" label="Fees" sub="Overview" tone="slate" onPress={() => parentNav()?.navigate?.('AdminFees')} />
+          <QuickAction2
+            icon="refresh-outline"
+            label="Renewals"
+            sub={dashboard?.renewalRequests?.pending ? `${dashboard.renewalRequests.pending} pending` : 'Requests'}
+            tone="emerald"
+            onPress={() => parentNav()?.navigate?.('RenewalRequests')}
+          />
         </View>
 
         {/* ── Alerts ── */}
-        {(expiredCount > 0 || blockedCount > 0 || pendingFeeCount > 0) && (
+        {(expiredCount > 0 || blockedCount > 0 || pendingFeeCount > 0 || (dashboard?.renewalRequests?.pending ?? 0) > 0) && (
           <View style={styles.alertsWrap}>
             {expiredCount > 0 && (
               <TouchableOpacity style={[styles.alertPill, { backgroundColor: '#FEF2F2' }]} onPress={() => navigation.navigate('Students')}>
@@ -287,6 +318,17 @@ export default function AdminDashboard() {
               <TouchableOpacity style={[styles.alertPill, { backgroundColor: '#FFFBEB' }]} onPress={() => parentNav()?.navigate?.('AdminFees')}>
                 <Ionicons name="cash" size={13} color="#D97706" />
                 <Text style={[styles.alertPillTxt, { color: '#D97706' }]}>{pendingFeeCount} fee due</Text>
+              </TouchableOpacity>
+            )}
+            {(dashboard?.renewalRequests?.pending ?? 0) > 0 && (
+              <TouchableOpacity
+                style={[styles.alertPill, { backgroundColor: '#F0FDFA' }]}
+                onPress={() => parentNav()?.navigate?.('RenewalRequests')}
+              >
+                <Ionicons name="refresh" size={13} color="#0F766E" />
+                <Text style={[styles.alertPillTxt, { color: '#0F766E' }]}>
+                  {dashboard!.renewalRequests!.pending} renewal{dashboard!.renewalRequests!.pending === 1 ? '' : 's'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -364,15 +406,9 @@ export default function AdminDashboard() {
         )}
       </ScrollView>
 
-      <ConfirmModal
+      <SignOutConfirmModal
         visible={showLogoutModal}
-        tone="primary"
-        label="CONFIRM"
-        title="Logout?"
-        description="Sign out of the admin panel?"
-        cancelText="Cancel"
-        confirmText="Logout"
-        confirmIcon="log-out-outline"
+        preset="libraryAdmin"
         onCancel={closeLogout}
         onConfirm={confirmLogout}
       />

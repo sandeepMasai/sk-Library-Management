@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Payment = require("../models/Payment");
 const Library = require("../models/Library");
+const { countLibrarySubscriptionOverview } = require("../utils/subscription");
 const {
   mongoNormalizePaymentAmountExpr,
   paiseToRupees,
@@ -50,10 +51,9 @@ async function getPaymentsOverview() {
     previousPeriodRevenue,
     pendingCount,
     failedCount,
-    activeSubscriptions,
+    subscriptionCounts,
     sparklineAgg,
     statusAgg,
-    expiredLibraries,
   ] = await Promise.all([
     sumPaidPaymentRevenueRupees(),
     sumPaidPaymentRevenueRupees({ $gte: mom.currentStart, $lte: mom.currentEnd }),
@@ -61,11 +61,7 @@ async function getPaymentsOverview() {
     sumPaidPaymentRevenueRupees({ $gte: mom.previousStart, $lte: mom.previousEnd }),
     Payment.countDocuments({ status: "pending" }),
     Payment.countDocuments({ status: "failed" }),
-    Library.countDocuments({
-      isActive: true,
-      subscriptionStatus: "active",
-      $or: [{ planExpiryDate: null }, { planExpiryDate: { $gte: now } }],
-    }),
+    countLibrarySubscriptionOverview(),
     Payment.aggregate([
       { $match: { status: "paid" } },
       { $addFields: { paidAt: paidAtExpr(), amountPaise: mongoNormalizePaymentAmountExpr() } },
@@ -79,9 +75,6 @@ async function getPaymentsOverview() {
       { $sort: { _id: 1 } },
     ]),
     Payment.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
-    Library.countDocuments({
-      planExpiryDate: { $ne: null, $lt: now },
-    }),
   ]);
   const growthPercent = computeGrowthPercent(monthlyRevenue, previousPeriodRevenue);
 
@@ -109,11 +102,11 @@ async function getPaymentsOverview() {
     growthPercent,
     pendingPayments: pendingCount,
     failedPayments: failedCount,
-    activeSubscriptions,
+    activeSubscriptions: subscriptionCounts.activePlans,
     sparkline,
     subscriptionMix: {
-      active: activeSubscriptions,
-      expired: expiredLibraries,
+      active: subscriptionCounts.activePlans,
+      expired: subscriptionCounts.expired,
     },
     statusCounts,
   };

@@ -4,6 +4,8 @@ const {
   getRecentLibraries,
   getRecentActivity,
   getRevenueOverview,
+  getSubscriptionOverview,
+  getCancelledLibraries,
 } = require("../services/superadminAnalytics.service");
 const {
   listLibrariesWithStudentAnalytics,
@@ -53,6 +55,30 @@ router.get("/revenue-overview", requireAdminAuth, async (req, res) => {
     return res.json({ ok: true, overview });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load revenue overview", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/subscription-overview
+ */
+router.get("/subscription-overview", requireAdminAuth, async (req, res) => {
+  try {
+    const overview = await getSubscriptionOverview();
+    return res.json({ ok: true, overview });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load subscription overview", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/cancelled-libraries
+ */
+router.get("/cancelled-libraries", requireAdminAuth, async (req, res) => {
+  try {
+    const data = await getCancelledLibraries();
+    return res.json({ ok: true, ...data });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load cancelled libraries", error: error.message });
   }
 });
 

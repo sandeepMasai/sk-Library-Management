@@ -24,6 +24,8 @@ import { Linking } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { APP_DISPLAY_NAME } from '../../constants/branding';
+import { resetAfterAuth } from '../../navigation/rootNavigation';
+import { normalizeAuthRole } from '../../utils/authRole';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const IS_SMALL_DEVICE = SCREEN_H < 720;
@@ -119,26 +121,30 @@ export default function LoginScreen() {
         title: "Couldn't sign in",
         description: getFriendlyLoginError(result.message),
       });
-    }
-  };
-
-  useEffect(() => {
-    // Redirect after successful login (role-based)
-    if (!role) return;
-    /**
-     * Connection: role-based redirect
-     * - Web: use URL paths (deep linking)
-     * - Native: navigate to protected roots
-     */
-    if (Platform.OS === 'web') {
-      const path = role === 'library' ? '/dashboard' : '/student/dashboard';
-      Linking.openURL(path);
       return;
     }
 
-    if (role === 'library') navigation.navigate('LibraryRoot');
-    else navigation.navigate('StudentRoot');
-  }, [role, navigation]);
+    const sessionRole = normalizeAuthRole(
+      useAppStore.getState().role ?? useAppStore.getState().currentUser?.role
+    );
+    if (Platform.OS === 'web') {
+      const path = sessionRole === 'library' ? '/dashboard' : '/student/dashboard';
+      Linking.openURL(path);
+      return;
+    }
+    resetAfterAuth(sessionRole);
+  };
+
+  useEffect(() => {
+    // Restored session on Login screen — jump to the correct root (stack reset, no stale StudentRoot)
+    if (!useAppStore.getState().isAuthenticated()) return;
+    const sessionRole = normalizeAuthRole(
+      role ?? useAppStore.getState().currentUser?.role
+    );
+    if (!sessionRole) return;
+    if (Platform.OS === 'web') return;
+    resetAfterAuth(sessionRole);
+  }, [role]);
 
   useEffect(() => {
     // Reset form when switching types (keeps UI clean and avoids cross-role confusion)

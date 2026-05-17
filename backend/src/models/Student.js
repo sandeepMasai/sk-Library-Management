@@ -53,7 +53,6 @@ const studentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Library",
       required: true,
-      index: true,
       immutable: true,
     },
 
@@ -322,7 +321,6 @@ studentSchema.index({
 });
 
 /** Super Admin: tenant-scoped status filters (membershipStatus is canonical "status"). */
-studentSchema.index({ libraryId: 1 });
 studentSchema.index({ membershipStatus: 1 });
 
 /** Partial index: eligible members by expiry window (large SaaS collections). */

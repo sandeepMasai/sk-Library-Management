@@ -2,8 +2,7 @@ import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { DrawerToggleButton } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../theme/ThemeProvider';
-import { theme } from '../../theme';
+import { APP_HEADER_BG, APP_HEADER_FG } from '../../constants/appHeader';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { SuperAdminHeaderLogo } from './SuperAdminHeaderLogo';
 
@@ -15,7 +14,6 @@ type Props = {
 
 export function SuperAdminTopHeader({ navigation, options, showDrawerToggle = true }: Props) {
   const insets = useSafeAreaInsets();
-  const { mode } = useTheme();
   const title =
     typeof options.title === 'string'
       ? options.title
@@ -29,16 +27,16 @@ export function SuperAdminTopHeader({ navigation, options, showDrawerToggle = tr
         styles.bar,
         {
           paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 8 : 0),
-          backgroundColor: theme.colors.surface,
-          borderBottomColor: mode === 'dark' ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)',
+          backgroundColor: APP_HEADER_BG,
+          borderBottomColor: 'rgba(6,95,70,0.12)',
         },
       ]}
     >
       <View style={styles.row}>
         <View style={styles.left}>
-          {showDrawerToggle ? <DrawerToggleButton tintColor={theme.colors.text} /> : <View style={{ width: 8 }} />}
+          {showDrawerToggle ? <DrawerToggleButton tintColor={APP_HEADER_FG} /> : <View style={{ width: 8 }} />}
         </View>
-        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: APP_HEADER_FG }]} numberOfLines={1}>
           {title}
         </Text>
         <SuperAdminHeaderLogo navigation={navigation} size={34} />

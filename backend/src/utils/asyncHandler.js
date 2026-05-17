@@ -52,14 +52,16 @@ function buildAsyncHandlerContext(req, handlerName) {
 }
 
 function logAsyncHandlerRejection(ctx, err, durationMs) {
-  logger.error("Async route handler rejected", {
+  const statusCode = Number(err?.statusCode ?? err?.status ?? 500);
+  const logFn = statusCode >= 400 && statusCode < 500 ? logger.warn.bind(logger) : logger.error.bind(logger);
+  logFn("Async route handler rejected", {
     event: "async_handler_rejection",
     ...ctx,
     durationMs,
     errorName: err?.name,
     errorMessage:
       err?.message != null ? String(err.message).slice(0, 500) : undefined,
-    statusCode: err?.statusCode ?? err?.status,
+    statusCode,
     stack:
       !isProduction && err?.stack
         ? String(err.stack).slice(0, 8000)

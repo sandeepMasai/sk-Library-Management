@@ -34,7 +34,6 @@ const auditLogSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Library",
       default: null,
-      index: true,
     },
 
     ip: {

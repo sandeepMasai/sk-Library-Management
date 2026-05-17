@@ -1,6 +1,11 @@
 const Library = require("../models/Library");
 const Log = require("../models/Log");
 const Payment = require("../models/Payment");
+const RenewalRequest = require("../models/RenewalRequest");
+const {
+  countLibrarySubscriptionOverview,
+  listCancelledLibraries,
+} = require("../utils/subscription");
 const {
   mongoNormalizePaymentAmountExpr,
   roundRupees,
@@ -119,7 +124,7 @@ async function getRevenueOverview() {
     monthlyRevenue,
     todayRevenue,
     previousPeriodRevenue,
-    activeSubscriptions,
+    subscriptionCounts,
     pendingRenewals,
     dailySparklineAgg,
     monthlyTrendAgg,
@@ -128,15 +133,8 @@ async function getRevenueOverview() {
     sumPaidPaymentRevenueRupees({ $gte: mom.currentStart, $lte: mom.currentEnd }),
     sumPaidPaymentRevenueRupees({ $gte: todayStart }),
     sumPaidPaymentRevenueRupees({ $gte: mom.previousStart, $lte: mom.previousEnd }),
-    Library.countDocuments({
-      isActive: true,
-      subscriptionStatus: "active",
-      $or: [{ planExpiryDate: null }, { planExpiryDate: { $gte: now } }],
-    }),
-    Library.countDocuments({
-      isActive: true,
-      planExpiryDate: { $ne: null, $gte: now, $lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) },
-    }),
+    countLibrarySubscriptionOverview(),
+    RenewalRequest.countDocuments({ status: "pending" }),
     Payment.aggregate([
       { $match: { status: "paid" } },
       {
@@ -195,7 +193,8 @@ async function getRevenueOverview() {
     totalRevenue,
     monthlyRevenue,
     todayRevenue,
-    activeSubscriptions,
+    activeSubscriptions: subscriptionCounts.activePlans,
+    cancelledSubscriptions: subscriptionCounts.cancelled,
     pendingRenewals,
     growthPercent,
     sparkline,
@@ -203,10 +202,27 @@ async function getRevenueOverview() {
   };
 }
 
+async function getSubscriptionOverview() {
+  const counts = await countLibrarySubscriptionOverview();
+  return {
+    active: counts.activePlans,
+    expiringSoon: counts.expiringSoon,
+    expired: counts.expired,
+    cancelled: counts.cancelled,
+  };
+}
+
+async function getCancelledLibraries() {
+  const libraries = await listCancelledLibraries();
+  return { count: libraries.length, libraries };
+}
+
 module.exports = {
   getRecentLibraries,
   getRecentActivity,
   getRevenueOverview,
+  getSubscriptionOverview,
+  getCancelledLibraries,
   ACTIVITY_LIMIT,
   LIBRARY_LIMIT,
 };

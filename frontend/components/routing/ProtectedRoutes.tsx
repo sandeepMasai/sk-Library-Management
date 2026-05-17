@@ -2,6 +2,7 @@ import React from 'react';
 import { useAppStore } from '../../store';
 import LoginScreen from '../../screens/auth/LoginScreen';
 import ForbiddenScreen from '../../screens/common/ForbiddenScreen';
+import { normalizeAuthRole, resolveEffectiveRole } from '../../utils/authRole';
 
 /**
  * Role-based routing guards.
@@ -15,17 +16,21 @@ import ForbiddenScreen from '../../screens/common/ForbiddenScreen';
 function BaseGuard(props: { allow: Array<'admin' | 'library' | 'student'>; children: React.ReactNode }) {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const role = useAppStore((s) => s.role);
+  const currentUserRole = useAppStore((s) => s.currentUser?.role);
+  const effectiveRole = resolveEffectiveRole(role, currentUserRole);
 
-  // Not logged in → "redirect" to Login by rendering it
+  // Not logged in → show login (logout resets stack to root Login so this is a fallback)
   if (!isAuthenticated()) return <LoginScreen />;
 
   // Role mismatch → block access
-  if (!role || !props.allow.includes(role)) {
+  if (!effectiveRole || !props.allow.includes(effectiveRole)) {
     return <ForbiddenScreen message="Your account role does not have access to this page." />;
   }
 
   return <>{props.children}</>;
 }
+
+export { normalizeAuthRole, resolveEffectiveRole };
 
 export function AdminRoute(props: { children: React.ReactNode }) {
   return <BaseGuard allow={['admin']}><>{props.children}</></BaseGuard>;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BackHandler, Platform, StatusBar as RNStatusBar, ToastAndroid, TouchableOpacity } from 'react-native';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './navigation/rootNavigation';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAppStore } from './store';
@@ -27,6 +28,7 @@ import {
   AdminAttendance,
   AdminNotifications,
   AdminFees,
+  RenewalRequestsScreen,
 } from './pages/libraryadmin';
 import {
   AdminLibraryDetailPage,
@@ -42,6 +44,8 @@ import StudentNotifications from './screens/student/Notifications';
 import StudentCalendarScreen from './screens/student/CalendarScreen';
 import StudentProfile from './screens/student/Profile';
 import StudentSettingsScreen from './screens/student/Settings';
+import RenewPlanScreen from './screens/student/RenewPlanScreen';
+import PaymentHistoryScreen from './screens/student/PaymentHistoryScreen';
 import StudentPrivacyPolicyScreen from './screens/student/PrivacyPolicy';
 import StudentTermsConditionsScreen from './screens/student/TermsConditions';
 import StudentLegalWebViewScreen from './screens/student/LegalWebView';
@@ -61,11 +65,10 @@ import PlaceholderScreen from './screens/common/PlaceholderScreen';
 import SplashScreen from './screens/common/SplashScreen';
 import { SuperAdminDrawerNavigator } from './components/superadmin/SuperAdminDrawerNavigator';
 import { rootLinking } from './navigation/linking';
+import { APP_HEADER_BG, APP_HEADER_FG, appScreenHeaderOptions, withAppHeaderOptions } from './constants/appHeader';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-const navigationRef = createNavigationContainerRef();
-
 /** Super Admin — SaaS drawer sidebar (web + native); see `SuperAdminDrawerNavigator`. */
 function AdminTabs() {
   return <SuperAdminDrawerNavigator />;
@@ -92,10 +95,7 @@ function StudentTabs() {
           return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         headerShown: true,
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-        headerTintColor: theme.colors.text,
-        headerShadowVisible: false,
+        ...appScreenHeaderOptions,
       })}
     >
       <Tab.Screen
@@ -111,7 +111,7 @@ function StudentTabs() {
               accessibilityRole="button"
               accessibilityLabel="Open profile"
             >
-              <Ionicons name="person-circle-outline" size={28} color={theme.colors.text} />
+              <Ionicons name="person-circle-outline" size={28} color={APP_HEADER_FG} />
             </TouchableOpacity>
           ),
         })}
@@ -135,67 +135,47 @@ function StudentTabs() {
 
 function StudentMainStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, ...appScreenHeaderOptions }}>
       <Stack.Screen name="StudentTabs" component={StudentTabs} />
       <Stack.Screen
         name="StudentProfile"
         component={StudentProfile}
-        options={{
-          headerShown: true,
-          title: 'Profile',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-          headerTintColor: theme.colors.text,
-          headerShadowVisible: false,
-        }}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Profile' })}
       />
       <Stack.Screen
         name="StudentPrivacyPolicy"
         component={StudentPrivacyPolicyScreen}
-        options={{
-          headerShown: true,
-          title: 'Privacy Policy',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-          headerTintColor: theme.colors.text,
-          headerShadowVisible: false,
-        }}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Privacy Policy' })}
       />
       <Stack.Screen
         name="StudentTermsConditions"
         component={StudentTermsConditionsScreen}
-        options={{
-          headerShown: true,
-          title: 'Terms & Conditions',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-          headerTintColor: theme.colors.text,
-          headerShadowVisible: false,
-        }}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Terms & Conditions' })}
       />
       <Stack.Screen
         name="StudentLegalWebView"
         component={StudentLegalWebViewScreen}
-        options={({ route }: any) => ({
-          headerShown: true,
-          title: String(route?.params?.title || 'Document'),
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-          headerTintColor: theme.colors.text,
-          headerShadowVisible: false,
-        })}
+        options={({ route }: any) =>
+          withAppHeaderOptions({
+            headerShown: true,
+            title: String(route?.params?.title || 'Document'),
+          })
+        }
       />
       <Stack.Screen
         name="Appearance"
         component={AppearanceScreen}
-        options={{
-          headerShown: true,
-          title: 'Appearance',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-          headerTintColor: theme.colors.text,
-          headerShadowVisible: false,
-        }}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Appearance' })}
+      />
+      <Stack.Screen
+        name="RenewPlan"
+        component={RenewPlanScreen}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Renew / Extend Plan' })}
+      />
+      <Stack.Screen
+        name="PaymentHistory"
+        component={PaymentHistoryScreen}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Payment History' })}
       />
     </Stack.Navigator>
   );
@@ -231,10 +211,7 @@ function LibraryTabs() {
           return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         headerShown: true,
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
-        headerTintColor: theme.colors.text,
-        headerShadowVisible: false,
+        ...appScreenHeaderOptions,
       })}
     >
       {/* Library dashboard — blocked until paid subscription */}
@@ -258,13 +235,18 @@ function LibraryMainStack() {
     <Stack.Navigator key={gate ? 'gate_on' : 'gate_off'} initialRouteName={initialRouteName}>
       <Stack.Screen name="LibraryTabs" component={LibraryTabs} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={AdminNotifications} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="RenewalRequests"
+        component={RenewalRequestsScreen}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Renewal Requests' })}
+      />
       <Stack.Screen name="PlanSelection" component={PlanSelectionScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PaymentError" component={PaymentErrorScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="Subscription"
         component={SubscriptionScreen}
-        options={{ title: 'Subscription', headerStyle: { backgroundColor: theme.colors.surface }, headerShadowVisible: false }}
+        options={withAppHeaderOptions({ title: 'Subscription', headerShown: true })}
       />
       <Stack.Screen
         name="Billing"
@@ -279,7 +261,7 @@ function LibraryMainStack() {
       <Stack.Screen name="LibraryChangePassword" component={LibraryChangePasswordScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="Branch"
-        options={{ title: 'Branch', headerStyle: { backgroundColor: theme.colors.surface }, headerShadowVisible: false }}
+        options={withAppHeaderOptions({ title: 'Branch', headerShown: true })}
       >
         {() => <PlaceholderScreen title="Branch Switcher" subtitle="Coming soon" />}
       </Stack.Screen>
@@ -290,13 +272,7 @@ function LibraryMainStack() {
       <Stack.Screen
         name="ShiftManagement"
         component={LibrarySeatsScreen}
-        options={{
-          title: 'Shift management',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.text,
-          headerTitleStyle: { fontWeight: '700', color: theme.colors.text },
-          headerShadowVisible: false,
-        }}
+        options={withAppHeaderOptions({ headerShown: true, title: 'Shift management' })}
       />
     </Stack.Navigator>
   );
@@ -338,7 +314,7 @@ function AppInner() {
   const currentUser = useAppStore((state) => state.currentUser);
   const backPressRef = React.useRef(0);
   const { mode, hydrated, theme: uiTheme } = useTheme();
-  const barStyle = mode === 'dark' ? 'light-content' : 'dark-content';
+  const barStyle = currentUser ? 'dark-content' : mode === 'dark' ? 'light-content' : 'dark-content';
   const [showExitModal, setShowExitModal] = React.useState(false);
 
   React.useEffect(() => {
@@ -426,7 +402,7 @@ function AppInner() {
         colors: {
           primary: uiTheme.colors.primary,
           background: uiTheme.colors.background,
-          card: uiTheme.colors.surface,
+          card: APP_HEADER_BG,
           text: uiTheme.colors.text,
           border: uiTheme.colors.border,
           notification: '#EF4444',
@@ -443,7 +419,7 @@ function AppInner() {
         hidden={false}
         translucent={false}
         barStyle={barStyle}
-        backgroundColor={Platform.OS === 'android' ? uiTheme.colors.background : undefined}
+        backgroundColor={Platform.OS === 'android' ? (currentUser ? APP_HEADER_BG : uiTheme.colors.background) : undefined}
       />
       <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
         {/* Boot / session check */}
@@ -466,50 +442,22 @@ function AppInner() {
         <Stack.Screen
           name="AdminStudentDetail"
           component={AdminStudentDetail}
-          options={{
-            headerShown: true,
-            title: 'Student',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Student' })}
         />
         <Stack.Screen
           name="AdminStudentForm"
           component={AdminStudentForm}
-          options={{
-            headerShown: true,
-            title: 'Student details',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Student details' })}
         />
         <Stack.Screen
           name="AdminFees"
           component={AdminFees}
-          options={{
-            headerShown: true,
-            title: 'Fee Management',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Fee Management' })}
         />
         <Stack.Screen
           name="AdminLibraryDetail"
           component={AdminLibraryDetailPage}
-          options={{
-            headerShown: true,
-            title: 'Library Detail',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Library Detail' })}
         />
         <Stack.Screen
           name="AdminSubscriptionDetail"
@@ -528,26 +476,12 @@ function AppInner() {
         <Stack.Screen
           name="AdminGlobalSettings"
           component={AdminGlobalSettingsPage}
-          options={{
-            headerShown: true,
-            title: 'Global URLs',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Global URLs' })}
         />
         <Stack.Screen
           name="Appearance"
           component={AppearanceScreen}
-          options={{
-            headerShown: true,
-            title: 'Appearance',
-            headerStyle: { backgroundColor: uiTheme.colors.surface },
-            headerTintColor: uiTheme.colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            headerShadowVisible: false,
-          }}
+          options={withAppHeaderOptions({ headerShown: true, title: 'Appearance' })}
         />
       </Stack.Navigator>
 

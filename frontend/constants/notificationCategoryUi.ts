@@ -8,6 +8,7 @@ export const CATEGORY_ORDER: NotificationCategory[] = [
   'hours',
   'rules',
   'event',
+  'renewal',
 ];
 
 export const CATEGORY_META: Record<
@@ -68,6 +69,14 @@ export const CATEGORY_META: Record<
     bg: '#ECFDF5',
     border: '#A7F3D0',
     icon: 'calendar-outline',
+  },
+  renewal: {
+    label: 'Renewal',
+    short: 'Renewal',
+    color: '#0F766E',
+    bg: '#F0FDFA',
+    border: '#99F6E4',
+    icon: 'refresh-outline',
   },
 };
 

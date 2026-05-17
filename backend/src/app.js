@@ -18,6 +18,8 @@ app.use("/api/notifications", require("./routes/notification.routes"));
 app.use("/api/seats", require("./routes/seat.routes"));
 app.use("/api/dashboard", require("./routes/dashboard.routes"));
 app.use("/api/student", require("./routes/student-me.routes"));
+app.use("/api/student", require("./routes/renew-request.student.routes"));
+app.use("/api/library", require("./routes/renew-request.library.routes"));
 app.use("/api/admin", require("./routes/adminAuth.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
 app.use("/api/superadmin", require("./routes/superadmin.routes"));

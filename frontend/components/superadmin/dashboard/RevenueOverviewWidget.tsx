@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, ScrollView } from 'react-native';
-import { IndianRupee, RefreshCw } from 'lucide-react-native';
+import { IndianRupee, RefreshCw, Building2, Clock } from 'lucide-react-native';
 import { theme } from '../../../theme';
 import { DashboardWidgetSkeleton } from './DashboardWidgetSkeleton';
 import { LineChart, BarChart } from '../../ui/SimpleCharts';
@@ -11,6 +11,7 @@ type Props = {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  onViewCancelled?: () => void;
   borderColor: string;
   surfaceColor: string;
   textColor: string;
@@ -28,6 +29,7 @@ export function RevenueOverviewWidget({
   loading,
   error,
   onRetry,
+  onViewCancelled,
   borderColor,
   surfaceColor,
   textColor,
@@ -42,11 +44,17 @@ export function RevenueOverviewWidget({
 
   const metrics = overview
     ? [
-        { label: 'Total revenue', value: fmtINR(overview.totalRevenue) },
-        { label: 'This month', value: fmtINR(overview.monthlyRevenue) },
-        { label: 'Today', value: fmtINR(overview.todayRevenue) },
-        { label: 'Active subs', value: String(overview.activeSubscriptions) },
-        { label: 'Pending renewals', value: String(overview.pendingRenewals) },
+        { label: 'Total revenue', value: fmtINR(overview.totalRevenue), kind: 'currency' as const },
+        { label: 'This month', value: fmtINR(overview.monthlyRevenue), kind: 'currency' as const },
+        { label: 'Today', value: fmtINR(overview.todayRevenue), kind: 'currency' as const },
+        { label: 'Active library plans', value: String(overview.activeSubscriptions), kind: 'count' as const },
+        { label: 'Pending renewals', value: String(overview.pendingRenewals), kind: 'count' as const },
+        {
+          label: 'Cancelled plans',
+          value: String(overview.cancelledSubscriptions ?? 0),
+          kind: 'count' as const,
+          onPress: onViewCancelled,
+        },
       ]
     : [];
 
@@ -93,13 +101,43 @@ export function RevenueOverviewWidget({
       ) : (
         <>
           <View style={styles.metricGrid}>
-            {metrics.map((m) => (
-              <View key={m.label} style={[styles.metricCell, { borderColor, backgroundColor }]}>
-                <IndianRupee size={12} color={theme.colors.primary} style={{ marginBottom: 4 }} />
-                <Text style={[styles.metricVal, { color: textColor }]}>{m.value}</Text>
-                <Text style={[styles.metricLbl, { color: mutedColor }]}>{m.label}</Text>
-              </View>
-            ))}
+            {metrics.map((m) => {
+              const cell = (
+                <>
+                  {m.kind === 'currency' ? (
+                    <IndianRupee size={12} color={theme.colors.primary} style={{ marginBottom: 4 }} />
+                  ) : m.label === 'Pending renewals' ? (
+                    <Clock size={12} color={theme.colors.warning} style={{ marginBottom: 4 }} />
+                  ) : m.label === 'Cancelled plans' ? (
+                    <Clock size={12} color="#64748B" style={{ marginBottom: 4 }} />
+                  ) : (
+                    <Building2 size={12} color={theme.colors.primary} style={{ marginBottom: 4 }} />
+                  )}
+                  <Text style={[styles.metricVal, { color: textColor }]}>{m.value}</Text>
+                  <Text style={[styles.metricLbl, { color: mutedColor }]}>{m.label}</Text>
+                  {'onPress' in m && m.onPress ? (
+                    <Text style={[styles.tapHint, { color: theme.colors.primary }]}>Tap to view list</Text>
+                  ) : null}
+                </>
+              );
+              if ('onPress' in m && m.onPress) {
+                return (
+                  <TouchableOpacity
+                    key={m.label}
+                    activeOpacity={0.85}
+                    onPress={m.onPress}
+                    style={[styles.metricCell, styles.metricCellTap, { borderColor, backgroundColor }]}
+                  >
+                    {cell}
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <View key={m.label} style={[styles.metricCell, { borderColor, backgroundColor }]}>
+                  {cell}
+                </View>
+              );
+            })}
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chartScroll}>
@@ -195,6 +233,8 @@ const styles = StyleSheet.create({
   },
   metricVal: { fontSize: 16, fontWeight: '900', letterSpacing: -0.4 },
   metricLbl: { marginTop: 4, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  metricCellTap: { borderColor: 'rgba(15,118,110,0.22)' },
+  tapHint: { marginTop: 6, fontSize: 9, fontWeight: '800' },
   chartBox: {
     borderRadius: theme.radius.md,
     borderWidth: 1,

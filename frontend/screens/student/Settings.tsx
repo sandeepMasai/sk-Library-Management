@@ -141,9 +141,16 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
         <Section title="SUBSCRIPTION">
           <Item
             icon="calendar-outline"
-            title="Extend Plan"
-            sub="Request membership extension"
-            onPress={() => setInfoModal({ title: 'Extend Plan', description: 'Please contact admin to extend your plan.' })}
+            title="Renew Plan"
+            sub="Request membership renewal"
+            onPress={() => navigation.getParent()?.navigate('RenewPlan')}
+          />
+          <Item
+            icon="wallet-outline"
+            title="Payment History"
+            sub="View payments & invoices"
+            onPress={() => navigation.getParent()?.navigate('PaymentHistory')}
+            last
           />
         </Section>
 

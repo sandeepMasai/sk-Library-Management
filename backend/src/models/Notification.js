@@ -7,6 +7,7 @@ const NOTIFICATION_CATEGORIES = [
   "hours",
   "rules",
   "event",
+  "renewal",
 ];
 
 const PRIORITY_LEVELS = [
@@ -24,7 +25,6 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Library",
       required: true,
-      index: true,
     },
 
     title: {

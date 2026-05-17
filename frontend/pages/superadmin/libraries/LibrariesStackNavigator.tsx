@@ -6,6 +6,7 @@ import AdminLibrariesHubPage from './AdminLibrariesHubPage';
 import AdminLibrariesListPage from './AdminLibrariesListPage';
 import type { LibrariesStackParamList } from './types';
 import { PLAN_FILTER_SCREEN_TITLES } from './types';
+import { appScreenHeaderOptions } from '../../../constants/appHeader';
 
 const Stack = createNativeStackNavigator<LibrariesStackParamList>();
 
@@ -13,7 +14,7 @@ export function LibrariesStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={({ navigation }) => ({
-        headerShadowVisible: false,
+        ...appScreenHeaderOptions,
         animation: 'slide_from_right',
         headerRight: () => <SuperAdminHeaderLogo navigation={navigation} size={32} />,
       })}

@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Student = require("../models/Student");
 const Attendance = require("../models/Attendance");
+const RenewalRequest = require("../models/RenewalRequest");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { requireNotExpiredSubscription } = require("../middleware/subscription.middleware");
@@ -59,7 +60,7 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
     const now = Date.now();
 
     // Multi-tenant isolation applied
-    const [students, todayAttendanceCount] = await Promise.all([
+    const [students, todayAttendanceCount, pendingRenewalCount] = await Promise.all([
       Student.find({ libraryId, isDeleted: false })
         .select("expiryDate isBlocked feeStatus feeAmount")
         .lean(),
@@ -67,6 +68,7 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
         libraryId,
         attendanceDate: { $gte: todayRange.start, $lt: todayRange.end },
       }),
+      RenewalRequest.countDocuments({ libraryId, status: "pending" }),
     ]);
 
     const totalStudents = students.length;
@@ -106,6 +108,9 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
         date: todayKey,
         todayCount: todayAttendanceCount,
         attendancePct,
+      },
+      renewalRequests: {
+        pending: pendingRenewalCount,
       },
     });
   } catch (error) {

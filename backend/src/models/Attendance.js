@@ -16,7 +16,7 @@ function normalizeToUtcStartOfDay(value) {
 const attendanceSchema = new mongoose.Schema(
   {
     // Multi-tenant isolation
-    libraryId: { type: mongoose.Schema.Types.ObjectId, ref: "Library", required: true, index: true },
+    libraryId: { type: mongoose.Schema.Types.ObjectId, ref: "Library", required: true },
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Student",

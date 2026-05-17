@@ -6,6 +6,7 @@ import { SuperAdminHeaderLogo } from '../../../components/superadmin/SuperAdminH
 import AdminStudentsLibrariesPage from './AdminStudentsLibrariesPage';
 import AdminLibraryStudentsPage from './AdminLibraryStudentsPage';
 import AdminStudentDetailModal from './AdminStudentDetailModal';
+import { appScreenHeaderOptions } from '../../../constants/appHeader';
 
 const Stack = createNativeStackNavigator<StudentsStackParamList>();
 
@@ -13,7 +14,7 @@ export function StudentsStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={({ navigation }) => ({
-        headerShadowVisible: false,
+        ...appScreenHeaderOptions,
         animation: 'slide_from_right',
         headerRight: () => <SuperAdminHeaderLogo navigation={navigation} size={32} />,
       })}

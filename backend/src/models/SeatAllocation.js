@@ -12,7 +12,6 @@ const seatAllocationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Library",
       required: true,
-      index: true,
       immutable: true,
     },
 
