@@ -1,0 +1,29 @@
+# One-time setup: GitHub repo → Settings → Secrets → RAILWAY_TOKEN
+# Create token: https://railway.app/account/tokens
+name: Deploy backend to Railway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/railway-backend.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    container: ghcr.io/railwayapp/cli:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy backend service
+        working-directory: backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::Add RAILWAY_TOKEN in GitHub repo Secrets (https://railway.app/account/tokens)"
+            exit 1
+          fi
+          railway up --detach

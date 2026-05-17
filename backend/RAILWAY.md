@@ -61,15 +61,22 @@ EXPO_PUBLIC_API_URL=https://YOUR-DOMAIN.up.railway.app
 
 Phir Expo restart: `npx expo start -c`
 
-## 6) CLI (optional)
+## 6) One-command deploy (Mac Terminal)
 
 ```bash
-npm i -g @railway/cli
 cd backend
-railway login
-railway link
-railway up
+npx @railway/cli login
+node scripts/build-railway-env.js
+bash scripts/railway-deploy.sh
 ```
+
+Script sets all variables from `.railway-deploy.env` and runs `railway up`.
+
+## 7) GitHub Actions (optional)
+
+1. https://railway.app/account/tokens → create token  
+2. GitHub repo → **Settings → Secrets → Actions** → `RAILWAY_TOKEN`  
+3. Push to `main` → workflow deploys `backend/`
 
 ## Troubleshooting
 

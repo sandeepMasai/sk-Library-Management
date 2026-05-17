@@ -27,7 +27,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^# ]] && continue
   key="${line%%=*}"
   val="${line#*=}"
-  $CLI variables set "$key=$val" --skip-deploys 2>/dev/null || $CLI variables --set "$key=$val" 2>/dev/null || true
+  $CLI variable set "${key}=${val}" --skip-deploys
 done < "$ENV_FILE"
 
 echo "Deploying..."
