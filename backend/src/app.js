@@ -8,6 +8,17 @@ const app = express();
 
 attachHttpMiddleware(app);
 
+/** Browser / uptime checks at domain root */
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    service: "smartlibdesk-backend",
+    message: "API is running. Use /health or /api/* routes.",
+    health: "/health",
+    apiPrefix: "/api",
+  });
+});
+
 /** Railway / load-balancer liveness — always 200 while process is up */
 app.get("/health", (_req, res) => {
   const db = getMongoStatus();
