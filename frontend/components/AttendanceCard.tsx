@@ -11,7 +11,7 @@ interface AttendanceCardProps {
   isToday?: boolean;
 }
 
-export default function AttendanceCard({ day, status, isToday = false }: AttendanceCardProps) {
+function AttendanceCardComponent({ day, status, isToday = false }: AttendanceCardProps) {
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   if (status === 'empty') {
@@ -71,3 +71,5 @@ function makeStyles() {
     },
   });
 }
+
+export default React.memo(AttendanceCardComponent);

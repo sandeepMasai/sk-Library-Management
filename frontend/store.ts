@@ -6,6 +6,7 @@ import { prepareAttendanceQrPayload } from './utils/attendanceQr';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, apiDelete, apiGet, apiPatch, apiPost, apiPut, type ApiError } from './services/api';
+import { isNotificationUnread } from './utils/notificationRead';
 
 export type Role = 'admin' | 'student';
 export type FeeStatus = 'Paid' | 'Half Paid' | 'Pending';
@@ -82,6 +83,17 @@ export interface Attendance {
   id: string;
   studentId: string;
   date: string; // ISO string
+}
+
+function attendanceSignature(list: Attendance[]): string {
+  return list
+    .map((a) => `${a.id}\t${a.studentId}\t${a.date}`)
+    .sort()
+    .join('\n');
+}
+
+function attendanceListUnchanged(prev: Attendance[], next: Attendance[]): boolean {
+  return attendanceSignature(prev) === attendanceSignature(next);
 }
 
 /** Library announcement type (shown to students with badge + styling) */
@@ -311,6 +323,7 @@ interface AppState {
     category?: NotificationCategory
   ) => Promise<{ ok: boolean; message?: string }>;
   markNotificationRead: (id: string) => Promise<{ ok: boolean }>;
+  markAllNotificationsRead: (studentId: string) => Promise<{ ok: boolean; count: number }>;
 
   // Library - Subscription
   // Legacy (no-payment) upgrade endpoint is disabled on backend now.
@@ -1292,7 +1305,7 @@ export const useAppStore = create<AppState>()(
   fetchTodayAttendance: async () => {
     try {
       const list = await apiGet<Attendance[]>(`/api/attendance/today`);
-      set({ attendances: list });
+      set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
     } catch {
       // Keep local state if backend fails.
     }
@@ -1301,7 +1314,7 @@ export const useAppStore = create<AppState>()(
   fetchAttendanceByDate: async (date) => {
     try {
       const list = await apiGet<Attendance[]>(`/api/attendance`, { date });
-      set({ attendances: list });
+      set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
     } catch {
       // Keep local state if backend fails.
     }
@@ -1310,11 +1323,19 @@ export const useAppStore = create<AppState>()(
   fetchNotifications: async (studentId) => {
     try {
       const list = await apiGet<Notification[]>(`/api/notifications`, studentId ? { studentId } : undefined);
-      set({
-        notifications: list.map((n) => ({
-          ...n,
-          category: (n.category as NotificationCategory) || 'general',
-        })),
+      set((state) => {
+        const prevById = new Map(state.notifications.map((n) => [n.id, n]));
+        return {
+          notifications: list.map((n) => {
+            const prev = prevById.get(n.id);
+            const readByMe = prev?.readByMe === true ? true : n.readByMe;
+            return {
+              ...n,
+              readByMe,
+              category: (n.category as NotificationCategory) || 'general',
+            };
+          }),
+        };
       });
     } catch {
       // Keep local state if backend fails.
@@ -1340,17 +1361,43 @@ export const useAppStore = create<AppState>()(
 
   markNotificationRead: async (id) => {
     if (!id || id.startsWith('sys-')) return { ok: true };
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        n.id === id ? { ...n, readByMe: true } : n
+      ),
+    }));
     try {
       await apiPatch<{ ok?: boolean; readByMe?: boolean }>(`/api/notifications/${id}/read`, {});
-      set((s) => ({
-        notifications: s.notifications.map((n) =>
-          n.id === id ? { ...n, readByMe: true } : n
-        ),
-      }));
       return { ok: true };
     } catch {
       return { ok: false };
     }
+  },
+
+  markAllNotificationsRead: async (studentId) => {
+    const { notifications, lastNotifSeenAt } = get();
+    const unreadIds = notifications
+      .filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt))
+      .map((n) => n.id);
+
+    if (unreadIds.length === 0) {
+      set({ lastNotifSeenAt: new Date().toISOString() });
+      return { ok: true, count: 0 };
+    }
+
+    const idSet = new Set(unreadIds);
+    set({
+      lastNotifSeenAt: new Date().toISOString(),
+      notifications: notifications.map((n) => (idSet.has(n.id) ? { ...n, readByMe: true } : n)),
+    });
+
+    const results = await Promise.all(
+      unreadIds.map((id) =>
+        apiPatch<{ ok?: boolean }>(`/api/notifications/${id}/read`, {}).catch(() => null)
+      )
+    );
+    const failed = results.filter((r) => r === null).length;
+    return { ok: failed === 0, count: unreadIds.length };
   },
 
   fetchStudentAttendance: async (studentId, year, month) => {
@@ -1449,14 +1496,7 @@ export const useAppStore = create<AppState>()(
 
   getUnreadNotifCount: (studentId) => {
     const { notifications, lastNotifSeenAt } = get();
-    const cutoff = lastNotifSeenAt ? new Date(lastNotifSeenAt).getTime() : 0;
-    return notifications.filter((n) => {
-      if (n.id.startsWith('sys-')) return false;
-      if (!(n.targetId === 'all' || n.targetId === studentId)) return false;
-      const hasPerUser = n.readByMe !== undefined && n.readByMe !== null;
-      if (hasPerUser) return !n.readByMe;
-      return new Date(n.date).getTime() > cutoff;
-    }).length;
+    return notifications.filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt)).length;
   },
 }),
     {

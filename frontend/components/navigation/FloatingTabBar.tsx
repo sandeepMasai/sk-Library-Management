@@ -67,7 +67,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             >
               <View style={styles.iconWrap}>
                 {icon}
-                {badge !== undefined && badge !== null && (
+                {badge !== undefined && badge !== null && badge !== 0 && badge !== '' && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeTxt}>
                       {typeof badge === 'number' && badge > 9 ? '9+' : String(badge)}

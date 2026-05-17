@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAppStore } from './store';
 import { libraryMustChoosePlan } from './utils/libraryAccess';
+import { isNotificationUnread } from './utils/notificationRead';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from './theme';
 import { ThemeProvider, useTheme } from './theme/ThemeProvider';
@@ -71,21 +72,11 @@ function AdminTabs() {
 }
 
 function StudentTabs() {
-  const currentUser = useAppStore((s) => s.currentUser);
-  const notifications = useAppStore((s) => s.notifications);
-  const lastNotifSeenAt = useAppStore((s) => s.lastNotifSeenAt);
-
-  const unread = (() => {
-    if (!currentUser) return 0;
-    const cutoff = lastNotifSeenAt ? new Date(lastNotifSeenAt).getTime() : 0;
-    return notifications.filter((n) => {
-      if (n.id.startsWith('sys-')) return false;
-      if (!(n.targetId === 'all' || n.targetId === currentUser.id)) return false;
-      const hasPerUser = n.readByMe !== undefined && n.readByMe !== null;
-      if (hasPerUser) return !n.readByMe;
-      return new Date(n.date).getTime() > cutoff;
-    }).length;
-  })();
+  const unread = useAppStore((s) => {
+    const user = s.currentUser;
+    if (!user) return 0;
+    return s.notifications.filter((n) => isNotificationUnread(n, user.id, s.lastNotifSeenAt)).length;
+  });
 
   return (
     <Tab.Navigator
@@ -130,7 +121,12 @@ function StudentTabs() {
       <Tab.Screen
         name="Notifications"
         component={StudentNotifications}
-        options={{ tabBarLabel: 'Notifications', title: 'Notifications', tabBarBadge: unread > 0 ? unread : undefined }}
+        options={{
+          tabBarLabel: 'Notifications',
+          title: 'Notifications',
+          tabBarBadge: unread > 0 ? unread : undefined,
+          tabBarBadgeStyle: { backgroundColor: theme.colors.danger, color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+        }}
       />
       <Tab.Screen name="Settings" component={StudentSettingsScreen} options={{ tabBarLabel: 'Settings', title: 'Settings' }} />
     </Tab.Navigator>
@@ -188,6 +184,18 @@ function StudentMainStack() {
           headerTintColor: theme.colors.text,
           headerShadowVisible: false,
         })}
+      />
+      <Stack.Screen
+        name="Appearance"
+        component={AppearanceScreen}
+        options={{
+          headerShown: true,
+          title: 'Appearance',
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTitleStyle: { color: theme.colors.text, fontWeight: '700' },
+          headerTintColor: theme.colors.text,
+          headerShadowVisible: false,
+        }}
       />
     </Stack.Navigator>
   );

@@ -12,8 +12,17 @@ import { getGlobalSettings, isValidHttpUrl, toApiErrorMessage } from '../../serv
 import { APP_DISPLAY_NAME } from '../../constants/branding';
 
 export default function StudentSettingsScreen({ navigation }: { navigation: any }) {
-  const { mode } = useTheme();
+  const { mode, preference } = useTheme();
   const styles = useMemo(() => makeStyles(mode), [mode]);
+
+  const themeModeLabel =
+    preference === 'system' ? 'System' : preference === 'dark' ? 'Dark' : 'Light';
+
+  const openAppearance = () => {
+    const parent = navigation.getParent?.();
+    if (parent?.navigate) parent.navigate('Appearance');
+    else navigation.navigate('Appearance');
+  };
 
   const currentUser = useAppStore((s) => s.currentUser);
   const logout = useAppStore((s) => s.logout);
@@ -114,6 +123,16 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
             {mobile ? (username ? `  ·  ${mobile}` : mobile) : ''}
           </Text>
         </View>
+
+        <Section title="APPEARANCE">
+          <Item
+            icon="moon-outline"
+            title="Theme Mode"
+            sub={`Currently: ${themeModeLabel}`}
+            onPress={openAppearance}
+            last
+          />
+        </Section>
 
         <Section title="ACCOUNT">
           <Item icon="person-outline" title="Profile" sub="View your profile" onPress={() => navigation.getParent()?.navigate('StudentProfile')} />
