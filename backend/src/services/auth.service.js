@@ -526,6 +526,12 @@ async function refresh({ body, metadata }) {
     userAgent: metadata?.userAgent,
   });
 
+  logger.info("Auth tokens refreshed", {
+    userId: String(stored.userId),
+    role: stored.role,
+    accessTtl: process.env.ACCESS_TOKEN_EXPIRES_IN || process.env.ACCESS_TOKEN_TTL || "1d",
+  });
+
   return tokens;
 }
 

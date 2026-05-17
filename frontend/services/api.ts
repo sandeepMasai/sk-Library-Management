@@ -1,21 +1,16 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { resolveApiBaseUrl } from '../constants/apiUrl';
+import { logoutAndClearAuth, refreshAccessToken } from './authSession';
 
 /**
  * Central API client (Axios)
- *
- * Why this exists:
- * - Single place to set baseURL
- * - Automatically attach Authorization header using persisted auth state
- * - Global error handling (401 logout, 403 normalized message)
- *
- * This avoids duplicating fetch/headers/error parsing across screens/stores.
+ * - Attaches Bearer token from Zustand (persisted to AsyncStorage)
+ * - Single in-flight refresh with queued retries on 401
  */
 
 export type ApiError = {
   status?: number;
   message: string;
-  /** Extra fields from API error payload (`success: false` → `data`). */
   details?: Record<string, unknown>;
 };
 
@@ -24,20 +19,57 @@ export const api = axios.create({
   timeout: 20_000,
 });
 
-/** One in-flight refresh so parallel 401s do not revoke each other's refresh tokens. */
-let refreshPromise: Promise<string | null> | null = null;
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-function unwrapSuccessPayload<T = Record<string, unknown>>(body: unknown): T | null {
-  if (!body || typeof body !== 'object') return null;
-  const b = body as { success?: boolean; data?: T };
-  if (b.success === true && b.data != null) return b.data;
-  return body as T;
+let isRefreshing = false;
+let refreshWaiters: Array<{
+  resolve: (token: string) => void;
+  reject: (err: ApiError) => void;
+}> = [];
+
+function flushRefreshQueue(token: string | null, error: ApiError | null) {
+  const waiters = refreshWaiters;
+  refreshWaiters = [];
+  waiters.forEach((w) => {
+    if (token) w.resolve(token);
+    else w.reject(error || { message: 'Session expired' });
+  });
 }
 
-// Attach Bearer token automatically from global auth state
+function isAuthRefreshUrl(url: string | undefined) {
+  return String(url || '').includes('/api/auth/refresh');
+}
+
+function isAuthLoginUrl(url: string | undefined) {
+  return String(url || '').includes('/api/auth/login') || String(url || '').includes('/api/admin/login');
+}
+
+async function enqueueRefresh(): Promise<string> {
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      refreshWaiters.push({ resolve, reject });
+    });
+  }
+
+  isRefreshing = true;
+  try {
+    const token = await refreshAccessToken();
+    flushRefreshQueue(token, null);
+    return token;
+  } catch (e) {
+    const apiError: ApiError = {
+      status: 401,
+      message: e instanceof Error ? e.message : 'Refresh failed',
+    };
+    flushRefreshQueue(null, apiError);
+    logoutAndClearAuth('refresh_failed');
+    throw apiError;
+  } finally {
+    isRefreshing = false;
+  }
+}
+
 api.interceptors.request.use((config) => {
-  // Lazy-require to avoid require-cycle: store.ts <-> services/api.ts
-  // This prevents uninitialized values after fast refresh / reload.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { useAppStore } = require('../store');
   const token = useAppStore.getState().token || useAppStore.getState().authToken;
@@ -67,71 +99,40 @@ api.interceptors.response.use(
       !Array.isArray(errData.data)
         ? (errData.data as Record<string, unknown>)
         : undefined;
-    const originalRequest = err.config as any;
 
-    // Global auth handling
-    if (status === 401) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useAppStore } = require('../store');
-      const isRefreshRequest = String(originalRequest?.url || '').includes('/api/auth/refresh');
+    const originalRequest = err.config as RetryConfig | undefined;
 
-      if (!isRefreshRequest && !originalRequest?._retry) {
-        const runRefresh = async (): Promise<string | null> => {
-          const rt = useAppStore.getState().refreshToken;
-          if (!rt) return null;
-          const refreshResponse = await axios.post(
-            `${resolveApiBaseUrl()}/api/auth/refresh`,
-            { refreshToken: rt },
-            { timeout: 20_000 }
-          );
-          const payload = unwrapSuccessPayload<{
-            authToken?: string;
-            accessToken?: string;
-            refreshToken?: string;
-          }>(refreshResponse.data);
-          const nextAccessToken = payload?.authToken || payload?.accessToken || null;
-          const nextRefreshToken = payload?.refreshToken || rt;
-          if (!nextAccessToken) return null;
-          useAppStore.setState({
-            authToken: nextAccessToken,
-            token: nextAccessToken,
-            refreshToken: nextRefreshToken,
-          });
-          return nextAccessToken;
-        };
+    if (status === 401 && originalRequest) {
+      const url = originalRequest.url;
 
+      if (isAuthLoginUrl(url) || isAuthRefreshUrl(url)) {
+        if (isAuthRefreshUrl(url)) {
+          logoutAndClearAuth('refresh_endpoint_401');
+        }
+        const apiError: ApiError = { status, message, details };
+        return Promise.reject(apiError);
+      }
+
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
         try {
-          originalRequest._retry = true;
-          if (!refreshPromise) {
-            refreshPromise = runRefresh().finally(() => {
-              refreshPromise = null;
-            });
-          }
-          const nextAccessToken = await refreshPromise;
-          if (nextAccessToken) {
-            originalRequest.headers = originalRequest.headers ?? {};
-            originalRequest.headers.Authorization = `Bearer ${nextAccessToken}`;
-            return api(originalRequest);
-          }
-        } catch {
-          useAppStore.getState().logout();
-          const apiError: ApiError = { status, message, details };
-          return Promise.reject(apiError);
+          const nextToken = await enqueueRefresh();
+          originalRequest.headers = originalRequest.headers ?? {};
+          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+          return api(originalRequest);
+        } catch (refreshErr) {
+          return Promise.reject(refreshErr);
         }
       }
-      // Session expired / invalid token → clear auth state
-      useAppStore.getState().logout();
-    }
 
-    // For 403 we don't show UI here (keeps service UI-agnostic).
-    // Callers can display `message`.
+      logoutAndClearAuth('retry_still_401');
+    }
 
     const apiError: ApiError = { status, message, details };
     return Promise.reject(apiError);
   }
 );
 
-// Small helpers for consistent usage patterns
 export const apiGet = async <T>(path: string, params?: Record<string, any>) => {
   const res = await api.get<T>(path, { params });
   return res.data;
@@ -156,4 +157,3 @@ export const apiDelete = async <T>(path: string) => {
   const res = await api.delete<T>(path);
   return res.data;
 };
-

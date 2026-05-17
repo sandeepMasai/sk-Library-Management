@@ -2,12 +2,32 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createHttpError } = require("./httpError");
 
-const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || "15m";
-const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_TTL || "7d";
+function readTokenTtl(envKeys, fallback) {
+  for (const key of envKeys) {
+    const value = process.env[key];
+    if (value != null && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return fallback;
+}
+
+/** Supports ACCESS_TOKEN_EXPIRES_IN or ACCESS_TOKEN_TTL (default 1 day). */
+const ACCESS_TOKEN_TTL = readTokenTtl(
+  ["ACCESS_TOKEN_EXPIRES_IN", "ACCESS_TOKEN_TTL"],
+  "1d"
+);
+
+/** Supports REFRESH_TOKEN_EXPIRES_IN or REFRESH_TOKEN_TTL (default 30 days). */
+const REFRESH_TOKEN_TTL = readTokenTtl(
+  ["REFRESH_TOKEN_EXPIRES_IN", "REFRESH_TOKEN_TTL"],
+  "30d"
+);
+
 const REFRESH_TOKEN_TTL_MS_RAW = Number(process.env.REFRESH_TOKEN_TTL_MS);
 const REFRESH_TOKEN_TTL_MS = Number.isFinite(REFRESH_TOKEN_TTL_MS_RAW)
   ? REFRESH_TOKEN_TTL_MS_RAW
-  : 7 * 24 * 60 * 60 * 1000;
+  : 30 * 24 * 60 * 60 * 1000;
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";

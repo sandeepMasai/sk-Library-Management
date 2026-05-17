@@ -586,6 +586,7 @@ const authStorage = createJSONStorage(() => {
 
       // Fallback restore from legacy keys (if persist key was never written).
       const legacyToken = await base.getItem('authToken');
+      const legacyRefresh = await base.getItem('refreshToken');
       const legacyRole = await base.getItem('userRole');
       const legacyLibraryId = await base.getItem('libraryId');
       const legacyLibraryCode = await base.getItem('libraryCode');
@@ -598,7 +599,7 @@ const authStorage = createJSONStorage(() => {
           libraryId: legacyLibraryId,
           libraryCode: legacyLibraryCode,
           authToken: legacyToken, // keep in sync
-          refreshToken: null,
+          refreshToken: legacyRefresh,
         },
         version: 1,
       };
@@ -609,11 +610,13 @@ const authStorage = createJSONStorage(() => {
       try {
         const parsed = JSON.parse(value) as { state?: Partial<AppState> };
         const token = parsed?.state?.token ?? null;
+        const refreshToken = parsed?.state?.refreshToken ?? null;
         const role = parsed?.state?.role ?? null;
         const libraryId = parsed?.state?.libraryId ?? null;
         const libraryCode = parsed?.state?.libraryCode ?? null;
         await Promise.all([
           base.setItem('authToken', token ?? ''),
+          base.setItem('refreshToken', refreshToken ?? ''),
           base.setItem('userRole', role ?? ''),
           base.setItem('libraryId', libraryId ?? ''),
           base.setItem('libraryCode', libraryCode ?? ''),
@@ -626,6 +629,7 @@ const authStorage = createJSONStorage(() => {
       await base.removeItem(name);
       await Promise.all([
         base.removeItem('authToken'),
+        base.removeItem('refreshToken'),
         base.removeItem('userRole'),
         base.removeItem('libraryId'),
         base.removeItem('libraryCode'),
@@ -1605,8 +1609,7 @@ export const useAppStore = create<AppState>()(
   fetchMyStudentPayments: async () => {
     try {
       const res = await apiGet<{ ok: boolean; payments: StudentPaymentRecord[] }>(
-        `/api/student/payments`,
-        { _: Date.now() }
+        `/api/student/payments`
       );
       set({ studentPayments: res.payments || [] });
       return { ok: true, payments: res.payments || [] };

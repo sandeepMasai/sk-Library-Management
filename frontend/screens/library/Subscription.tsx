@@ -4,7 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { subColors, subRadius, subShadow, subSpacing } from '../../ui/subscriptionTheme';
 import { useAppStore } from '../../store';
 import { apiGet, apiPost, type ApiError } from '../../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+
+const SUBSCRIPTION_SYNC_MS = 60_000;
 
 type PlanRow = {
   id: string;
@@ -157,23 +159,26 @@ export default function SubscriptionScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto refresh subscription status every 10s so payments reflect without going back.
-  useEffect(() => {
-    let alive = true;
-    const t = setInterval(async () => {
-      try {
-        const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-        if (!alive) return;
-        if (me?.user) useAppStore.setState({ currentUser: me.user });
-      } catch {
-        // ignore
-      }
-    }, 10_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
+  // Sync subscription while screen is focused (avoids /subscription/me spam in background).
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      const syncMe = async () => {
+        try {
+          const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
+          if (alive && me?.user) useAppStore.setState({ currentUser: me.user });
+        } catch {
+          // ignore
+        }
+      };
+      void syncMe();
+      const t = setInterval(() => void syncMe(), SUBSCRIPTION_SYNC_MS);
+      return () => {
+        alive = false;
+        clearInterval(t);
+      };
+    }, [])
+  );
 
   const isActiveUntilExpiry = useMemo(() => {
     const end = expiryDate ? new Date(expiryDate).getTime() : null;
