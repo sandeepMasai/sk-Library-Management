@@ -1,6 +1,5 @@
 const express = require("express");
 
-const { getMongoStatus } = require("./config/db");
 const { attachHttpMiddleware } = require("./config/httpStack");
 const { errorHandler } = require("./middleware/error.middleware");
 
@@ -10,13 +9,10 @@ attachHttpMiddleware(app);
 
 // Health check — registered before all other routes so it is always reachable
 app.get("/health", (_req, res) => {
-  const dbStatus = getMongoStatus();
-  const dbOk = dbStatus === "connected";
   res.status(200).json({
-    ok: dbOk,
+    ok: true,
     service: "backend",
     env: process.env.NODE_ENV || "development",
-    db: dbStatus,
     timestamp: new Date().toISOString(),
   });
 });
