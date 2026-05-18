@@ -7,17 +7,7 @@ import { apiGet, apiPost, type ApiError } from '../../services/api';
 import { useAppStore } from '../../store';
 import { theme } from '../../theme';
 
-// NOTE:
-// Razorpay native checkout requires a custom dev client / prebuild (not Expo Go).
-// This screen assumes you run via `expo run:android` / `expo run:ios`.
-let RazorpayCheckout: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require('react-native-razorpay');
-  RazorpayCheckout = mod?.default ?? mod;
-} catch {
-  RazorpayCheckout = null;
-}
+import { isPaymentSetupError, openRazorpayCheckout } from '../../services/razorpayCheckout';
 
 type PlanKey = 'trial' | 'monthly' | '6month' | 'yearly';
 type Plan = { id: string; key: PlanKey; title: string; price: number; sub: string };
@@ -82,14 +72,6 @@ export default function PlanSelectionScreen(props: { embedded?: boolean } = {}) 
         return;
       }
 
-      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
-        Alert.alert(
-          'Razorpay not available',
-          'Razorpay module is not linked. Run the app with a Dev Client (expo run:android/ios) after installing react-native-razorpay.'
-        );
-        return;
-      }
-
       setBusy(true);
       try {
         const order = await apiPost<{
@@ -117,7 +99,7 @@ export default function PlanSelectionScreen(props: { embedded?: boolean } = {}) 
           theme: { color: theme.colors.primary },
         };
 
-        const data = await RazorpayCheckout.open(options);
+        const data = await openRazorpayCheckout(options);
         // data: { razorpay_payment_id, razorpay_order_id, razorpay_signature }
         const verify = await apiPost<{ ok: boolean; user?: any; message?: string }>(`/api/payment/verify`, {
           planId: plan.id,
@@ -136,27 +118,23 @@ export default function PlanSelectionScreen(props: { embedded?: boolean } = {}) 
         // PhonePe/UPI-intent edge case: payment may succeed but SDK/verify may throw.
         // Recover by re-checking latest subscription from backend.
         try {
-          const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-          if (me?.user) {
-            useAppStore.setState({ currentUser: me.user });
-            const exp = me.user?.planExpiryDate ? new Date(me.user.planExpiryDate).getTime() : null;
-            const active =
-              me.user?.subscriptionStatus === 'active' &&
-              exp &&
-              Number.isFinite(exp) &&
-              Date.now() < exp;
-            if (active) {
-              Alert.alert('Success', 'Subscription activated.');
-              navigation.goBack();
-              return;
-            }
+          const { isSubscriptionActive, syncSubscriptionMe } = await import('../../services/subscriptionSync');
+          const me = await syncSubscriptionMe({ force: true });
+          if (isSubscriptionActive(me.user)) {
+            Alert.alert('Success', 'Subscription activated.');
+            navigation.goBack();
+            return;
           }
         } catch {
           // ignore recovery errors; show fallback error below
         }
 
         const err = e as ApiError;
-        const msg = err?.message || 'Please try again.';
+        const msg = err?.message || e?.message || 'Please try again.';
+        if (isPaymentSetupError(msg)) {
+          Alert.alert('Payment could not open', 'Please try again. Razorpay will open in a secure browser window.');
+          return;
+        }
         const code = typeof (err as any)?.status === 'number' ? ` (HTTP ${(err as any).status})` : '';
         Alert.alert('Payment failed', `${msg}${code}`);
       } finally {

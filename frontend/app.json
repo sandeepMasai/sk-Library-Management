@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F6FFFE"
     },
     "ios": {
       "supportsTablet": true,
@@ -18,30 +18,23 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#1E5C52",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.sk245444.libdesk",
-      "usesCleartextTraffic": true
+      "package": "com.sk245444.libdesk"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "eas": {
-        "projectId": "552f0665-e30d-4f11-9ea9-97bc22a22809"
-      },
       "apiUrl": "https://sk-library-management-production.up.railway.app",
-      "apiPort": 1998
-    },
-    "updates": {
-      "url": "https://u.expo.dev/552f0665-e30d-4f11-9ea9-97bc22a22809"
+      "apiPort": 1998,
+      "eas": {
+        "projectId": "8bde25ff-7919-4ae3-aef4-f36e1b0a1292"
+      }
     },
     "runtimeVersion": "1.0.0",
-    "owner": "arcadalabs",
     "platforms": [
       "ios",
       "android",

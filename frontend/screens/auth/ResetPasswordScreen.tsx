@@ -5,9 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Keyboard,
   Image,
@@ -21,6 +18,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useAppStore } from '../../store';
 import FlashToast from '../../components/auth/FlashToast';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import AuthKeyboardScroll, { useAuthFieldFocus } from '../../components/auth/AuthKeyboardScroll';
 
 const BRAND_LOGO = require('../../assets/logo.png');
 
@@ -97,77 +95,24 @@ export default function ResetPasswordScreen() {
         <Text style={styles.heroSub}>Use a strong password you have not reused on other sites.</Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.card}>
-            <View style={styles.bannerOk}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#0f766e" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Email verified</Text>
-                <Text style={styles.bannerHint}>Your reset session is active. This step completes the process.</Text>
-              </View>
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>NEW PASSWORD</Text>
-              <View style={styles.inputRow}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
-                <TextInput
-                  value={pw1}
-                  onChangeText={setPw1}
-                  placeholder="At least 8 characters"
-                  placeholderTextColor={theme.colors.mutedText}
-                  secureTextEntry={!showPw1}
-                  style={styles.input}
-                />
-                <TouchableOpacity onPress={() => setShowPw1((p) => !p)} hitSlop={8}>
-                  <Ionicons name={showPw1 ? 'eye-off-outline' : 'eye-outline'} size={18} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.fieldHint}>Use letters, numbers, and symbols. Minimum 8 characters.</Text>
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>CONFIRM PASSWORD</Text>
-              <View style={[styles.inputRow, pw2.length > 0 && !matchOk ? styles.inputRowErr : null]}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
-                <TextInput
-                  value={pw2}
-                  onChangeText={setPw2}
-                  placeholder="Repeat new password"
-                  placeholderTextColor={theme.colors.mutedText}
-                  secureTextEntry={!showPw2}
-                  style={styles.input}
-                />
-                <TouchableOpacity onPress={() => setShowPw2((p) => !p)} hitSlop={8}>
-                  <Ionicons name={showPw2 ? 'eye-off-outline' : 'eye-outline'} size={18} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-              {pw2.length > 0 && !matchOk ? <Text style={styles.errInline}>Passwords must match.</Text> : null}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.cta, !canSubmit && styles.ctaDisabled]}
-              onPress={onReset}
-              disabled={!canSubmit}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={canSubmit ? ['#0f766e', '#14b8a6'] : ['#94a3b8', '#cbd5e1']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.ctaGrad}
-              >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Update password</Text>}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.footerLink} onPress={() => navigation.navigate('ForgotPassword')} activeOpacity={0.85}>
-              <Text style={styles.footerLinkTxt}>Start over</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <AuthKeyboardScroll contentContainerStyle={styles.scroll}>
+        <ResetPasswordForm
+          styles={styles}
+          pw1={pw1}
+          setPw1={setPw1}
+          pw2={pw2}
+          setPw2={setPw2}
+          showPw1={showPw1}
+          setShowPw1={setShowPw1}
+          showPw2={showPw2}
+          setShowPw2={setShowPw2}
+          matchOk={matchOk}
+          canSubmit={canSubmit}
+          loading={loading}
+          onReset={onReset}
+          navigation={navigation}
+        />
+      </AuthKeyboardScroll>
 
       <FlashToast visible={!!toast} message={toast?.msg || ''} tone={toast?.tone} onHide={() => setToast(null)} />
 
@@ -183,6 +128,116 @@ export default function ResetPasswordScreen() {
         onCancel={() => setInfo(null)}
         onConfirm={goLogin}
       />
+    </View>
+  );
+}
+
+function ResetPasswordForm({
+  styles,
+  pw1,
+  setPw1,
+  pw2,
+  setPw2,
+  showPw1,
+  setShowPw1,
+  showPw2,
+  setShowPw2,
+  matchOk,
+  canSubmit,
+  loading,
+  onReset,
+  navigation,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  pw1: string;
+  setPw1: (v: string) => void;
+  pw2: string;
+  setPw2: (v: string) => void;
+  showPw1: boolean;
+  setShowPw1: React.Dispatch<React.SetStateAction<boolean>>;
+  showPw2: boolean;
+  setShowPw2: React.Dispatch<React.SetStateAction<boolean>>;
+  matchOk: boolean;
+  canSubmit: boolean;
+  loading: boolean;
+  onReset: () => void;
+  navigation: ReturnType<typeof useNavigation<any>>;
+}) {
+  const pw1Focus = useAuthFieldFocus();
+  const pw2Focus = useAuthFieldFocus();
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.bannerOk}>
+        <Ionicons name="shield-checkmark-outline" size={20} color="#0f766e" />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.bannerTitle}>Email verified</Text>
+          <Text style={styles.bannerHint}>Your reset session is active. This step completes the process.</Text>
+        </View>
+      </View>
+
+      <View ref={pw1Focus.wrapRef} collapsable={false} style={styles.fieldBlock}>
+        <Text style={styles.label}>NEW PASSWORD</Text>
+        <View style={styles.inputRow}>
+          <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
+          <TextInput
+            value={pw1}
+            onChangeText={setPw1}
+            placeholder="At least 8 characters"
+            placeholderTextColor={theme.colors.mutedText}
+            secureTextEntry={!showPw1}
+            style={styles.input}
+            onFocus={pw1Focus.onInputFocus}
+            returnKeyType="next"
+          />
+          <TouchableOpacity onPress={() => setShowPw1((p) => !p)} hitSlop={8}>
+            <Ionicons name={showPw1 ? 'eye-off-outline' : 'eye-outline'} size={18} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.fieldHint}>Use letters, numbers, and symbols. Minimum 8 characters.</Text>
+      </View>
+
+      <View ref={pw2Focus.wrapRef} collapsable={false} style={styles.fieldBlock}>
+        <Text style={styles.label}>CONFIRM PASSWORD</Text>
+        <View style={[styles.inputRow, pw2.length > 0 && !matchOk ? styles.inputRowErr : null]}>
+          <Ionicons name="lock-closed-outline" size={18} color="#64748b" />
+          <TextInput
+            value={pw2}
+            onChangeText={setPw2}
+            placeholder="Repeat new password"
+            placeholderTextColor={theme.colors.mutedText}
+            secureTextEntry={!showPw2}
+            style={styles.input}
+            onFocus={pw2Focus.onInputFocus}
+            returnKeyType="done"
+            onSubmitEditing={onReset}
+          />
+          <TouchableOpacity onPress={() => setShowPw2((p) => !p)} hitSlop={8}>
+            <Ionicons name={showPw2 ? 'eye-off-outline' : 'eye-outline'} size={18} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+        {pw2.length > 0 && !matchOk ? <Text style={styles.errInline}>Passwords must match.</Text> : null}
+      </View>
+
+      <TouchableOpacity
+        style={[styles.cta, !canSubmit && styles.ctaDisabled]}
+        onPress={onReset}
+        disabled={!canSubmit}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={canSubmit ? ['#0f766e', '#14b8a6'] : ['#94a3b8', '#cbd5e1']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.ctaGrad}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Update password</Text>}
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.footerLink} onPress={() => navigation.navigate('ForgotPassword')} activeOpacity={0.85}>
+        <Text style={styles.footerLinkTxt}>Start over</Text>
+      </TouchableOpacity>
     </View>
   );
 }

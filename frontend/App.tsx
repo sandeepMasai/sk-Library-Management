@@ -13,6 +13,7 @@ import { ThemeProvider, useTheme } from './theme/ThemeProvider';
 import FloatingTabBar from './components/navigation/FloatingTabBar';
 import { AdminRoute, LibraryRoute, StudentRoute } from './components/routing/ProtectedRoutes';
 import { ConfirmModal } from './components/ConfirmModal';
+import RazorpayWebCheckoutHost from './components/payment/RazorpayWebCheckoutHost';
 // Screens
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterLibraryScreen from './screens/auth/RegisterLibraryScreen';
@@ -497,6 +498,7 @@ function AppInner() {
         onCancel={() => setShowExitModal(false)}
         onConfirm={() => setShowExitModal(false)}
       />
+      <RazorpayWebCheckoutHost />
     </NavigationContainer>
   );
 }

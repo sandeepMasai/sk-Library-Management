@@ -19,6 +19,7 @@ type Props = {
   onChange: (next: string) => void;
   disabled?: boolean;
   hasError?: boolean;
+  onFocus?: () => void;
 };
 
 type CellProps = {
@@ -123,7 +124,7 @@ function CursorPulse() {
 /**
  * Hidden numeric input + six premium cells (paste-friendly, mobile-first).
  */
-export default function OtpSixBoxes({ value, onChange, disabled, hasError }: Props) {
+export default function OtpSixBoxes({ value, onChange, disabled, hasError, onFocus }: Props) {
   const inputRef = useRef<TextInput>(null);
   const { mode } = useTheme();
   const isDark = mode === 'dark';
@@ -174,6 +175,7 @@ export default function OtpSixBoxes({ value, onChange, disabled, hasError }: Pro
         ref={inputRef}
         value={raw}
         onChangeText={sync}
+        onFocus={onFocus}
         keyboardType="number-pad"
         textContentType="oneTimeCode"
         autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}

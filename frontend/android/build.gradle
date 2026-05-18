@@ -22,3 +22,13 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// Disable all Lint tasks across every subproject. Lint OOMs on this project
+// (expo-modules-core EnforceType.kt) and is not required for Play Store / sideload APKs.
+subprojects { subproject ->
+    subproject.tasks.matching { task ->
+        task.name.toLowerCase().startsWith("lint")
+    }.configureEach {
+        enabled = false
+    }
+}

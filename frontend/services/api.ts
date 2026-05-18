@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { resolveApiBaseUrl } from '../constants/apiUrl';
 import { logoutAndClearAuth, refreshAccessToken } from './authSession';
+import { formatReachabilityError, isNetworkFailure } from './networkError';
 
 /**
  * Central API client (Axios)
@@ -15,8 +16,7 @@ export type ApiError = {
 };
 
 export const api = axios.create({
-  baseURL: resolveApiBaseUrl(),
-  timeout: 20_000,
+  timeout: 30_000,
 });
 
 type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
@@ -70,6 +70,7 @@ async function enqueueRefresh(): Promise<string> {
 }
 
 api.interceptors.request.use((config) => {
+  config.baseURL = resolveApiBaseUrl();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { useAppStore } = require('../store');
   const token = useAppStore.getState().token || useAppStore.getState().authToken;
@@ -128,7 +129,11 @@ api.interceptors.response.use(
       logoutAndClearAuth('retry_still_401');
     }
 
-    const apiError: ApiError = { status, message, details };
+    const apiError: ApiError = {
+      status,
+      message: !status && isNetworkFailure(err) ? formatReachabilityError(err) : message,
+      details,
+    };
     return Promise.reject(apiError);
   }
 );

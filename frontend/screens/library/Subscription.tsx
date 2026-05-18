@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { subColors, subRadius, subShadow, subSpacing } from '../../ui/subscriptionTheme';
 import { useAppStore } from '../../store';
 import { apiGet, apiPost, type ApiError } from '../../services/api';
+import { isSubscriptionActive, syncSubscriptionMe } from '../../services/subscriptionSync';
+import { isPaymentSetupError, openRazorpayCheckout } from '../../services/razorpayCheckout';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 const SUBSCRIPTION_SYNC_MS = 60_000;
@@ -72,16 +74,6 @@ export default function SubscriptionScreen() {
   // Legacy (old) plan state removed; selection is now by plan id from /api/plans.
   const [payBusy, setPayBusy] = useState(false);
 
-  // Razorpay native checkout requires a custom dev client / prebuild (not Expo Go).
-  let RazorpayCheckout: any = null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('react-native-razorpay');
-    RazorpayCheckout = mod?.default ?? mod;
-  } catch {
-    RazorpayCheckout = null;
-  }
-
   // Update countdown every second
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 1000);
@@ -127,13 +119,6 @@ export default function SubscriptionScreen() {
     let alive = true;
     (async () => {
       try {
-        // Sync latest subscription status (handles auto-expire downgrade on backend).
-        try {
-          const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-          if (me?.user) useAppStore.setState({ currentUser: me.user });
-        } catch {
-          // ignore
-        }
         const res = await apiGet<{ ok: boolean; plans: any[] }>(`/api/plans`);
         if (!alive) return;
         const rows: PlanRow[] = (res?.plans || []).map((p: any) => ({
@@ -163,16 +148,11 @@ export default function SubscriptionScreen() {
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      const syncMe = async () => {
-        try {
-          const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-          if (alive && me?.user) useAppStore.setState({ currentUser: me.user });
-        } catch {
-          // ignore
-        }
+      const syncMe = () => {
+        void syncSubscriptionMe().catch(() => {});
       };
-      void syncMe();
-      const t = setInterval(() => void syncMe(), SUBSCRIPTION_SYNC_MS);
+      syncMe();
+      const t = setInterval(syncMe, SUBSCRIPTION_SYNC_MS);
       return () => {
         alive = false;
         clearInterval(t);
@@ -261,16 +241,6 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      // No plan activates without payment (trial is also paid).
-
-      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
-        Alert.alert(
-          'Razorpay not available',
-          'Razorpay module is not linked. Run the app with a Dev Client (expo run:android/ios) after installing react-native-razorpay.'
-        );
-        return;
-      }
-
       setPayBusy(true);
       try {
         const order = await apiPost<{
@@ -298,7 +268,7 @@ export default function SubscriptionScreen() {
           theme: { color: subColors.accent },
         };
 
-        const data = await RazorpayCheckout.open(options);
+        const data = await openRazorpayCheckout(options);
         // Only after verify success we show success UI.
         const verify = await apiPost<{ ok: boolean; user?: any; message?: string }>(`/api/payment/verify`, {
           planId: planRow.id,
@@ -326,19 +296,10 @@ export default function SubscriptionScreen() {
         // PhonePe/UPI-intent edge case: payment may succeed but SDK/verify may throw.
         // Recover by re-checking latest subscription from backend.
         try {
-          const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-          if (me?.user) {
-            useAppStore.setState({ currentUser: me.user });
-            const exp = me.user?.planExpiryDate ? new Date(me.user.planExpiryDate).getTime() : null;
-            const active =
-              me.user?.subscriptionStatus === 'active' &&
-              exp &&
-              Number.isFinite(exp) &&
-              Date.now() < exp;
-            if (active) {
-              navigation.navigate('PaymentSuccess');
-              return;
-            }
+          const me = await syncSubscriptionMe({ force: true });
+          if (isSubscriptionActive(me.user)) {
+            navigation.navigate('PaymentSuccess');
+            return;
           }
         } catch {
           // ignore recovery errors; show fallback error below
@@ -346,13 +307,20 @@ export default function SubscriptionScreen() {
 
         const err = e as ApiError;
         const m = err?.message || e?.message || 'Something went wrong. Please try again later.';
+        if (isPaymentSetupError(m)) {
+          Alert.alert(
+            'Payment could not open',
+            'Please try again. If the problem continues, update the app or contact support.'
+          );
+          return;
+        }
         const code = typeof (err as any)?.status === 'number' ? ` (HTTP ${(err as any).status})` : '';
-        navigation.navigate('PaymentError', { message: `${m}${code}`, retryTo: 'Subscription' });
+        navigation.navigate('PaymentError', { message: `${m}${code}`, retryTo: 'Subscription', skipVerify: false });
       } finally {
         setPayBusy(false);
       }
     },
-    [RazorpayCheckout, currentUser, navigation, payBusy]
+    [currentUser, navigation, payBusy]
   );
 
   return (

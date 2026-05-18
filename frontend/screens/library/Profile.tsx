@@ -74,7 +74,7 @@ export default function ProfileScreen() {
   const resendRestartNextSend = useRef(false);
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [totalSeats, setTotalSeats] = useState(0);
+  const [seatCount, setSeatCount] = useState(0);
   const [seatsLoading, setSeatsLoading] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -97,7 +97,7 @@ export default function ProfileScreen() {
   const applyProfilePayload = (p: any) => {
     setIsEmailVerified(Boolean(p?.isEmailVerified));
     if (typeof p?.totalSeats === 'number' && Number.isFinite(p.totalSeats)) {
-      setTotalSeats(p.totalSeats);
+      setSeatCount(p.totalSeats);
     }
     setForm({
       name: p?.name || currentUser?.ownerName || currentUser?.name || '',
@@ -149,7 +149,7 @@ export default function ProfileScreen() {
   };
 
   const openEditSeats = async () => {
-    const count = totalSeats > 0 ? totalSeats : seats?.length ? Math.max(...seats.map((s) => s.number)) : 50;
+    const count = seatCount > 0 ? seatCount : seats?.length ? Math.max(...seats.map((s) => s.number)) : 50;
     setTotalSeatsDraft(String(count));
     setEditSeatsOpen(true);
     if (!seats?.length) {
@@ -178,7 +178,7 @@ export default function ProfileScreen() {
         return;
       }
       setEditSeatsOpen(false);
-      setTotalSeats(n);
+      setSeatCount(n);
       Alert.alert('Updated', `Library now has ${n} seats (numbered 1–${n}).`);
     } finally {
       setSeatsSaving(false);
@@ -548,11 +548,11 @@ export default function ProfileScreen() {
           <View style={styles.card}>
             <Text style={styles.fieldLabel}>Total seats</Text>
             <Text style={styles.seatTotalBig}>
-              {seatsLoading ? '…' : totalSeats > 0 ? totalSeats : '—'}
+              {seatsLoading ? '…' : seatCount > 0 ? seatCount : '—'}
             </Text>
             <Text style={styles.seatTotalHint}>
-              {totalSeats > 0
-                ? `Seats are numbered 1–${totalSeats}. Lowering the count removes high-number seats only when they have no active assignments.`
+              {seatCount > 0
+                ? `Seats are numbered 1–${seatCount}. Lowering the count removes high-number seats only when they have no active assignments.`
                 : 'Set how many numbered seats your library has. You can change this anytime.'}
             </Text>
           </View>

@@ -4,9 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Image,
   Keyboard,
@@ -21,6 +18,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useAppStore } from '../../store';
 import FlashToast from '../../components/auth/FlashToast';
 import OtpSixBoxes from '../../components/auth/OtpSixBoxes';
+import AuthKeyboardScroll, { useAuthFieldFocus } from '../../components/auth/AuthKeyboardScroll';
 
 const BRAND_LOGO = require('../../assets/logo.png');
 
@@ -132,45 +130,20 @@ export default function ForgotPasswordOtpScreen() {
         <Text style={styles.heroSub}>We sent a 6-digit code to {email || 'your inbox'}.</Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>ENTER CODE</Text>
-            <OtpSixBoxes value={otp} onChange={setOtp} disabled={busy || showSuccess} hasError={Boolean(inlineErr)} />
-
-            {inlineErr ? <Text style={styles.err}>{inlineErr}</Text> : null}
-
-            <TouchableOpacity
-              style={[styles.cta, (otp.length !== 6 || busy || showSuccess) && styles.ctaDisabled]}
-              onPress={() => void verifyNow(otp)}
-              disabled={otp.length !== 6 || busy || showSuccess}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={otp.length === 6 && !busy && !showSuccess ? ['#0f766e', '#14b8a6'] : ['#94a3b8', '#cbd5e1']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.ctaGrad}
-              >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Verify code</Text>}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.resendRow}>
-              <Text style={styles.resendHint}>Did not receive it?</Text>
-              <TouchableOpacity onPress={onResend} disabled={resendSec > 0 || resending} activeOpacity={0.85}>
-                {resending ? (
-                  <ActivityIndicator size="small" color="#0d9488" />
-                ) : (
-                  <Text style={[styles.resendBtn, resendSec > 0 && styles.resendBtnDisabled]}>
-                    {resendSec > 0 ? `Resend in ${resendSec}s` : 'Resend code'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <AuthKeyboardScroll contentContainerStyle={styles.scroll}>
+        <ForgotPasswordOtpForm
+          styles={styles}
+          otp={otp}
+          setOtp={setOtp}
+          busy={busy}
+          showSuccess={showSuccess}
+          inlineErr={inlineErr}
+          verifyNow={verifyNow}
+          onResend={onResend}
+          resendSec={resendSec}
+          resending={resending}
+        />
+      </AuthKeyboardScroll>
 
       {showSuccess ? (
         <View style={styles.successOverlay} pointerEvents="none">
@@ -182,6 +155,78 @@ export default function ForgotPasswordOtpScreen() {
       ) : null}
 
       <FlashToast visible={!!toast} message={toast?.msg || ''} tone={toast?.tone} onHide={() => setToast(null)} />
+    </View>
+  );
+}
+
+function ForgotPasswordOtpForm({
+  styles,
+  otp,
+  setOtp,
+  busy,
+  showSuccess,
+  inlineErr,
+  verifyNow,
+  onResend,
+  resendSec,
+  resending,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  otp: string;
+  setOtp: (v: string) => void;
+  busy: boolean;
+  showSuccess: boolean;
+  inlineErr: string | null;
+  verifyNow: (code: string) => void;
+  onResend: () => void;
+  resendSec: number;
+  resending: boolean;
+}) {
+  const { wrapRef, onInputFocus } = useAuthFieldFocus();
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.sectionLabel}>ENTER CODE</Text>
+      <View ref={wrapRef} collapsable={false}>
+        <OtpSixBoxes
+          value={otp}
+          onChange={setOtp}
+          disabled={busy || showSuccess}
+          hasError={Boolean(inlineErr)}
+          onFocus={onInputFocus}
+        />
+      </View>
+
+      {inlineErr ? <Text style={styles.err}>{inlineErr}</Text> : null}
+
+      <TouchableOpacity
+        style={[styles.cta, (otp.length !== 6 || busy || showSuccess) && styles.ctaDisabled]}
+        onPress={() => void verifyNow(otp)}
+        disabled={otp.length !== 6 || busy || showSuccess}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={otp.length === 6 && !busy && !showSuccess ? ['#0f766e', '#14b8a6'] : ['#94a3b8', '#cbd5e1']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.ctaGrad}
+        >
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Verify code</Text>}
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <View style={styles.resendRow}>
+        <Text style={styles.resendHint}>Did not receive it?</Text>
+        <TouchableOpacity onPress={onResend} disabled={resendSec > 0 || resending} activeOpacity={0.85}>
+          {resending ? (
+            <ActivityIndicator size="small" color="#0d9488" />
+          ) : (
+            <Text style={[styles.resendBtn, resendSec > 0 && styles.resendBtnDisabled]}>
+              {resendSec > 0 ? `Resend in ${resendSec}s` : 'Resend code'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

@@ -481,6 +481,11 @@ async function hydrateSessionAfterAuth(
 
   const userWithRole = { ...authenticatedUser, role: sessionRole };
 
+  if (sessionRole === 'library') {
+    const { seedSubscriptionUser } = await import('./services/subscriptionSync');
+    seedSubscriptionUser(userWithRole as Record<string, unknown>);
+  }
+
   set((state) => ({
     currentUser: userWithRole,
     authToken: token,
@@ -942,10 +947,11 @@ export const useAppStore = create<AppState>()(
       return { ok: true };
     } catch (e) {
       const err = e as ApiError;
-      const msg = err?.message || 'Network error';
-      if (/Network/i.test(msg)) {
-        return { ok: false, message: 'Please check your internet connection' };
+      const { formatReachabilityError, isNetworkFailure } = await import('./services/networkError');
+      if (isNetworkFailure(e)) {
+        return { ok: false, message: formatReachabilityError(e) };
       }
+      const msg = err?.message || 'Network error';
       return { ok: false, message: msg };
     }
   },
@@ -1046,12 +1052,13 @@ export const useAppStore = create<AppState>()(
         }
 
         // Full path: subscription/me (expiry sync + plan gating fields).
-        const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
+        const { syncSubscriptionMe } = await import('./services/subscriptionSync');
+        const me = await syncSubscriptionMe({ force: true });
         if (me?.user) {
           set({
-            currentUser: { ...me.user, role: 'library' },
+            currentUser: { ...me.user, role: 'library' } as User,
             role: 'library',
-            libraryId: me.user.id || libraryId || cu?.id || null,
+            libraryId: String(me.user.id || libraryId || cu?.id || ''),
           });
           return { ok: true };
         }

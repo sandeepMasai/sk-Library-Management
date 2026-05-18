@@ -1,53 +1,55 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { theme } from '../../theme';
-import { apiGet, type ApiError } from '../../services/api';
-import { useAppStore } from '../../store';
+import { type ApiError } from '../../services/api';
+import { isPaymentSetupError } from '../../services/razorpayCheckout';
+import { isSubscriptionActive, syncSubscriptionMe } from '../../services/subscriptionSync';
 
 type Params = {
   message?: string;
   retryTo?: string;
+  skipVerify?: boolean;
 };
+
+const VERIFY_ATTEMPTS = 4;
+const VERIFY_DELAY_MS = 5000;
 
 export default function PaymentErrorScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const params = (route?.params || {}) as Params;
   const message = (params?.message || '').trim();
-  // Default retry route: PlanSelection (safe screen to restart payment).
   const retryTo = String(params?.retryTo || '').trim() || 'PlanSelection';
+  const skipVerify = Boolean(params?.skipVerify) || isPaymentSetupError(message);
 
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(!skipVerify);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const checkStatus = useCallback(async () => {
     setCheckError(null);
     try {
-      const me = await apiGet<{ ok: boolean; user?: any }>(`/api/subscription/me`);
-      if (me?.user) {
-        useAppStore.getState().patchCurrentUser?.(me.user);
-        // Fallback if patchCurrentUser is not available (older store API)
-        if (!useAppStore.getState().patchCurrentUser) {
-          useAppStore.setState({ currentUser: me.user });
-        }
-        const exp = me.user?.planExpiryDate ? new Date(me.user.planExpiryDate).getTime() : null;
-        const active =
-          me.user?.subscriptionStatus === 'active' &&
-          (typeof exp !== 'number' || (Number.isFinite(exp) && Date.now() < exp));
-        if (active) {
-          navigation.replace('PaymentSuccess');
-          return { active: true };
-        }
+      const me = await syncSubscriptionMe({ force: true });
+      if (isSubscriptionActive(me.user)) {
+        navigation.replace('PaymentSuccess');
+        return { active: true };
       }
       return { active: false };
-    } catch (e: any) {
+    } catch (e: unknown) {
       const err = e as ApiError;
       setCheckError(err?.message || 'Could not refresh payment status');
       return { active: false };
@@ -55,52 +57,42 @@ export default function PaymentErrorScreen() {
   }, [navigation]);
 
   const pollVerify = useCallback(async () => {
-    // Keep user on "Verifying..." longer to avoid false failure.
-    // Attempt every 1.5s for ~15s total.
-    const maxAttempts = 10;
-    const delayMs = 1500;
-    setAttempt(0);
-    for (let i = 1; i <= maxAttempts; i++) {
+    for (let i = 1; i <= VERIFY_ATTEMPTS; i++) {
+      if (!mountedRef.current) return { active: false };
       setAttempt(i);
-      // eslint-disable-next-line no-await-in-loop
       const res = await checkStatus();
       if (res.active) return { active: true };
-      if (i < maxAttempts) {
-        // eslint-disable-next-line no-await-in-loop
-        await sleep(delayMs);
-      }
+      if (i < VERIFY_ATTEMPTS) await sleep(VERIFY_DELAY_MS);
     }
     return { active: false };
   }, [checkStatus]);
 
   useEffect(() => {
-    // Run once on mount.
+    if (skipVerify) return;
     (async () => {
       setChecking(true);
-      const res = await pollVerify();
-      setChecking(false);
+      await pollVerify();
+      if (mountedRef.current) setChecking(false);
     })();
-  }, [pollVerify]);
+  }, [pollVerify, skipVerify]);
 
-  // Prevent leaving verification screen while checking.
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (checking) return true; // block
-      return false;
-    });
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => checking);
     return () => sub.remove();
   }, [checking]);
 
-  const subText = useMemo(() => {
-    if (checking) return `Please wait… Verifying payment (${attempt}/10)`;
+  const displayMessage = useMemo(() => {
+    if (isPaymentSetupError(message)) {
+      return 'Payment window could not open. Go back and tap Pay again — Razorpay will open in a secure in-app browser.';
+    }
+    if (checking) return `Please wait… Verifying payment (${attempt}/${VERIFY_ATTEMPTS})`;
     if (checkError) return checkError;
     return message || 'Payment verification is taking longer than usual. Please tap Retry.';
   }, [checking, checkError, message, attempt]);
 
-  // Never show scary "Payment Failed" for UPI false-failure; show a softer state.
-  const title = checking ? 'Please wait…' : 'Still verifying…';
-  const iconName = checking ? 'time-outline' : 'information-circle';
-  const iconColor = checking ? theme.colors.primary : theme.colors.primary;
+  const title = skipVerify ? 'Payment could not start' : checking ? 'Please wait…' : 'Still verifying…';
+  const iconName = checking && !skipVerify ? 'time-outline' : 'information-circle';
+  const iconColor = theme.colors.primary;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
@@ -109,36 +101,46 @@ export default function PaymentErrorScreen() {
           <Ionicons name={iconName as any} size={64} color={iconColor} />
         </View>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.sub}>{subText}</Text>
-        {checking ? <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary as any} /> : null}
+        <Text style={styles.sub}>{displayMessage}</Text>
+        {checking && !skipVerify ? (
+          <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary as any} />
+        ) : null}
 
         {!checking ? (
           <View style={styles.row}>
             <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.goBack()} style={styles.btnSecondary}>
               <Text style={styles.btnSecondaryTxt}>Go Back</Text>
             </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={async () => {
-              // First try to refresh payment status (PhonePe intent sometimes shows false errors).
-              if (retrying) return;
-              setRetrying(true);
-              setChecking(true);
-              const res = await pollVerify();
-              setChecking(false);
-              if (res.active) {
-                setRetrying(false);
-                return;
-              }
-              // Navigate to a safe screen where user can start payment again.
-              navigation.replace(retryTo);
-              setRetrying(false);
-            }}
-            style={styles.btnPrimary}
-            disabled={checking || retrying}
-          >
-            <Text style={styles.btnPrimaryTxt}>{retrying ? 'Please wait…' : 'Retry'}</Text>
-          </TouchableOpacity>
+            {!skipVerify ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={async () => {
+                  if (retrying) return;
+                  setRetrying(true);
+                  setChecking(true);
+                  const res = await pollVerify();
+                  setChecking(false);
+                  if (res.active) {
+                    setRetrying(false);
+                    return;
+                  }
+                  navigation.replace(retryTo);
+                  setRetrying(false);
+                }}
+                style={styles.btnPrimary}
+                disabled={checking || retrying}
+              >
+                <Text style={styles.btnPrimaryTxt}>{retrying ? 'Please wait…' : 'Retry'}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => navigation.replace(retryTo)}
+                style={styles.btnPrimary}
+              >
+                <Text style={styles.btnPrimaryTxt}>Try again</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : null}
       </View>
@@ -186,4 +188,3 @@ const styles = StyleSheet.create({
   },
   btnPrimaryTxt: { color: theme.colors.surface, fontWeight: '900' },
 });
-

@@ -5,9 +5,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   ActivityIndicator,
   Image,
   Keyboard,
@@ -20,6 +18,7 @@ import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAppStore } from '../../store';
 import FlashToast from '../../components/auth/FlashToast';
+import AuthKeyboardScroll, { useAuthFieldFocus } from '../../components/auth/AuthKeyboardScroll';
 
 const BRAND_LOGO = require('../../assets/logo.png');
 
@@ -74,34 +73,59 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.heroSub}>We will email you a one-time 6-digit code to verify it is you.</Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.card}>
-            <Text style={styles.label}>REGISTERED EMAIL</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="mail-outline" size={18} color="#64748b" />
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={theme.colors.mutedText}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-              />
-            </View>
-
-            <TouchableOpacity style={styles.cta} onPress={onSend} disabled={loading} activeOpacity={0.9}>
-              <LinearGradient colors={['#0f766e', '#14b8a6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaGrad}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Send code</Text>}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <AuthKeyboardScroll contentContainerStyle={styles.scroll}>
+        <ForgotPasswordForm
+          email={email}
+          setEmail={setEmail}
+          loading={loading}
+          onSend={onSend}
+          styles={styles}
+        />
+      </AuthKeyboardScroll>
 
       <FlashToast visible={!!toast} message={toast?.msg || ''} tone={toast?.tone} onHide={() => setToast(null)} />
+    </View>
+  );
+}
+
+function ForgotPasswordForm({
+  email,
+  setEmail,
+  loading,
+  onSend,
+  styles,
+}: {
+  email: string;
+  setEmail: (v: string) => void;
+  loading: boolean;
+  onSend: () => void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const { wrapRef, onInputFocus } = useAuthFieldFocus();
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.label}>REGISTERED EMAIL</Text>
+      <View ref={wrapRef} collapsable={false} style={styles.inputRow}>
+        <Ionicons name="mail-outline" size={18} color="#64748b" />
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          placeholderTextColor={theme.colors.mutedText}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.input}
+          onFocus={onInputFocus}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.cta} onPress={onSend} disabled={loading} activeOpacity={0.9}>
+        <LinearGradient colors={['#0f766e', '#14b8a6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaGrad}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaTxt}>Send code</Text>}
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -12,6 +12,10 @@ local.properties
 *.hprof
 .cxx/
 *.keystore
+!app/debug.keystore
+*.jks
+keystore.properties
+PLAY_UPLOAD_KEY_BACKUP.txt
 
 # Bundle artifacts
 *.jsbundle

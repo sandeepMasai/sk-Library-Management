@@ -1,19 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Image,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import AuthKeyboardScroll, { useAuthKeyboardScroll } from '../../components/auth/AuthKeyboardScroll';
 import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +29,7 @@ const { height: SCREEN_H } = Dimensions.get('window');
 const IS_SMALL_DEVICE = SCREEN_H < 720;
 const BRAND_LOGO = require('../../assets/logo.png');
 const DEFAULT_LOGIN_ERROR = 'Invalid credentials or account blocked.';
-const NETWORK_LOGIN_ERROR = 'Please check your internet connection';
+const NETWORK_LOGIN_ERROR = "Can't reach the server. Check Wi‑Fi/mobile data and try again.";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function stripTechnicalDetails(message: string): string {
@@ -50,7 +48,9 @@ function hasTechnicalDetails(message: string): boolean {
 function getFriendlyLoginError(message?: string): string {
   const raw = message?.trim();
   if (!raw) return DEFAULT_LOGIN_ERROR;
-  if (/Network/i.test(raw)) return NETWORK_LOGIN_ERROR;
+  if (/Network/i.test(raw) || /can't reach|reach the server|reach the app server/i.test(raw)) {
+    return raw.includes('localhost') || raw.includes('192.168') ? raw : NETWORK_LOGIN_ERROR;
+  }
 
   const cleaned = stripTechnicalDetails(raw);
   if (!__DEV__ && hasTechnicalDetails(raw)) {
@@ -77,6 +77,18 @@ export default function LoginScreen() {
   const login = useAppStore((s) => s.login);
   const role = useAppStore((s) => s.role);
   const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleLogin = async () => {
     Keyboard.dismiss();
@@ -199,175 +211,32 @@ export default function LoginScreen() {
         <Text style={styles.brandTagline}>Experience the next generation of library management.</Text>
       </LinearGradient>
 
-      {/* ── White bottom card ── */}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scroll}
-          >
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Welcome back</Text>
-
-              {/* Login type toggle */}
-              <View style={styles.toggleWrap}>
-                {(['library', 'student'] as const).map((t) => {
-                  const active = loginType === t;
-                  return (
-                    <TouchableOpacity
-                      key={t}
-                      onPress={() => setLoginType(t)}
-                      activeOpacity={0.9}
-                      style={[styles.togglePill, active && styles.togglePillActive]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Login as ${t}`}
-                    >
-                      <Text style={[styles.toggleTxt, active && styles.toggleTxtActive]}>
-                        {t === 'library' ? 'Library' : 'Student'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Identifier */}
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldLabel}>
-                  {loginType === 'library' ? 'EMAIL' : 'MOBILE'}
-                </Text>
-                <View style={[styles.fieldRow, idFocus && styles.fieldRowFocus]}>
-                  <Ionicons
-                    name={loginType === 'library' ? 'mail-outline' : 'person-outline'}
-                    size={18}
-                    color={idFocus ? stylesVars.accent : stylesVars.icon}
-                  />
-                  <TextInput
-                    value={identifier}
-                    onChangeText={setIdentifier}
-                    placeholder={
-                      loginType === 'library'
-                        ? 'Enter email'
-                        : 'Enter mobile number'
-                    }
-                    placeholderTextColor={theme.colors.mutedText}
-                    style={styles.input}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType={loginType === 'library' ? 'email-address' : 'phone-pad'}
-                    returnKeyType="next"
-                    onFocus={() => setIdFocus(true)}
-                    onBlur={() => setIdFocus(false)}
-                  />
-                </View>
-              </View>
-
-              {/* Secret */}
-              <View style={styles.fieldWrap}>
-                <View style={styles.pinLabelRow}>
-                  <Text style={styles.fieldLabel}>
-                    {loginType === 'student' ? 'PIN' : 'PASSWORD'}
-                  </Text>
-                  {loginType === 'library' ? (
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Forgot password"
-                      onPress={() => navigation.navigate('ForgotPassword')}
-                      hitSlop={10}
-                    >
-                      <Text style={styles.forgotTxt}>Forgot?</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                <View style={[styles.fieldRow, secretFocus && styles.fieldRowFocus]}>
-                  <Ionicons
-                    name="lock-closed-outline" size={18}
-                    color={secretFocus ? stylesVars.accent : stylesVars.icon}
-                  />
-                  <TextInput
-                    value={secret}
-                    onChangeText={setSecret}
-                    placeholder={loginType === 'student' ? 'Enter 4-digit PIN' : 'Enter your password'}
-                    placeholderTextColor={theme.colors.mutedText}
-                    secureTextEntry={!showPin}
-                    style={[styles.input, { flex: 1 }]}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    keyboardType={loginType === 'student' ? 'number-pad' : 'default'}
-                    maxLength={loginType === 'student' ? 4 : undefined}
-                    onFocus={() => setSecretFocus(true)}
-                    onBlur={() => setSecretFocus(false)}
-                    onSubmitEditing={handleLogin}
-                  />
-                  <TouchableOpacity onPress={() => setShowPin((p) => !p)} hitSlop={8}>
-                    <Ionicons
-                      name={showPin ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={stylesVars.icon}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Sign in button */}
-              <TouchableOpacity
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.88}
-                style={styles.btnWrap}
-              >
-                <View style={[styles.btn, loading && { opacity: 0.7 }]}>
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <Text style={styles.btnTxt}>Sign In</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#fff" />
-                    </>
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {loginType === 'library' ? (
-                <View style={styles.createRow}>
-                  <Text style={styles.createMuted}>New here? </Text>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Create account"
-                    onPress={() => {
-                      // Library signup only (admin accounts aren't created in-app).
-                      if (Platform.OS === 'web') {
-                        Linking.openURL('/register-library');
-                      } else {
-                        navigation.navigate('RegisterLibrary');
-                      }
-                    }}
-                    hitSlop={10}
-                  >
-                    <Text style={styles.createLink}>Create Account</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-
-              {/* Security note */}
-              <View style={styles.secureRow}>
-                <Ionicons name="shield-checkmark-outline" size={13} color={stylesVars.icon} />
-                <Text style={styles.secureTxt}>AES-256 Bit Encrypted Connection</Text>
-              </View>
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-
-      {/* ── Footer ── */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <Ionicons name="information-circle-outline" size={13} color={stylesVars.accent} />
-        <Text style={styles.footerHintTxt}>Contact your library admin if you need access</Text>
-      </View>
+      {/* ── Scrollable form (keyboard-aware) ── */}
+      <AuthKeyboardScroll contentContainerStyle={styles.scroll}>
+        <LoginFormCard
+          loginType={loginType}
+          setLoginType={setLoginType}
+          identifier={identifier}
+          setIdentifier={setIdentifier}
+          secret={secret}
+          setSecret={setSecret}
+          showPin={showPin}
+          setShowPin={setShowPin}
+          loading={loading}
+          idFocus={idFocus}
+          setIdFocus={setIdFocus}
+          secretFocus={secretFocus}
+          setSecretFocus={setSecretFocus}
+          handleLogin={handleLogin}
+          navigation={navigation}
+        />
+        {!keyboardOpen ? (
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+            <Ionicons name="information-circle-outline" size={13} color={stylesVars.accent} />
+            <Text style={styles.footerHintTxt}>Contact your library admin if you need access</Text>
+          </View>
+        ) : null}
+      </AuthKeyboardScroll>
 
       <ConfirmModal
         visible={!!infoModal}
@@ -384,6 +253,187 @@ export default function LoginScreen() {
     </View>
   );
 }
+type LoginFormCardProps = {
+  loginType: 'library' | 'student';
+  setLoginType: (t: 'library' | 'student') => void;
+  identifier: string;
+  setIdentifier: (v: string) => void;
+  secret: string;
+  setSecret: (v: string) => void;
+  showPin: boolean;
+  setShowPin: React.Dispatch<React.SetStateAction<boolean>>;
+  loading: boolean;
+  idFocus: boolean;
+  setIdFocus: (v: boolean) => void;
+  secretFocus: boolean;
+  setSecretFocus: (v: boolean) => void;
+  handleLogin: () => void;
+  navigation: ReturnType<typeof useNavigation<any>>;
+};
+
+function LoginFormCard({
+  loginType,
+  setLoginType,
+  identifier,
+  setIdentifier,
+  secret,
+  setSecret,
+  showPin,
+  setShowPin,
+  loading,
+  idFocus,
+  setIdFocus,
+  secretFocus,
+  setSecretFocus,
+  handleLogin,
+  navigation,
+}: LoginFormCardProps) {
+  const styles = React.useMemo(() => makeStyles(IS_SMALL_DEVICE), []);
+  const { onFieldFocus } = useAuthKeyboardScroll();
+  const idWrapRef = useRef<View>(null);
+  const secretWrapRef = useRef<View>(null);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Welcome back</Text>
+
+      <View style={styles.toggleWrap}>
+        {(['library', 'student'] as const).map((t) => {
+          const active = loginType === t;
+          return (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setLoginType(t)}
+              activeOpacity={0.9}
+              style={[styles.togglePill, active && styles.togglePillActive]}
+              accessibilityRole="button"
+              accessibilityLabel={`Login as ${t}`}
+            >
+              <Text style={[styles.toggleTxt, active && styles.toggleTxtActive]}>
+                {t === 'library' ? 'Library' : 'Student'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View ref={idWrapRef} collapsable={false} style={styles.fieldWrap}>
+        <Text style={styles.fieldLabel}>{loginType === 'library' ? 'EMAIL' : 'MOBILE'}</Text>
+        <View style={[styles.fieldRow, idFocus && styles.fieldRowFocus]}>
+          <Ionicons
+            name={loginType === 'library' ? 'mail-outline' : 'person-outline'}
+            size={18}
+            color={idFocus ? stylesVars.accent : stylesVars.icon}
+          />
+          <TextInput
+            value={identifier}
+            onChangeText={setIdentifier}
+            placeholder={loginType === 'library' ? 'Enter email' : 'Enter mobile number'}
+            placeholderTextColor={theme.colors.mutedText}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType={loginType === 'library' ? 'email-address' : 'phone-pad'}
+            returnKeyType="next"
+            onFocus={() => {
+              setIdFocus(true);
+              onFieldFocus(idWrapRef.current);
+            }}
+            onBlur={() => setIdFocus(false)}
+          />
+        </View>
+      </View>
+
+      <View ref={secretWrapRef} collapsable={false} style={styles.fieldWrap}>
+        <View style={styles.pinLabelRow}>
+          <Text style={styles.fieldLabel}>{loginType === 'student' ? 'PIN' : 'PASSWORD'}</Text>
+          {loginType === 'library' ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+              onPress={() => navigation.navigate('ForgotPassword')}
+              hitSlop={10}
+            >
+              <Text style={styles.forgotTxt}>Forgot?</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <View style={[styles.fieldRow, secretFocus && styles.fieldRowFocus]}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={18}
+            color={secretFocus ? stylesVars.accent : stylesVars.icon}
+          />
+          <TextInput
+            value={secret}
+            onChangeText={setSecret}
+            placeholder={loginType === 'student' ? 'Enter 4-digit PIN' : 'Enter your password'}
+            placeholderTextColor={theme.colors.mutedText}
+            secureTextEntry={!showPin}
+            style={[styles.input, { flex: 1 }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            keyboardType={loginType === 'student' ? 'number-pad' : 'default'}
+            maxLength={loginType === 'student' ? 4 : undefined}
+            onFocus={() => {
+              setSecretFocus(true);
+              onFieldFocus(secretWrapRef.current);
+            }}
+            onBlur={() => setSecretFocus(false)}
+            onSubmitEditing={handleLogin}
+          />
+          <TouchableOpacity onPress={() => setShowPin((p) => !p)} hitSlop={8}>
+            <Ionicons
+              name={showPin ? 'eye-off-outline' : 'eye-outline'}
+              size={18}
+              color={stylesVars.icon}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <TouchableOpacity onPress={handleLogin} disabled={loading} activeOpacity={0.88} style={styles.btnWrap}>
+        <View style={[styles.btn, loading && { opacity: 0.7 }]}>
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Text style={styles.btnTxt}>Sign In</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {loginType === 'library' ? (
+        <View style={styles.createRow}>
+          <Text style={styles.createMuted}>New here? </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                Linking.openURL('/register-library');
+              } else {
+                navigation.navigate('RegisterLibrary');
+              }
+            }}
+            hitSlop={10}
+          >
+            <Text style={styles.createLink}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <View style={styles.secureRow}>
+        <Ionicons name="shield-checkmark-outline" size={13} color={stylesVars.icon} />
+        <Text style={styles.secureTxt}>AES-256 Bit Encrypted Connection</Text>
+      </View>
+    </View>
+  );
+}
+
 const stylesVars = {
   accent: '#0F766E',
   icon: '#64748B',
@@ -589,15 +639,19 @@ function makeStyles(isSmall: boolean) {
     },
     secureTxt: { fontSize: 11, fontWeight: '600', color: theme.colors.mutedText },
 
-    // ── Footer ──
+    // ── Footer (inside scroll; hidden while keyboard is open) ──
     footer: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
       paddingHorizontal: 20,
       paddingTop: 12,
-      marginBottom: 10,
+      marginTop: 8,
+      marginHorizontal: 12,
+      borderRadius: 14,
     },
     footerHintTxt: { fontSize: 12, fontWeight: '600', color: stylesVars.accent },
   });

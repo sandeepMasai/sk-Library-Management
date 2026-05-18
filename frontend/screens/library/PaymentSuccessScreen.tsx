@@ -4,16 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../../theme';
-import { useAppStore } from '../../store';
-
 export default function PaymentSuccessScreen() {
   const navigation = useNavigation<any>();
 
   const onDone = async () => {
     try {
-      const { apiGet } = await import('../../services/api');
-      const me = await apiGet<{ ok: boolean; user?: Record<string, unknown> }>(`/api/subscription/me`);
-      if (me?.user) useAppStore.setState({ currentUser: me.user as any });
+      const { syncSubscriptionMe } = await import('../../services/subscriptionSync');
+      await syncSubscriptionMe({ force: true });
     } catch {
       // ignore refresh errors
     }

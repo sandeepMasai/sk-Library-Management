@@ -5,12 +5,10 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   ActivityIndicator,
-  TouchableWithoutFeedback,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   FlatList,
   Pressable,
@@ -35,6 +33,10 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import OtpSixBoxes from '../../components/auth/OtpSixBoxes';
 import { INDIA_STATE_CITIES, ALL_STATES } from './indiaRegisterLocations';
+import AuthKeyboardScroll, {
+  useAuthFieldFocus,
+  useAuthKeyboardScrollOptional,
+} from '../../components/auth/AuthKeyboardScroll';
 
 type RegisterLibraryResponse = {
   user: User;
@@ -132,6 +134,8 @@ function PremiumField(props: {
 } & Omit<React.ComponentProps<typeof TextInput>, 'style'>) {
   const { mode } = useTheme();
   const [focused, setFocused] = useState(false);
+  const fieldRef = useRef<View>(null);
+  const kbScroll = useAuthKeyboardScrollOptional();
   const {
     label,
     requiredStar,
@@ -147,7 +151,7 @@ function PremiumField(props: {
   const softBgFocus = mode === 'dark' ? 'rgba(13,148,136,0.12)' : 'rgba(13,148,136,0.07)';
 
   return (
-    <View style={{ marginTop: 10 }}>
+    <View ref={fieldRef} collapsable={false} style={{ marginTop: 10 }}>
       <Text style={premiumStyles.label}>
         {label}
         {requiredStar ? <Text style={{ color: '#e24b4a' }}> *</Text> : null}
@@ -173,6 +177,7 @@ function PremiumField(props: {
           placeholderTextColor={theme.colors.mutedText}
           onFocus={(e) => {
             setFocused(true);
+            kbScroll?.onFieldFocus(fieldRef.current);
             onFocus?.(e);
           }}
           onBlur={(e) => {
@@ -255,9 +260,11 @@ function EmailVerifyBlock({
 
   const isVerified = Boolean(registrationToken);
   const sendDisabled = otpSending || resendSec > 0 || !isValidRegisterEmail(email);
+  const emailWrapRef = useRef<View>(null);
+  const kbScroll = useAuthKeyboardScrollOptional();
 
   return (
-    <View style={evStyles.wrap}>
+    <View ref={emailWrapRef} collapsable={false} style={evStyles.wrap}>
       <Text style={evStyles.label}>
         Email <Text style={{ color: '#e24b4a' }}>*</Text>
       </Text>
@@ -286,6 +293,7 @@ function EmailVerifyBlock({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!isVerified}
+          onFocus={() => kbScroll?.onFieldFocus(emailWrapRef.current)}
         />
         {/* Send-code button — only visible when NOT verified */}
         {!isVerified && (
@@ -451,6 +459,100 @@ const evStyles = StyleSheet.create({
     lineHeight: 17,
   },
 });
+
+function RegisterPincodeField({
+  styles,
+  pincode,
+  setPincode,
+  selectedCity,
+  error,
+  clearError,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  pincode: string;
+  setPincode: (v: string) => void;
+  selectedCity: string;
+  error?: string;
+  clearError: () => void;
+}) {
+  const { wrapRef, onInputFocus } = useAuthFieldFocus();
+
+  return (
+    <View ref={wrapRef} collapsable={false} style={styles.fieldWrapTight}>
+      <Text style={styles.fieldLabel}>
+        PIN code <Text style={{ color: '#e24b4a' }}>*</Text>
+      </Text>
+      <View
+        style={[
+          styles.pickerRow,
+          !selectedCity && styles.pickerRowMuted,
+          !!error && styles.pickerRowError,
+        ]}
+      >
+        <Ionicons name="keypad-outline" size={18} color="#94a3b8" />
+        <TextInput
+          value={pincode}
+          onChangeText={(t) => {
+            setPincode(t.replace(/\D/g, '').slice(0, 6));
+            clearError();
+          }}
+          placeholder={selectedCity ? '6-digit PIN' : 'Select city first'}
+          placeholderTextColor={theme.colors.mutedText}
+          style={[styles.pickerInput, { flex: 1 }]}
+          keyboardType="number-pad"
+          maxLength={6}
+          editable={!!selectedCity}
+          autoCorrect={false}
+          onFocus={onInputFocus}
+        />
+      </View>
+      {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
+    </View>
+  );
+}
+
+function RegisterPlaceField({
+  styles,
+  place,
+  setPlace,
+  error,
+  clearError,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  place: string;
+  setPlace: (v: string) => void;
+  error?: string;
+  clearError: () => void;
+}) {
+  const { wrapRef, onInputFocus } = useAuthFieldFocus();
+
+  return (
+    <View ref={wrapRef} collapsable={false} style={styles.fieldWrapTight}>
+      <Text style={styles.fieldLabel}>
+        Place / area <Text style={{ color: '#e24b4a' }}>*</Text>
+      </Text>
+      <View style={[styles.pickerRow, !!error && styles.pickerRowError]}>
+        <Ionicons name="navigate-outline" size={18} color="#94a3b8" />
+        <TextInput
+          value={place}
+          onChangeText={(t) => {
+            setPlace(t);
+            clearError();
+          }}
+          placeholder="Landmark or locality"
+          placeholderTextColor={theme.colors.mutedText}
+          style={[styles.pickerInput, { flex: 1 }]}
+          autoCorrect={false}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+          maxLength={200}
+          onFocus={onInputFocus}
+        />
+      </View>
+      {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
+    </View>
+  );
+}
 
 /**
  * RegisterLibraryScreen
@@ -784,20 +886,10 @@ export default function RegisterLibraryScreen() {
         <Text style={styles.heroSubtitle}>Start your workspace in minutes.</Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      <AuthKeyboardScroll
+        contentContainerStyle={styles.scroll}
+        extraBottomPadding={8}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.scroll,
-              { paddingBottom: Math.max(insets.bottom, 12) + 20 },
-            ]}
-          >
             <View style={[styles.card, mode === 'dark' && styles.cardDark]}>
               <Text style={styles.cardTitle}>Library details</Text>
               <Text style={styles.cardSubtitle}>Tell us about your space — quick & secure.</Text>
@@ -860,59 +952,22 @@ export default function RegisterLibraryScreen() {
                 {errors.city ? <Text style={styles.errorTxt}>{errors.city}</Text> : null}
               </View>
 
-              <View style={styles.fieldWrapTight}>
-                <Text style={styles.fieldLabel}>
-                  PIN code <Text style={{ color: '#e24b4a' }}>*</Text>
-                </Text>
-                <View
-                  style={[
-                    styles.pickerRow,
-                    !selectedCity && styles.pickerRowMuted,
-                    !!errors.pincode && styles.pickerRowError,
-                  ]}
-                >
-                  <Ionicons name="keypad-outline" size={18} color="#94a3b8" />
-                  <TextInput
-                    value={pincode}
-                    onChangeText={(t) => {
-                      setPincode(t.replace(/\D/g, '').slice(0, 6));
-                      setErrors((e) => ({ ...e, pincode: undefined }));
-                    }}
-                    placeholder={selectedCity ? '6-digit PIN' : 'Select city first'}
-                    placeholderTextColor={theme.colors.mutedText}
-                    style={[styles.pickerInput, { flex: 1 }]}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    editable={!!selectedCity}
-                    autoCorrect={false}
-                  />
-                </View>
-                {errors.pincode ? <Text style={styles.errorTxt}>{errors.pincode}</Text> : null}
-              </View>
+              <RegisterPincodeField
+                styles={styles}
+                pincode={pincode}
+                setPincode={setPincode}
+                selectedCity={selectedCity}
+                error={errors.pincode}
+                clearError={() => setErrors((e) => ({ ...e, pincode: undefined }))}
+              />
 
-              <View style={styles.fieldWrapTight}>
-                <Text style={styles.fieldLabel}>
-                  Place / area <Text style={{ color: '#e24b4a' }}>*</Text>
-                </Text>
-                <View style={[styles.pickerRow, !!errors.place && styles.pickerRowError]}>
-                  <Ionicons name="navigate-outline" size={18} color="#94a3b8" />
-                  <TextInput
-                    value={place}
-                    onChangeText={(t) => {
-                      setPlace(t);
-                      setErrors((e) => ({ ...e, place: undefined }));
-                    }}
-                    placeholder="Landmark or locality"
-                    placeholderTextColor={theme.colors.mutedText}
-                    style={[styles.pickerInput, { flex: 1 }]}
-                    autoCorrect={false}
-                    autoCapitalize="sentences"
-                    returnKeyType="next"
-                    maxLength={200}
-                  />
-                </View>
-                {errors.place ? <Text style={styles.errorTxt}>{errors.place}</Text> : null}
-              </View>
+              <RegisterPlaceField
+                styles={styles}
+                place={place}
+                setPlace={setPlace}
+                error={errors.place}
+                clearError={() => setErrors((e) => ({ ...e, place: undefined }))}
+              />
 
               <EmailVerifyBlock
                 mode={mode}
@@ -1001,8 +1056,7 @@ export default function RegisterLibraryScreen() {
                 <Text style={styles.backToLogin}>Back to login</Text>
               </TouchableOpacity>
             </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
+      </AuthKeyboardScroll>
 
         <Modal visible={pickerMode !== null} animationType="slide" transparent onRequestClose={() => setPickerMode(null)}>
           <Pressable
@@ -1129,7 +1183,6 @@ export default function RegisterLibraryScreen() {
             </Pressable>
           </Pressable>
         </Modal>
-      </KeyboardAvoidingView>
 
       <Modal
         visible={otpVerifyModalVisible}
@@ -1138,7 +1191,7 @@ export default function RegisterLibraryScreen() {
         onRequestClose={closeOtpModal}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
         >
