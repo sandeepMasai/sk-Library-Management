@@ -1,0 +1,10 @@
+# Set service Root Directory to `website` in Railway dashboard (same repo as backend).
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
