@@ -18,6 +18,7 @@ function applySettingsToForm(
   setters: {
     setPrivacyPolicyUrl: (v: string) => void;
     setTermsUrl: (v: string) => void;
+    setRefundPolicyUrl: (v: string) => void;
     setWhatsapp: (v: string) => void;
     setChannel: (v: string) => void;
     setEmail: (v: string) => void;
@@ -27,6 +28,7 @@ function applySettingsToForm(
 ) {
   setters.setPrivacyPolicyUrl(settings.privacyPolicyUrl);
   setters.setTermsUrl(settings.termsUrl);
+  setters.setRefundPolicyUrl(settings.refundPolicyUrl);
   setters.setWhatsapp(settings.communication.whatsapp);
   setters.setChannel(settings.communication.channel);
   setters.setEmail(settings.communication.email);
@@ -42,6 +44,7 @@ export default function AdminGlobalSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState('');
   const [termsUrl, setTermsUrl] = useState('');
+  const [refundPolicyUrl, setRefundPolicyUrl] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [channel, setChannel] = useState('');
   const [email, setEmail] = useState('');
@@ -62,6 +65,7 @@ export default function AdminGlobalSettingsPage() {
       applySettingsToForm(parseGlobalSettingsPayload(data), {
         setPrivacyPolicyUrl,
         setTermsUrl,
+        setRefundPolicyUrl,
         setWhatsapp,
         setChannel,
         setEmail,
@@ -83,6 +87,7 @@ export default function AdminGlobalSettingsPage() {
   const save = async () => {
     const p = privacyPolicyUrl.trim();
     const t = termsUrl.trim();
+    const r = refundPolicyUrl.trim();
     const w = whatsapp.trim();
     const c = channel.trim();
     const e = email.trim().toLowerCase();
@@ -94,6 +99,13 @@ export default function AdminGlobalSettingsPage() {
       setInfoModal({
         title: 'Invalid URL',
         description: 'Privacy and Terms URLs must start with http:// or https://',
+      });
+      return;
+    }
+    if (r && !isValidHttpUrl(r)) {
+      setInfoModal({
+        title: 'Invalid URL',
+        description: 'Refund Policy URL must start with http:// or https://',
       });
       return;
     }
@@ -115,12 +127,14 @@ export default function AdminGlobalSettingsPage() {
       const data = await apiPut('/api/settings', {
         privacyPolicyUrl: p,
         termsUrl: t,
+        refundPolicyUrl: r,
         communication: { whatsapp: w, channel: c, email: e },
       });
       const parsed = parseGlobalSettingsPayload(data);
       applySettingsToForm(parsed, {
         setPrivacyPolicyUrl,
         setTermsUrl,
+        setRefundPolicyUrl,
         setWhatsapp,
         setChannel,
         setEmail,
@@ -220,6 +234,20 @@ export default function AdminGlobalSettingsPage() {
                 value={termsUrl}
                 onChangeText={setTermsUrl}
                 placeholder="https://example.com/terms"
+                placeholderTextColor={theme.colors.mutedText}
+                style={styles.input}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <Text style={[styles.label, { marginTop: 14 }]}>REFUND POLICY URL (optional)</Text>
+            <View style={styles.inputShell}>
+              <Ionicons name="cash-outline" size={18} color={theme.colors.mutedText} />
+              <TextInput
+                value={refundPolicyUrl}
+                onChangeText={setRefundPolicyUrl}
+                placeholder="https://example.com/refund-policy"
                 placeholderTextColor={theme.colors.mutedText}
                 style={styles.input}
                 autoCapitalize="none"

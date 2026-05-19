@@ -15,7 +15,7 @@ router.put(
   "/",
   requireAuth,
   requireRole("admin"),
-  sanitizeBody(["privacyPolicyUrl", "termsUrl"], { maxLength: 2048 }),
+  sanitizeBody(["privacyPolicyUrl", "termsUrl", "refundPolicyUrl"], { maxLength: 2048 }),
   validateRequiredHttpUrlFields(["privacyPolicyUrl", "termsUrl"]),
   settingsController.updateSettings
 );

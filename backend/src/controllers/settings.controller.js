@@ -41,6 +41,7 @@ function sanitizeSettingsBody(body = {}) {
   const hasAllowedField =
     body.privacyPolicyUrl !== undefined ||
     body.termsUrl !== undefined ||
+    body.refundPolicyUrl !== undefined ||
     body.communication !== undefined;
 
   if (!hasAllowedField) {
@@ -49,14 +50,20 @@ function sanitizeSettingsBody(body = {}) {
 
   const privacyPolicyUrl = String(body.privacyPolicyUrl || "").trim();
   const termsUrl = String(body.termsUrl || "").trim();
+  const refundPolicyUrl =
+    body.refundPolicyUrl === undefined ? undefined : String(body.refundPolicyUrl || "").trim();
   if (!privacyPolicyUrl) throw createHttpError(400, "privacyPolicyUrl is required");
   if (!termsUrl) throw createHttpError(400, "termsUrl is required");
   if (!isValidHttpUrl(privacyPolicyUrl)) throw createHttpError(400, "Invalid privacyPolicyUrl");
   if (!isValidHttpUrl(termsUrl)) throw createHttpError(400, "Invalid termsUrl");
+  if (refundPolicyUrl !== undefined && refundPolicyUrl && !isValidHttpUrl(refundPolicyUrl)) {
+    throw createHttpError(400, "Invalid refundPolicyUrl");
+  }
 
   return {
     privacyPolicyUrl,
     termsUrl,
+    ...(refundPolicyUrl !== undefined ? { refundPolicyUrl } : {}),
     ...(body.communication !== undefined ? { communication: sanitizeCommunication(body.communication) } : {}),
   };
 }

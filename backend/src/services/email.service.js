@@ -11,7 +11,7 @@ function getResend() {
 }
 
 // Configuration
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@libdesk.in";
+const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@smartlibdesk.in";
 const EMAIL_OTP_EXPIRY_MINUTES = Number.parseInt(process.env.EMAIL_OTP_EXPIRY_MINUTES || "5", 10) || 5;
 
 /**

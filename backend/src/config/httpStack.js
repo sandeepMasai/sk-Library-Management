@@ -10,15 +10,35 @@ const cookieParser = require("cookie-parser");
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";
 
+function collectAllowedOrigins() {
+  const set = new Set();
+  const add = (value) => {
+    const v = String(value || "").trim();
+    if (v) set.add(v.replace(/\/$/, ""));
+  };
+
+  String(process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .forEach((s) => add(s));
+
+  add(process.env.FRONTEND_URL);
+  add(process.env.WEBSITE_URL);
+
+  if (String(process.env.CORS_ALLOW_LOCALHOST || "").trim().toLowerCase() === "true") {
+    [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5174",
+    ].forEach(add);
+  }
+
+  return [...set];
+}
+
 /** Whitelist origins for browser clients; omit or '*' in development if unset. */
 function buildCorsOptions() {
-  const raw = String(process.env.ALLOWED_ORIGINS || "").trim();
-  const list = raw
-    ? raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
+  const list = collectAllowedOrigins();
 
   /** @type {import('cors').CorsOptions} */
   const base = {

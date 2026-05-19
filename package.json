@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "start": "npm --prefix backend start",
-    "build": "npm --prefix backend install"
+    "build": "npm --prefix backend install",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:website": "npm --prefix website run dev",
+    "build:website": "npm --prefix website run build"
   }
 }

@@ -18,6 +18,7 @@ function toSettingsResponse(doc) {
   return {
     privacyPolicyUrl: doc?.privacyPolicyUrl || "",
     termsUrl: doc?.termsUrl || "",
+    refundPolicyUrl: doc?.refundPolicyUrl || "",
     communication: {
       whatsapp: doc?.communication?.whatsapp || legacyWhatsapp || "",
       channel: doc?.communication?.channel || legacyChannel || "",
@@ -31,6 +32,7 @@ function toUpdatedSettingsResponse(doc) {
   return {
     privacyPolicyUrl: doc.privacyPolicyUrl,
     termsUrl: doc.termsUrl,
+    refundPolicyUrl: doc.refundPolicyUrl || "",
     communication: {
       whatsapp: doc?.communication?.whatsapp || "",
       channel: doc?.communication?.channel || "",
@@ -80,6 +82,7 @@ function normalizeCommunication(rawCommunication) {
 const EMPTY_SETTINGS = {
   privacyPolicyUrl: "",
   termsUrl: "",
+  refundPolicyUrl: "",
   communication: { whatsapp: "", channel: "", email: "" },
   updatedAt: null,
 };
@@ -93,19 +96,29 @@ async function getSettings() {
 async function updateSettings({ body }) {
   const privacyPolicyUrl = String(body?.privacyPolicyUrl || "").trim();
   const termsUrl = String(body?.termsUrl || "").trim();
+  const refundPolicyUrl =
+    body?.refundPolicyUrl === undefined ? undefined : String(body.refundPolicyUrl || "").trim();
   const rawCommunication = body?.communication;
 
   if (!privacyPolicyUrl) throw createHttpError(400, "privacyPolicyUrl is required");
   if (!termsUrl) throw createHttpError(400, "termsUrl is required");
   if (!isValidHttpUrl(privacyPolicyUrl)) throw createHttpError(400, "Invalid privacyPolicyUrl");
   if (!isValidHttpUrl(termsUrl)) throw createHttpError(400, "Invalid termsUrl");
+  if (refundPolicyUrl !== undefined && refundPolicyUrl && !isValidHttpUrl(refundPolicyUrl)) {
+    throw createHttpError(400, "Invalid refundPolicyUrl");
+  }
 
   const communication = normalizeCommunication(rawCommunication);
   let doc;
   try {
     doc = await GlobalSettings.findByIdAndUpdate(
       "global",
-      { privacyPolicyUrl, termsUrl, ...(rawCommunication !== undefined ? { communication } : {}) },
+      {
+        privacyPolicyUrl,
+        termsUrl,
+        ...(refundPolicyUrl !== undefined ? { refundPolicyUrl: refundPolicyUrl || "" } : {}),
+        ...(rawCommunication !== undefined ? { communication } : {}),
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
     ).lean();
   } catch (err) {

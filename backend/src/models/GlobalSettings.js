@@ -42,6 +42,16 @@ const GlobalSettingsSchema = new mongoose.Schema(
       match: urlRegex,
     },
 
+    refundPolicyUrl: {
+      type: String,
+      default: "",
+      trim: true,
+      validate: {
+        validator: optionalUrl,
+        message: "refundPolicyUrl must be http(s) URL when set",
+      },
+    },
+
     communication: {
       type: {
         whatsapp: {

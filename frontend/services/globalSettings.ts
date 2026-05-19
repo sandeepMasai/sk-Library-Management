@@ -4,6 +4,7 @@ import { apiGet, type ApiError } from './api';
 export type GlobalSettings = {
   privacyPolicyUrl: string;
   termsUrl: string;
+  refundPolicyUrl: string;
   communication: { whatsapp: string; channel: string; email: string };
   updatedAt: string | null;
 };
@@ -28,6 +29,7 @@ export function parseGlobalSettingsPayload(body: unknown): GlobalSettings {
   return {
     privacyPolicyUrl: String(raw.privacyPolicyUrl || '').trim(),
     termsUrl: String(raw.termsUrl || '').trim(),
+    refundPolicyUrl: String(raw.refundPolicyUrl || '').trim(),
     communication: {
       whatsapp: String(raw.communication?.whatsapp || '').trim(),
       channel: String(raw.communication?.channel || '').trim(),
