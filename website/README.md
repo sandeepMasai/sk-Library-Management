@@ -19,16 +19,15 @@ npm run build
 npm run preview
 ```
 
-## Deploy on Railway (website service)
+## Deploy on Vercel (recommended)
 
-See **[RAILWAY.md](./RAILWAY.md)** — add a **new service**, root directory `website`, set `VITE_API_URL` to your backend Railway URL.
+See **[VERCEL.md](./VERCEL.md)** — import repo, **Root Directory = `website`**, set `VITE_API_URL`, deploy.
 
-## Deploy on Vercel
+Quick link: [vercel.com/new](https://vercel.com/new) → GitHub → `sk-Library-Management` → root `website`.
 
-1. Import this repo and set **Root Directory** to `website`.
-2. Framework preset: **Vite**.
-3. Environment variable: `VITE_API_URL` = your Railway API URL.
-4. Deploy. SPA rewrites in `vercel.json` prevent 404 on refresh.
+## Deploy on Railway (optional)
+
+See **[RAILWAY.md](./RAILWAY.md)** if you prefer hosting the static site on Railway too.
 
 ## Local dev (CORS)
 

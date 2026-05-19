@@ -36,13 +36,48 @@ function collectAllowedOrigins() {
   return [...set];
 }
 
+function envFlag(name) {
+  return String(process.env[name] || "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
+/** @param {string} origin */
+function isOriginAllowed(origin, list) {
+  if (!origin) return true;
+  const normalized = String(origin).trim().replace(/\/$/, "");
+  if (list.includes(normalized)) return true;
+
+  if (envFlag("CORS_ALLOW_VERCEL")) {
+    try {
+      const host = new URL(normalized).hostname.toLowerCase();
+      if (host === "vercel.app" || host.endsWith(".vercel.app")) return true;
+    } catch {
+      /* ignore invalid origin */
+    }
+  }
+
+  for (const entry of list) {
+    if (!entry.includes("*")) continue;
+    const pattern = entry
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*");
+    if (new RegExp(`^${pattern}$`).test(normalized)) return true;
+  }
+
+  return false;
+}
+
 /** Whitelist origins for browser clients; omit or '*' in development if unset. */
 function buildCorsOptions() {
   const list = collectAllowedOrigins();
+  const allowVercel = envFlag("CORS_ALLOW_VERCEL");
 
   /** @type {import('cors').CorsOptions} */
   const base = {
-    credentials: Boolean(process.env.CORS_CREDENTIALS === "true" || list.length),
+    credentials: Boolean(
+      process.env.CORS_CREDENTIALS === "true" || list.length || allowVercel
+    ),
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
@@ -62,12 +97,11 @@ function buildCorsOptions() {
     maxAge: 86400,
   };
 
-  if (list.length) {
+  if (list.length || allowVercel) {
     return {
       ...base,
       origin: (origin, cb) => {
-        if (!origin) return cb(null, true);
-        if (list.includes(origin)) return cb(null, true);
+        if (isOriginAllowed(origin, list)) return cb(null, true);
         cb(null, false);
       },
     };
