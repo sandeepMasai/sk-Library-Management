@@ -27,8 +27,8 @@ export function AuthShell({ title, subtitle, children, footer, onLogoEasterEgg }
     }
   }
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl lg:grid-cols-2">
+    <div className="min-h-[calc(100dvh-4rem)] bg-slate-50">
+      <div className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl lg:grid-cols-2">
         <div className="relative hidden overflow-hidden bg-gradient-to-br from-[#0b3d36] via-primary to-accent p-12 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
             <Logo size="md" variant="light" />
@@ -45,7 +45,7 @@ export function AuthShell({ title, subtitle, children, footer, onLogoEasterEgg }
           </ul>
         </div>
 
-        <div className="flex flex-col justify-center px-4 py-12 sm:px-8 lg:px-14">
+        <div className="flex flex-col justify-center px-4 py-10 sm:px-8 sm:py-12 lg:px-14">
           <div className="mx-auto w-full max-w-md">
             <div
               className={`mb-8 flex justify-center ${onLogoEasterEgg ? 'cursor-default select-none' : ''}`}
@@ -55,7 +55,7 @@ export function AuthShell({ title, subtitle, children, footer, onLogoEasterEgg }
             >
               <Logo size="lg" linkToHome={!onLogoEasterEgg} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{title}</h1>
             <p className="mt-2 text-sm text-muted">{subtitle}</p>
             <div className="mt-8">{children}</div>
             {footer ? <div className="mt-6 text-center text-sm text-muted">{footer}</div> : null}

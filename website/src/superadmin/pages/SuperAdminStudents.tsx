@@ -32,7 +32,7 @@ export function SuperAdminStudents() {
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="page-pad">
       <h1 className="text-2xl font-bold text-slate-900">Students</h1>
       <p className="mt-1 text-sm text-muted">{total} students across all libraries</p>
 

@@ -8,28 +8,30 @@ export function Home() {
     <>
       <section className="mesh-bg relative overflow-hidden border-b border-slate-200/80">
         <div className="pointer-events-none absolute -right-32 top-20 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-28 lg:py-32">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary shadow-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary shadow-sm sm:px-4 sm:text-xs">
                 Library SaaS · India
               </span>
-              <h1 className="mt-6 text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              <h1 className="mt-5 text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-900 sm:mt-6 sm:text-4xl md:text-5xl lg:text-6xl">
                 Run your study library like a{' '}
                 <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   modern business
                 </span>
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-muted sm:mt-6 sm:text-lg">
                 {SITE.name} brings attendance, seats, students, notifications, and Razorpay subscriptions into one
                 platform — built for reading rooms and coaching libraries.
               </p>
-              <div className="mt-10 flex flex-wrap gap-4">
-                <Link to="/register">
-                  <Button>Start free registration</Button>
+              <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:gap-4">
+                <Link to="/register" className="w-full sm:w-auto">
+                  <Button fullWidth className="sm:!w-auto">Start free registration</Button>
                 </Link>
-                <Link to="/login">
-                  <Button variant="outline">Sign in</Button>
+                <Link to="/login" className="w-full sm:w-auto">
+                  <Button variant="outline" fullWidth className="sm:!w-auto">
+                    Sign in
+                  </Button>
                 </Link>
               </div>
             </div>
@@ -62,9 +64,9 @@ export function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-slate-900">Everything your library needs</h2>
+          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Everything your library needs</h2>
           <p className="mx-auto mt-3 max-w-2xl text-muted">From daily check-in to subscription billing — no spreadsheets required.</p>
         </div>
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -88,7 +90,7 @@ export function Home() {
 
       <section className="border-y border-slate-200 bg-slate-50 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-center text-3xl font-bold text-slate-900">How it works</h2>
+          <h2 className="text-center text-2xl font-bold text-slate-900 sm:text-3xl">How it works</h2>
           <div className="mt-14 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
             {HOW_IT_WORKS.map((step) => (
               <div key={step.step} className="relative rounded-2xl bg-white p-6 shadow-sm">
@@ -102,7 +104,7 @@ export function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <h2 className="text-center text-3xl font-bold text-slate-900">What owners say</h2>
+        <h2 className="text-center text-2xl font-bold text-slate-900 sm:text-3xl">What owners say</h2>
         <div className="mt-12 grid gap-6 md:grid-cols-2">
           {TESTIMONIALS.map((t) => (
             <blockquote key={t.author} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -118,16 +120,18 @@ export function Home() {
 
       <section className="bg-gradient-to-br from-primary via-primary to-accent px-4 py-20 text-white sm:px-6">
         <div className="mx-auto max-w-6xl text-center">
-          <h2 className="text-3xl font-bold">Ready to go digital?</h2>
+          <h2 className="text-2xl font-bold sm:text-3xl">Ready to go digital?</h2>
           <p className="mx-auto mt-4 max-w-xl text-white/85">
             Register your library in minutes. Subscribe with Razorpay when you are ready — Trial from ₹99.
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <Link to="/register">
-              <Button className="!bg-white !text-primary hover:!brightness-95">Create library account</Button>
+          <div className="mt-8 flex flex-col items-stretch gap-3 px-2 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4 sm:px-0">
+            <Link to="/register" className="w-full sm:w-auto">
+              <Button fullWidth className="!bg-white !text-primary hover:!brightness-95 sm:!w-auto">
+                Create library account
+              </Button>
             </Link>
-            <Link to="/pricing">
-              <Button variant="outline" className="!border-white/40 !text-white hover:!bg-white/10">
+            <Link to="/pricing" className="w-full sm:w-auto">
+              <Button variant="outline" fullWidth className="!border-white/40 !text-white hover:!bg-white/10 sm:!w-auto">
                 View pricing
               </Button>
             </Link>

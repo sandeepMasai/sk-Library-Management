@@ -5,8 +5,8 @@ import { Logo } from './Logo';
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="grid gap-10 sm:gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <Logo showName size="md" linkToHome variant="light" className="[&_img]:ring-2 [&_img]:ring-white/20" />
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-400">{SITE.tagline}</p>

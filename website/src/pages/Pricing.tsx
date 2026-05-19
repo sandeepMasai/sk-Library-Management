@@ -16,12 +16,12 @@ export function Pricing() {
         title="Simple, transparent pricing"
         subtitle="Library subscriptions billed via Razorpay in the app. No hidden fees."
       />
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <div className="grid gap-8 lg:grid-cols-4">
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4">
           {PLANS.map((plan) => (
             <div
               key={plan.key}
-              className={`card-hover relative flex flex-col rounded-3xl border bg-white p-8 shadow-sm ${
+              className={`card-hover relative flex flex-col rounded-3xl border bg-white p-6 shadow-sm sm:p-8 ${
                 plan.tag === 'Popular' ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200'
               }`}
             >

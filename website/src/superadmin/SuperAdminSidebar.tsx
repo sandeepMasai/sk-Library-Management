@@ -14,11 +14,15 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-400 hover:bg-white/5 hover:text-white'
   }`;
 
-export function SuperAdminSidebar() {
+type SuperAdminSidebarProps = {
+  onNavigate?: () => void;
+};
+
+export function SuperAdminSidebar({ onNavigate }: SuperAdminSidebarProps) {
   const { user, logout } = useAuth();
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col bg-[#0B1220] text-white">
+    <aside className="flex h-full min-h-screen w-full flex-col bg-[#0B1220] text-white lg:min-h-0 lg:w-64 lg:shrink-0">
       <div className="border-b border-white/10 p-5">
         <Logo size="sm" variant="light" linkToHome={false} />
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-emerald-400/90">Super Admin</p>
@@ -26,13 +30,13 @@ export function SuperAdminSidebar() {
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {NAV.map((item) => (
-          <NavLink key={item.to} to={item.to} className={linkClass} end={item.end}>
+          <NavLink key={item.to} to={item.to} className={linkClass} end={item.end} onClick={onNavigate}>
             {item.label}
           </NavLink>
         ))}
       </nav>
       <div className="border-t border-white/10 p-4">
-        <NavLink to="/" className="mb-2 block text-xs text-slate-500 hover:text-white">
+        <NavLink to="/" className="mb-2 block text-xs text-slate-500 hover:text-white" onClick={onNavigate}>
           ← Marketing site
         </NavLink>
         <button

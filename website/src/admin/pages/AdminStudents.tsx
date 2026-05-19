@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { TableScroll } from '../../components/ui/TableScroll';
 import { createStudent, deleteStudent, fetchStudents, toggleBlockStudent, type StudentRow } from '../api/libraryApi';
 
 export function AdminStudents() {
@@ -55,13 +56,15 @@ export function AdminStudents() {
   }
 
   return (
-    <div className="p-6 sm:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="page-pad">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Students</h1>
           <p className="text-sm text-muted">{students.length} registered</p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? 'Cancel' : '+ Add student'}</Button>
+        <Button className="w-full sm:w-auto" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? 'Cancel' : '+ Add student'}
+        </Button>
       </div>
 
       {showForm ? (
@@ -85,6 +88,7 @@ export function AdminStudents() {
         {loading ? (
           <p className="p-8 text-muted">Loading…</p>
         ) : (
+          <TableScroll>
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-muted">
               <tr>
@@ -130,6 +134,7 @@ export function AdminStudents() {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </div>
     </div>

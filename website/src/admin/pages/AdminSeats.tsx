@@ -39,7 +39,7 @@ export function AdminSeats() {
   const assigned = seats.filter((s) => s.status === 'occupied' || s.studentId).length;
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="page-pad">
       <h1 className="text-2xl font-bold text-slate-900">Seats</h1>
       <p className="mt-1 text-sm text-muted">
         {seats.length} seats · {assigned} assigned

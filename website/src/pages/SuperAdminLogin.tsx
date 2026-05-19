@@ -44,8 +44,8 @@ export function SuperAdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1220] text-white">
-      <div className="mx-auto max-w-md px-4 py-16">
+    <div className="min-h-screen min-h-[100dvh] bg-[#0B1220] text-white safe-top safe-bottom">
+      <div className="mx-auto max-w-md px-4 py-12 sm:py-16">
         <div className="mb-10 flex justify-center">
           <Logo size="lg" variant="light" linkToHome={false} />
         </div>

@@ -49,7 +49,7 @@ export function AdminDashboard() {
   if (!data) return null;
 
   return (
-    <div className="p-6 sm:p-8">
+    <div className="page-pad">
       <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
       <p className="mt-1 text-sm text-muted">Overview for {data.attendance?.date || 'today'}</p>
 
