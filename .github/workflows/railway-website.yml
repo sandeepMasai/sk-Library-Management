@@ -31,7 +31,7 @@ jobs:
             echo "Create token: https://railway.app/account/tokens"
             exit 1
           fi
-          SERVICE="${RAILWAY_SERVICE:-website}"
+          SERVICE="${RAILWAY_SERVICE:-8bab4f3f-ec5d-41a3-83d3-66bf0bfe2bcc}"
           echo "Deploying to service: ${SERVICE}"
           railway variables set "VITE_API_URL=${VITE_API_URL}" --service "${SERVICE}" --skip-deploys || true
           railway up --detach --service "${SERVICE}"

@@ -18,7 +18,7 @@ Repo → **Settings** → **Secrets** → **Actions**:
 | Secret | Value |
 |--------|--------|
 | `RAILWAY_TOKEN` | [railway.app/account/tokens](https://railway.app/account/tokens) |
-| `RAILWAY_WEBSITE_SERVICE` | Service name or ID from step 3 |
+| `RAILWAY_WEBSITE_SERVICE` | Optional — defaults to `8bab4f3f-ec5d-41a3-83d3-66bf0bfe2bcc` |
 
 Push to `main` (changes under `website/`) or run workflow **Deploy website to Railway** manually.
 

@@ -7,7 +7,7 @@ cd "$ROOT"
 
 CLI="npx --yes @railway/cli@latest"
 API_URL="${VITE_API_URL:-https://sk-library-management-production.up.railway.app}"
-SERVICE="${RAILWAY_WEBSITE_SERVICE:-website}"
+SERVICE="${RAILWAY_WEBSITE_SERVICE:-8bab4f3f-ec5d-41a3-83d3-66bf0bfe2bcc}"
 
 echo "=== SmartLibDesk website → Railway ==="
 echo ""
