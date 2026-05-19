@@ -1,11 +1,15 @@
 import { Outlet } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell';
+import { SeoNoIndex } from '../seo/Seo';
 import { SuperAdminSidebar } from './SuperAdminSidebar';
 
 export function SuperAdminLayout() {
   return (
-    <DashboardShell title="Super Admin" sidebar={({ onNavigate }) => <SuperAdminSidebar onNavigate={onNavigate} />}>
-      <Outlet />
-    </DashboardShell>
+    <>
+      <SeoNoIndex title="Super Admin" />
+      <DashboardShell title="Super Admin" sidebar={({ onNavigate }) => <SuperAdminSidebar onNavigate={onNavigate} />}>
+        <Outlet />
+      </DashboardShell>
+    </>
   );
 }

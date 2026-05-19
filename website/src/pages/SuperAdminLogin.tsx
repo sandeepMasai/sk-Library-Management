@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
 import { loginAdmin } from '../lib/auth';
+import { SeoNoIndex } from '../seo/Seo';
 
 export function SuperAdminLogin() {
   const navigate = useNavigate();
@@ -44,6 +45,8 @@ export function SuperAdminLogin() {
   }
 
   return (
+    <>
+      <SeoNoIndex title="Super Admin login" />
     <div className="min-h-screen min-h-[100dvh] bg-[#0B1220] text-white safe-top safe-bottom">
       <div className="mx-auto max-w-md px-4 py-12 sm:py-16">
         <div className="mb-10 flex justify-center">
@@ -92,5 +95,6 @@ export function SuperAdminLogin() {
         </p>
       </div>
     </div>
+    </>
   );
 }

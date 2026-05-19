@@ -1,0 +1,12 @@
+# SmartLibDesk — https://www.smartlibdesk.in
+User-agent: *
+Allow: /
+
+# App dashboards — not for public indexing
+Disallow: /admin
+Disallow: /superadmin
+Disallow: /dashboard
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://www.smartlibdesk.in/sitemap.xml

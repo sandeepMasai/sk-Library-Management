@@ -1,11 +1,14 @@
 {
-  "name": "SmartLibDesk",
+  "name": "SmartLibDesk — Library Management",
   "short_name": "SmartLibDesk",
-  "description": "Library management software for attendance, seats, students, and subscriptions.",
+  "description": "SmartLibDesk is a modern library management system for schools, colleges, coaching institutes, and libraries.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#f8fafc",
   "theme_color": "#1e5c52",
+  "lang": "en-IN",
   "icons": [
     {
       "src": "/favicon.png",
