@@ -6,6 +6,7 @@
     "build": "npm --prefix backend install",
     "dev:backend": "npm --prefix backend run dev",
     "dev:website": "npm --prefix website run dev",
-    "build:website": "npm --prefix website run build"
+    "build:website": "npm --prefix website run build",
+    "start:website": "npm --prefix website start"
   }
 }

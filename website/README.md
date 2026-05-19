@@ -19,6 +19,10 @@ npm run build
 npm run preview
 ```
 
+## Deploy on Railway (website service)
+
+See **[RAILWAY.md](./RAILWAY.md)** — add a **new service**, root directory `website`, set `VITE_API_URL` to your backend Railway URL.
+
 ## Deploy on Vercel
 
 1. Import this repo and set **Root Directory** to `website`.
