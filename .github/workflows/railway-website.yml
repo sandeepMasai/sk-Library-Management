@@ -1,8 +1,7 @@
-# Setup: GitHub → Settings → Secrets → Actions
-#   RAILWAY_TOKEN          — https://railway.app/account/tokens
-#   RAILWAY_WEBSITE_SERVICE — website service name or ID (e.g. "website" or UUID)
-#
-# Railway: same project as backend → + New Service → repo → Root Directory = website
+# Setup (one time):
+#   1. Railway → backend project → + New → GitHub repo → Root Directory = website
+#   2. GitHub → Settings → Secrets → RAILWAY_TOKEN (https://railway.app/account/tokens)
+#   3. Optional secret RAILWAY_WEBSITE_SERVICE (defaults to "website")
 name: Deploy website to Railway
 
 on:
@@ -28,12 +27,11 @@ jobs:
           VITE_API_URL: https://sk-library-management-production.up.railway.app
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "::error::Add RAILWAY_TOKEN in GitHub repo Secrets"
+            echo "::error::Add RAILWAY_TOKEN in GitHub → Settings → Secrets → Actions"
+            echo "Create token: https://railway.app/account/tokens"
             exit 1
           fi
-          if [ -z "$RAILWAY_SERVICE" ]; then
-            echo "::error::Add RAILWAY_WEBSITE_SERVICE (service name or ID from Railway dashboard)"
-            exit 1
-          fi
-          railway variables set "VITE_API_URL=${VITE_API_URL}" --service "$RAILWAY_SERVICE" --skip-deploys
-          railway up --detach --service "$RAILWAY_SERVICE"
+          SERVICE="${RAILWAY_SERVICE:-website}"
+          echo "Deploying to service: ${SERVICE}"
+          railway variables set "VITE_API_URL=${VITE_API_URL}" --service "${SERVICE}" --skip-deploys || true
+          railway up --detach --service "${SERVICE}"
