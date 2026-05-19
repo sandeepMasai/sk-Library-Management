@@ -18,24 +18,34 @@ Vercel is the recommended host for this Vite + React site (easier than a second 
 
 Your site will be live at something like: `https://sk-library-management-xxx.vercel.app`
 
-## 2) Backend CORS (Railway)
+## 2) Backend CORS (Railway) — required for login
+
+The website calls the API from the browser. Railway must allow your site **origin** or login fails with a CORS error.
 
 On your **backend** Railway service (`sk-Library-Management`) → **Variables**:
 
+### Custom domain `smartlibdesk.in` (production)
+
 ```env
-CORS_ALLOW_VERCEL=true
+WEBSITE_URL=https://www.smartlibdesk.in
+ALLOWED_ORIGINS=https://www.smartlibdesk.in,https://smartlibdesk.in
+CORS_ALLOW_SMARTLIBDESK=true
 CORS_CREDENTIALS=true
-WEBSITE_URL=https://YOUR-PRODUCTION-URL.vercel.app
-ALLOWED_ORIGINS=https://YOUR-PRODUCTION-URL.vercel.app
 ```
 
-`CORS_ALLOW_VERCEL=true` allows **all** `*.vercel.app` preview URLs (each deploy gets a new subdomain).
+`WEBSITE_URL` also auto-adds the `www` / non-`www` pair. `CORS_ALLOW_SMARTLIBDESK=true` allows `https://www.smartlibdesk.in` and `https://smartlibdesk.in`.
 
-**Redeploy the backend** after saving variables (and after pulling latest backend code with CORS fix).
+### Vercel preview URLs (optional)
 
-## 3) Custom domain (optional)
+```env
+CORS_ALLOW_VERCEL=true
+```
 
-Vercel project → **Settings** → **Domains** → add e.g. `smartlibdesk.in`
+**Redeploy the backend** after saving variables (and after pushing the latest `httpStack.js` CORS changes).
+
+## 3) Custom domain
+
+Vercel project → **Settings** → **Domains** → add `smartlibdesk.in` and `www.smartlibdesk.in` → point DNS as Vercel instructs.
 
 ## 4) CLI deploy (optional)
 

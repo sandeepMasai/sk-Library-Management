@@ -10,12 +10,27 @@ const cookieParser = require("cookie-parser");
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";
 
+function addOriginWithWwwVariants(set, value) {
+  const v = String(value || "").trim().replace(/\/$/, "");
+  if (!v) return;
+  set.add(v);
+  try {
+    const u = new URL(v);
+    const host = u.hostname.toLowerCase();
+    const port = u.port ? `:${u.port}` : "";
+    if (host.startsWith("www.")) {
+      set.add(`${u.protocol}//${host.slice(4)}${port}`);
+    } else {
+      set.add(`${u.protocol}//www.${host}${port}`);
+    }
+  } catch {
+    /* ignore invalid URL */
+  }
+}
+
 function collectAllowedOrigins() {
   const set = new Set();
-  const add = (value) => {
-    const v = String(value || "").trim();
-    if (v) set.add(v.replace(/\/$/, ""));
-  };
+  const add = (value) => addOriginWithWwwVariants(set, value);
 
   String(process.env.ALLOWED_ORIGINS || "")
     .split(",")
@@ -57,6 +72,17 @@ function isOriginAllowed(origin, list) {
     }
   }
 
+  if (envFlag("CORS_ALLOW_SMARTLIBDESK")) {
+    try {
+      const host = new URL(normalized).hostname.toLowerCase();
+      if (host === "smartlibdesk.in" || host === "www.smartlibdesk.in" || host.endsWith(".smartlibdesk.in")) {
+        return true;
+      }
+    } catch {
+      /* ignore invalid origin */
+    }
+  }
+
   for (const entry of list) {
     if (!entry.includes("*")) continue;
     const pattern = entry
@@ -72,11 +98,12 @@ function isOriginAllowed(origin, list) {
 function buildCorsOptions() {
   const list = collectAllowedOrigins();
   const allowVercel = envFlag("CORS_ALLOW_VERCEL");
+  const allowSmartlibdesk = envFlag("CORS_ALLOW_SMARTLIBDESK");
 
   /** @type {import('cors').CorsOptions} */
   const base = {
     credentials: Boolean(
-      process.env.CORS_CREDENTIALS === "true" || list.length || allowVercel
+      process.env.CORS_CREDENTIALS === "true" || list.length || allowVercel || allowSmartlibdesk
     ),
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -97,7 +124,7 @@ function buildCorsOptions() {
     maxAge: 86400,
   };
 
-  if (list.length || allowVercel) {
+  if (list.length || allowVercel || allowSmartlibdesk) {
     return {
       ...base,
       origin: (origin, cb) => {
