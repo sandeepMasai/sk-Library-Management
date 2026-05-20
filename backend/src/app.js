@@ -56,6 +56,7 @@ app.use("/api/spaces", require("./routes/space.routes"));
 app.use("/api/shifts", require("./routes/shift.routes"));
 app.use("/api/allocations", require("./routes/allocation.routes"));
 app.use("/api/payment", require("./routes/payment.routes"));
+app.use("/api", require("./routes/checkoutStandard.routes"));
 app.use("/api/plans", require("./routes/plans.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 
