@@ -20,9 +20,14 @@ export function getAuthToken(): string | null {
   }
 }
 
+export function notifySessionUpdate() {
+  window.dispatchEvent(new CustomEvent('sld:session-updated'));
+}
+
 export function setAuthToken(token: string | null) {
   if (token) localStorage.setItem('sld_auth_token', token);
   else localStorage.removeItem('sld_auth_token');
+  notifySessionUpdate();
 }
 
 const REFRESH_KEY = 'sld_refresh_token';
@@ -38,18 +43,39 @@ export function getRefreshToken(): string | null {
 export function setRefreshToken(token: string | null) {
   if (token) localStorage.setItem(REFRESH_KEY, token);
   else localStorage.removeItem(REFRESH_KEY);
+  notifySessionUpdate();
 }
 
 type RequestInitWithRetry = RequestInit & { _authRetry?: boolean };
 
-let refreshInFlight: Promise<string | null> | null = null;
+let logoutBroadcast = false;
+
+function forceLogout() {
+  if (logoutBroadcast) return;
+  logoutBroadcast = true;
+  setTimeout(() => {
+    logoutBroadcast = false;
+  }, 1500);
+  setAuthToken(null);
+  setRefreshToken(null);
+  window.dispatchEvent(new CustomEvent('sld:auth-expired'));
+}
+
+function unwrapEnvelope<T>(body: ApiEnvelope<T> & T): T {
+  if (body && typeof body === 'object' && 'success' in body && body.success === true && 'data' in body) {
+    return body.data as T;
+  }
+  return body as T;
+}
+
+let refreshInFlightInner: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
   const existing = getRefreshToken();
   if (!existing) return null;
 
-  if (!refreshInFlight) {
-    refreshInFlight = (async () => {
+  if (!refreshInFlightInner) {
+    refreshInFlightInner = (async () => {
       try {
         const res = await fetch(`${API_URL}/api/auth/refresh`, {
           method: 'POST',
@@ -61,30 +87,42 @@ async function refreshAccessToken(): Promise<string | null> {
           authToken?: string;
           accessToken?: string;
           refreshToken?: string;
-        }> & { authToken?: string; accessToken?: string; refreshToken?: string };
+        }> &
+          { authToken?: string; accessToken?: string; refreshToken?: string };
 
-        if (!res.ok) return null;
+        if (!res.ok) {
+          if (import.meta.env.DEV) {
+            console.warn('[auth] refresh failed', res.status, body);
+          }
+          return null;
+        }
 
-        const data =
-          body && typeof body === 'object' && 'success' in body && body.success === true && body.data
-            ? body.data
-            : body;
-
+        const data = unwrapEnvelope(body);
         const nextAccess = data.authToken ?? data.accessToken;
         if (!nextAccess) return null;
 
         setAuthToken(nextAccess);
         if (data.refreshToken) setRefreshToken(data.refreshToken);
         return nextAccess;
-      } catch {
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('[auth] refresh error', err);
+        }
         return null;
       } finally {
-        refreshInFlight = null;
+        refreshInFlightInner = null;
       }
     })();
   }
 
-  return refreshInFlight;
+  return refreshInFlightInner;
+}
+
+/** Restore access token from refresh token if needed. Call before protected API use. */
+export async function ensureSession(): Promise<boolean> {
+  if (getAuthToken()) return true;
+  const next = await refreshAccessToken();
+  return Boolean(next);
 }
 
 function parseApiErrorMessage(
@@ -101,14 +139,20 @@ function parseApiErrorMessage(
   if (status === 401) return msg || 'Session expired. Please sign in again.';
   if (status === 402) return msg || 'Subscription expired. Choose a plan to continue.';
   if (body?.code === 'BAD_REQUEST_ERROR' || body?.code === 'RAZORPAY_AUTH_FAILED') {
-    return 'Razorpay is not configured on the server. Add live API keys on Railway and redeploy the backend.';
+    return 'Razorpay is not configured on the server. Add valid test API keys on Railway and redeploy.';
   }
   return msg || `Request failed (${status})`;
 }
 
 export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRetry = {}): Promise<T> {
   const { _authRetry, ...fetchInit } = init;
-  const token = getAuthToken();
+  const isAuthRoute = path.startsWith('/api/auth/login') || path.startsWith('/api/admin/login');
+
+  let token = getAuthToken();
+  if (!token && !isAuthRoute && !_authRetry) {
+    token = (await refreshAccessToken()) || null;
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchInit.headers as Record<string, string>),
@@ -124,25 +168,28 @@ export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRet
     T & { message?: string; code?: string };
 
   if (!res.ok) {
-    if (res.status === 401 && !_authRetry) {
+    const isPaymentOrRazorpay =
+      path.includes('/payment/') || body?.code === 'RAZORPAY_AUTH_FAILED' || body?.code === 'BAD_REQUEST_ERROR';
+
+    if (res.status === 401 && !_authRetry && !isAuthRoute) {
       const nextToken = await refreshAccessToken();
       if (nextToken) {
         return apiRaw<T>(path, { ...init, _authRetry: true });
       }
-      setAuthToken(null);
-      setRefreshToken(null);
-      window.dispatchEvent(new CustomEvent('sld:auth-expired'));
+      if (!isPaymentOrRazorpay) {
+        forceLogout();
+      }
       throw new Error(
         token
-          ? 'Session expired. Please sign in again at /login (use the same URL: www or non-www).'
-          : 'Not signed in. Please log in at /login before continuing.'
+          ? 'Session expired. Please sign in again (use the same site URL: www or non-www).'
+          : 'Please log in as library owner before continuing.'
       );
     }
-    if (res.status === 401) {
-      setAuthToken(null);
-      setRefreshToken(null);
-      window.dispatchEvent(new CustomEvent('sld:auth-expired'));
+
+    if (res.status === 401 && _authRetry && !isPaymentOrRazorpay) {
+      forceLogout();
     }
+
     throw new Error(parseApiErrorMessage(body, res.status));
   }
 
@@ -152,8 +199,5 @@ export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRet
 /** Unwrap `{ success, data }` or return body as-is for `{ ok, ... }` APIs. */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body = await apiRaw<ApiEnvelope<T> & T>(path, init);
-  if (body && typeof body === 'object' && 'success' in body && body.success === true && 'data' in body) {
-    return body.data as T;
-  }
-  return body as T;
+  return unwrapEnvelope(body);
 }

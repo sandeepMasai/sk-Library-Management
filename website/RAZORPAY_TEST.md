@@ -82,10 +82,31 @@ If OTP is asked in test mode, enter **`123456`** or the OTP shown in the Razorpa
 
 ## Troubleshooting
 
+### `Authentication failed` on `api.razorpay.com/.../otp/create` (or checkout popup)
+
+This means **Key ID and Key Secret do not match** or keys were **regenerated** in the dashboard.
+
+**Verify keys on your machine:**
+
+```bash
+cd backend
+node scripts/verify-razorpay.js
+```
+
+You must see `✅ Razorpay keys are VALID`. If you see `❌ Authentication failed`:
+
+1. [Razorpay Dashboard](https://dashboard.razorpay.com) → **Test mode** (toggle ON)
+2. **Settings → API Keys** → **Regenerate** secret (or create new key pair)
+3. Copy **Key ID** + **Key Secret** together (same row / same generation)
+4. Update **Railway** `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` → redeploy backend
+5. Update **Vercel** `VITE_RAZORPAY_KEY_ID` = same Key ID only → redeploy website
+6. Update `backend/.env` and `website/.env` for local dev
+7. Run `node scripts/verify-razorpay.js` again until ✅
+
 | Symptom | Fix |
 |---------|-----|
 | `401` on `create-order` | Log out → log in again on the same URL (`www`). Deploy latest website (refresh token support). |
-| `Authentication failed` / `BAD_REQUEST_ERROR` | Wrong Razorpay keys on Railway — use **test** key + secret, redeploy backend. |
+| `Authentication failed` / `BAD_REQUEST_ERROR` | Run `verify-razorpay.js` — regenerate test keys in Razorpay dashboard. |
 | Popup does not open | Check browser console; fix CORS / login first. |
 | Payment succeeds in popup but site shows error | Check `POST /api/payment/verify` in Network tab; ensure still logged in. |
 | Razorpay still says “no test payment” | Keys on Railway are **live** while dashboard is in **test** — both must be test. |

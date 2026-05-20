@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
-import { getAuthToken } from '../../lib/http';
+import { ensureSession } from '../../lib/http';
 import { openRazorpayCheckout } from '../../lib/razorpayWeb';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow } from '../api/libraryApi';
 
@@ -14,19 +14,38 @@ export function AdminSubscription() {
   const [paying, setPaying] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchPlans(), fetchSubscriptionMe()])
-      .then(([p, s]) => {
+    let alive = true;
+    (async () => {
+      const ok = await ensureSession();
+      if (!alive) return;
+      if (!ok) {
+        setError('Session expired. Please sign in again.');
+        return;
+      }
+      try {
+        const [p, s] = await Promise.all([fetchPlans(), fetchSubscriptionMe()]);
+        if (!alive) return;
         setPlans(p);
         setSub(s as Record<string, unknown>);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
+      } catch (e) {
+        if (!alive) return;
+        const msg = e instanceof Error ? e.message : 'Failed to load';
+        if (!/session expired|sign in/i.test(msg)) {
+          setError(msg);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   async function pay(plan: PlanRow) {
     const planId = plan._id || plan.id;
     if (!planId) return;
-    if (!getAuthToken()) {
-      setError('Your session expired. Please sign in again before paying.');
+    const ok = await ensureSession();
+    if (!ok) {
+      setError('Session expired. Please sign in again before paying.');
       return;
     }
     setPaying(planId);

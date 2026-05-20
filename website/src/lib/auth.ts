@@ -1,4 +1,4 @@
-import { apiFetch, setAuthToken, setRefreshToken } from './http';
+import { apiFetch, apiRaw, setAuthToken, setRefreshToken } from './http';
 
 export type AuthRole = 'admin' | 'library' | 'student';
 
@@ -43,12 +43,15 @@ function unwrapSession(raw: unknown): AuthSession | null {
 }
 
 export async function loginLibrary(email: string, password: string): Promise<AuthSession> {
-  const raw = await apiFetch<unknown>('/api/auth/login', {
+  const raw = await apiRaw<unknown>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ role: 'library', email: email.trim().toLowerCase(), password }),
   });
   const session = unwrapSession(raw);
   if (!session) throw new Error('Invalid login response');
+  if (!session.refreshToken && import.meta.env.DEV) {
+    console.warn('[auth] Login response missing refreshToken — silent refresh will not work');
+  }
   applySessionTokens(session);
   return session;
 }
@@ -124,7 +127,7 @@ export type RegisterLibraryPayload = {
 };
 
 export async function registerLibrary(payload: RegisterLibraryPayload): Promise<AuthSession> {
-  const raw = await apiFetch<unknown>('/api/auth/register-library', {
+  const raw = await apiRaw<unknown>('/api/auth/register-library', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
