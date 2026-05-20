@@ -123,16 +123,15 @@ android {
             keyPassword 'android'
         }
         release {
-            if (!signingPropertiesFile.exists()) {
-                throw new GradleException(
-                    "Release signing missing. Create android/key.properties (see key.properties.example)."
-                )
+            // Local Mac builds: android/key.properties + upload-keystore.jks
+            // EAS Build: key.properties is not uploaded; signing is injected via eas-build.gradle
+            if (signingPropertiesFile.exists()) {
+                def storeFileProp = signingProperties['storeFile'] ?: 'upload-keystore.jks'
+                storeFile resolveKeystoreFile(storeFileProp)
+                storePassword signingProperties['storePassword']
+                keyAlias signingProperties['keyAlias']
+                keyPassword signingProperties['keyPassword']
             }
-            def storeFileProp = signingProperties['storeFile'] ?: 'upload-keystore.jks'
-            storeFile resolveKeystoreFile(storeFileProp)
-            storePassword signingProperties['storePassword']
-            keyAlias signingProperties['keyAlias']
-            keyPassword signingProperties['keyPassword']
         }
     }
     buildTypes {
