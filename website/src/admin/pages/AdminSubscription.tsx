@@ -4,7 +4,11 @@ import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { ensureSession } from '../../lib/http';
 import { openRazorpayCheckout } from '../../lib/razorpayWeb';
+import { EXPECTED_RAZORPAY_KEY_ID, RAZORPAY_TEST_ONLY, razorpayKeyMode } from '../../lib/razorpayConfig';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow } from '../api/libraryApi';
+
+const showTestPaymentBanner =
+  RAZORPAY_TEST_ONLY || razorpayKeyMode(EXPECTED_RAZORPAY_KEY_ID) === 'test';
 
 export function AdminSubscription() {
   const { user } = useAuth();
@@ -67,21 +71,15 @@ export function AdminSubscription() {
       <h1 className="text-2xl font-bold text-slate-900">Subscription</h1>
       <p className="mt-1 text-sm text-muted">Pay with Razorpay to activate your library plan.</p>
 
-      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-semibold">Razorpay test transaction (no real charge)</p>
-        <p className="mt-1 leading-relaxed">
-          On <strong>desktop</strong>, Razorpay shows a <strong>UPI QR only</strong> (you cannot type{' '}
-          <code className="rounded bg-amber-100 px-1">test@razorpay</code>). Use the <strong>Cards</strong> tab when
-          the popup opens:
-        </p>
-        <p className="mt-2 font-mono text-xs leading-relaxed">
-          4111 1111 1111 1111 · CVV 123 · Expiry 12/26 · OTP 123456
-        </p>
-        <p className="mt-2 text-xs text-amber-900/80">
-          On phone, UPI may show QR or apps — for dashboard test, card is most reliable. Then refresh Razorpay → “Do a
-          test transaction”.
-        </p>
-      </div>
+      {showTestPaymentBanner ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">Test mode — no real charge</p>
+          <p className="mt-1 leading-relaxed">
+            Desktop: use <strong>Cards</strong> · Phone UPI:{' '}
+            <code className="rounded bg-amber-100 px-1">test@razorpay</code>
+          </p>
+        </div>
+      ) : null}
 
       {sub ? (
         <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-6">

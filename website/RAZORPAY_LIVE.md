@@ -1,76 +1,141 @@
-# Razorpay LIVE keys (production)
+# Razorpay LIVE keys — full app go-live
 
-Use this when accepting **real payments** on [smartlibdesk.in](https://www.smartlibdesk.in).
+Real payments on **website** ([smartlibdesk.in](https://www.smartlibdesk.in)) and **mobile app** (Expo).  
+The mobile app does **not** need a Razorpay key in `.env` — it gets `keyId` from the backend `POST /api/payment/create-order`.
 
-## 1) Razorpay Dashboard
+---
 
-1. Complete **KYC** and activate **Live mode** on [dashboard.razorpay.com](https://dashboard.razorpay.com).
-2. **Settings → API Keys → Live mode** → generate / copy:
-   - Key ID: `rzp_live_…`
-   - Key Secret (shown once — store safely)
+## Checklist (do in this order)
 
-## 2) Railway (backend only)
+### 1) Razorpay Dashboard
 
-On service `sk-Library-Management` → **Variables**:
+1. [dashboard.razorpay.com](https://dashboard.razorpay.com) → **KYC complete** → **Live mode** ON (top toggle).
+2. **Settings → API Keys → Live mode** → copy:
+   - `rzp_live_…` (Key ID)
+   - Key Secret (shown once — save safely)
+3. **Settings → Website & app details** → add:
+   - `https://www.smartlibdesk.in`
+   - `https://smartlibdesk.in`
+
+---
+
+### 2) Railway — backend (secret + key id)
+
+Service: `sk-Library-Management` → **Variables** → update:
 
 ```env
 RAZORPAY_KEY_ID=rzp_live_YOUR_KEY_ID
 RAZORPAY_KEY_SECRET=YOUR_LIVE_SECRET
 ```
 
-Never commit the secret to git. **Redeploy** the backend after saving.
+Keep existing CORS vars:
 
-## 3) Vercel (website — public key only)
+```env
+WEBSITE_URL=https://www.smartlibdesk.in
+ALLOWED_ORIGINS=https://www.smartlibdesk.in,https://smartlibdesk.in
+CORS_ALLOW_SMARTLIBDESK=true
+CORS_CREDENTIALS=true
+```
+
+**Deploy / Redeploy** the backend.
+
+Verify (on your Mac, with live keys in `backend/.env` only — do not commit):
+
+```bash
+cd backend && npm run verify:razorpay
+```
+
+Must show: `✅ Razorpay keys are VALID` and mode **live**.
+
+---
+
+### 3) Vercel — website (public key only)
 
 **Project → Settings → Environment Variables → Production:**
 
 ```env
 VITE_RAZORPAY_KEY_ID=rzp_live_YOUR_KEY_ID
+VITE_RAZORPAY_TEST_ONLY=false
 VITE_API_URL=https://sk-library-management-production.up.railway.app
 ```
 
-`VITE_RAZORPAY_KEY_ID` must be the **same** `rzp_live_*` id as `RAZORPAY_KEY_ID` on Railway.
-
-Do **not** add `RAZORPAY_KEY_SECRET` to Vercel.
+| Variable | Important |
+|----------|-----------|
+| `VITE_RAZORPAY_TEST_ONLY=false` | **Required** — otherwise live keys are blocked |
+| `VITE_RAZORPAY_KEY_ID` | Must match Railway `RAZORPAY_KEY_ID` exactly |
+| Never add `RAZORPAY_KEY_SECRET` to Vercel | Secret stays on Railway only |
 
 **Redeploy** the website (env is baked at build time).
 
-## 4) Local dev (optional)
+---
+
+### 4) Mobile app (Expo / Play Store)
+
+No Razorpay env in the app. Only the API URL:
+
+`frontend/.env` or `eas.json` (already set for production):
+
+```env
+EXPO_PUBLIC_API_URL=https://sk-library-management-production.up.railway.app
+```
+
+After Railway has **live** keys:
+
+1. Users on an **old APK** still work — payments use whatever keys the **server** returns.
+2. For a **new store build**: `cd frontend && eas build --profile production`
+3. Test on a real device: Library login → Subscription / Plan → Pay → real UPI or card.
+
+---
+
+### 5) Local development (optional)
+
+Keep **test** keys locally so you do not charge real money while coding:
 
 `backend/.env`:
 
 ```env
-RAZORPAY_KEY_ID=rzp_live_...
+RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=...
 ```
 
 `website/.env`:
 
 ```env
-VITE_RAZORPAY_KEY_ID=rzp_live_...
+VITE_RAZORPAY_KEY_ID=rzp_test_...
+VITE_RAZORPAY_TEST_ONLY=true
 ```
 
-Restart both servers after changes.
+Production = live keys only on **Railway + Vercel**.
 
-> Tip: For day-to-day dev, keep **test** keys locally (`rzp_test_*`) and use **live** keys only on Railway + Vercel production.
+---
 
-## 5) Razorpay merchant settings
+### 6) First live payment test
 
-In Live mode, set website URL / webhook URLs to:
+1. Website: login → `/admin/subscription` → Pay now → **real** UPI or card (small amount).
+2. App: same flow on phone.
+3. Razorpay Dashboard → **Live mode** → **Transactions** → **captured**.
 
-- `https://www.smartlibdesk.in`
-- `https://smartlibdesk.in`
+Test cards (`4111…`) and `test@razorpay` **do not work** in live mode.
 
-## 6) Verify
-
-1. Library login → `/admin/subscription` → Pay now  
-2. Complete payment with a **real** card/UPI (real money)  
-3. Razorpay Dashboard → **Live mode** → Transactions → captured  
+---
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| Authentication failed | Key id + secret must be a **live** pair from the same dashboard account |
-| Key mismatch error on site | `VITE_RAZORPAY_KEY_ID` ≠ Railway `RAZORPAY_KEY_ID` → make them identical and redeploy |
-| Test card `4111…` fails in live | Test cards work only in **test** mode; live needs real payment methods |
+| Problem | Fix |
+|---------|-----|
+| “This website uses Razorpay TEST mode only” | Vercel: `VITE_RAZORPAY_TEST_ONLY=false` + redeploy |
+| Key mismatch | `VITE_RAZORPAY_KEY_ID` = Railway `RAZORPAY_KEY_ID` (same `rzp_live_*`) |
+| Authentication failed | Regenerate live key pair; update Railway secret; redeploy |
+| App payment fails, website works | Railway keys OK; check app login + `EXPO_PUBLIC_API_URL` |
+| Test card fails in live | Expected — use real payment in live mode |
+
+---
+
+## Quick reference
+
+| Place | `RAZORPAY_KEY_ID` | `RAZORPAY_KEY_SECRET` | `VITE_RAZORPAY_*` |
+|-------|-------------------|------------------------|-------------------|
+| Railway | `rzp_live_*` | ✅ yes | — |
+| Vercel | — | ❌ never | `rzp_live_*` + `TEST_ONLY=false` |
+| Mobile app | — (from API) | ❌ never | — |
+| Local dev | `rzp_test_*` | ✅ yes | `rzp_test_*` + `TEST_ONLY=true` |
