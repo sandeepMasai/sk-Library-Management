@@ -57,28 +57,28 @@ If you close the popup or see 401 in the console, Razorpay will not count the te
 
 Use exactly what Razorpay shows under **“Do a test transaction”**. No real money is charged.
 
-### Test card
+### Desktop website (recommended): **Test card**
+
+On **www.smartlibdesk.in** (desktop browser), the UPI tab shows **only a QR code** — Razorpay no longer shows a field to type `test@razorpay` on web. Use **Cards**:
 
 | Field | Value |
 |--------|--------|
 | Card number | `4111 1111 1111 1111` |
 | CVV | `123` |
-| Expiry | `12/26` (or any future date) |
-| Name | Any name |
+| Expiry | `12/26` |
+| OTP (if asked) | `123456` |
 
-If OTP is asked, use **`123456`** or the OTP shown in the Razorpay test UI.
+Our checkout opens on **Cards** automatically on desktop in test mode.
 
-If you see **“International cards are not supported”**, use **Test UPI** below instead.
+If you see **“International cards are not supported”**, try another browser or contact Razorpay support — your test account may need card payments enabled.
 
-### Test UPI
+### Mobile / UPI QR
 
 | Field | Value |
 |--------|--------|
-| UPI ID | `test@razorpay` |
+| UPI (when VPA field exists) | `test@razorpay` |
 
-Type this in the **UPI** tab — do **not** scan the QR with real PhonePe / GPay (that can show `unprocessed` and will not count).
-
-(`success@razorpay` also works on some accounts; prefer `test@razorpay` from the dashboard.)
+On many phones the UPI tab is **QR only**. Do **not** scan with real PhonePe/GPay in test mode (`unprocessed`). Prefer **Cards** on desktop for the dashboard checklist.
 
 ## 5) Confirm in Razorpay Dashboard
 

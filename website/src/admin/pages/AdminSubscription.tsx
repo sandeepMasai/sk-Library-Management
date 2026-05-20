@@ -69,19 +69,17 @@ export function AdminSubscription() {
 
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-semibold">Razorpay test transaction (no real charge)</p>
-        <ul className="mt-2 list-inside list-disc space-y-1 leading-relaxed">
-          <li>
-            <strong>Card:</strong> <code className="rounded bg-amber-100 px-1">4111 1111 1111 1111</code> · CVV{' '}
-            <code className="rounded bg-amber-100 px-1">123</code> · Expiry{' '}
-            <code className="rounded bg-amber-100 px-1">12/26</code>
-          </li>
-          <li>
-            <strong>UPI:</strong> <code className="rounded bg-amber-100 px-1">test@razorpay</code> (UPI tab — do not
-            scan QR with a real UPI app)
-          </li>
-        </ul>
+        <p className="mt-1 leading-relaxed">
+          On <strong>desktop</strong>, Razorpay shows a <strong>UPI QR only</strong> (you cannot type{' '}
+          <code className="rounded bg-amber-100 px-1">test@razorpay</code>). Use the <strong>Cards</strong> tab when
+          the popup opens:
+        </p>
+        <p className="mt-2 font-mono text-xs leading-relaxed">
+          4111 1111 1111 1111 · CVV 123 · Expiry 12/26 · OTP 123456
+        </p>
         <p className="mt-2 text-xs text-amber-900/80">
-          After success, refresh Razorpay Dashboard → “Do a test transaction” should complete.
+          On phone, UPI may show QR or apps — for dashboard test, card is most reliable. Then refresh Razorpay → “Do a
+          test transaction”.
         </p>
       </div>
 

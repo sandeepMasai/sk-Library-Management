@@ -84,7 +84,16 @@ function parsePaymentFailed(payload: RazorpayFailedPayload): string {
   return formatRazorpayError(msg, e?.code);
 }
 
-/** Test/sandbox: show UPI first — avoids "international cards not supported" on default card form. */
+function isMobileViewport(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+/**
+ * Test/sandbox checkout layout.
+ * Desktop web: Razorpay shows UPI QR only (no VPA field for test@razorpay) — land on Cards.
+ * Mobile: card + UPI (intent/QR) both available.
+ */
 function buildCheckoutOptions(order: {
   keyId: string;
   amount: number;
@@ -107,23 +116,39 @@ function buildCheckoutOptions(order: {
     theme: { color: '#1E5C52' },
   };
 
-  if (razorpayKeyMode(order.keyId) === 'test') {
+  if (razorpayKeyMode(order.keyId) !== 'test') return base;
+
+  const mobile = isMobileViewport();
+
+  if (mobile) {
     base.config = {
       display: {
         blocks: {
+          card: {
+            name: 'Test card (recommended)',
+            instruments: [{ method: 'card' }],
+          },
           upi: {
-            name: 'Pay with UPI (recommended for test)',
+            name: 'UPI (QR / apps)',
             instruments: [{ method: 'upi' }],
           },
+        },
+        sequence: ['block.card', 'block.upi'],
+        preferences: { show_default_blocks: false },
+      },
+    };
+  } else {
+    // Desktop: UPI tab is QR-only — hide it so users use Razorpay test card for "Do a test transaction".
+    base.config = {
+      display: {
+        blocks: {
           card: {
-            name: 'Cards (Indian cards only)',
+            name: 'Pay with test card',
             instruments: [{ method: 'card' }],
           },
         },
-        sequence: ['block.upi', 'block.card'],
-        preferences: {
-          show_default_blocks: false,
-        },
+        sequence: ['block.card'],
+        preferences: { show_default_blocks: false },
       },
     };
   }
