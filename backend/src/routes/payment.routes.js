@@ -193,10 +193,12 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
 
       if (!verified && verifyMode === "razorpay_fetch") {
         // Fetch payment details from Razorpay and validate.
-        // Retry because UPI intent callbacks can race with capture updates.
+        // Retry because UPI / QR callbacks can race with capture (status may stay "created" briefly).
         const expectedAmount = Math.round(Number(plan.finalPrice) * 100);
+        const successStatuses = new Set(["captured", "authorized"]);
         let last = null;
-        for (let attempt = 1; attempt <= 5; attempt++) {
+        const maxAttempts = 10;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           // eslint-disable-next-line no-await-in-loop
           const p = await client.payments.fetch(paymentId);
           const rpOrderId = String(p?.order_id || "");
@@ -206,7 +208,7 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
 
           const ok =
             rpOrderId === orderId &&
-            rpStatus === "captured" &&
+            successStatuses.has(rpStatus) &&
             Number.isFinite(rpAmount) &&
             rpAmount === expectedAmount;
           if (ok) {
@@ -214,9 +216,9 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
             break;
           }
 
-          if (attempt < 5) {
+          if (attempt < maxAttempts) {
             // eslint-disable-next-line no-await-in-loop
-            await new Promise((r) => setTimeout(r, 1500));
+            await new Promise((r) => setTimeout(r, 2000));
           }
         }
 
@@ -231,7 +233,22 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
             rpAmount: last?.rpAmount,
             expectedAmount,
           });
-          return res.status(400).json({ message: "Payment verification failed", code: "VERIFY_FAILED" });
+          const pending = last?.rpStatus === "created" || last?.rpStatus === "pending";
+          if (pending) {
+            return res.status(409).json({
+              message:
+                "Payment is still processing (UPI/QR not confirmed yet). Wait 1–2 minutes, then click Pay now again — we will not charge twice for the same payment.",
+              code: "PAYMENT_PENDING",
+              paymentId,
+              orderId,
+              razorpayStatus: last?.rpStatus || "unknown",
+            });
+          }
+          return res.status(400).json({
+            message: "Payment verification failed",
+            code: "VERIFY_FAILED",
+            razorpayStatus: last?.rpStatus || null,
+          });
         }
       }
     } catch (e) {

@@ -97,7 +97,7 @@ RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
 RAZORPAY_KEY_SECRET=your_test_secret
 ```
 
-Redeploy **both** after changing keys. Test card: `4111 1111 1111 1111` · UPI: `success@razorpay`.
+Redeploy **both** after changing keys. Test card: `4111 1111 1111 1111` (CVV `123`, expiry `12/26`) · UPI: `test@razorpay`.
 
 Full steps: **[RAZORPAY_TEST.md](./RAZORPAY_TEST.md)**.
 

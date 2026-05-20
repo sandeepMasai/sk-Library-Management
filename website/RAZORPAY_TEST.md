@@ -53,32 +53,32 @@ Use **one** URL in the browser (recommended: `https://www.smartlibdesk.in` only)
 
 If you close the popup or see 401 in the console, Razorpay will not count the test.
 
-## 4) Razorpay test payment details
+## 4) Razorpay test payment details (from Dashboard)
 
-### UPI (recommended — avoids “International cards are not supported”)
+Use exactly what Razorpay shows under **“Do a test transaction”**. No real money is charged.
 
-Many Indian Razorpay test accounts **reject foreign / international test cards**. Use UPI instead:
-
-| Field | Value |
-|--------|--------|
-| UPI ID | `success@razorpay` |
-
-Or scan the **UPI QR** in the checkout and complete payment in your UPI app (test mode).
-
-(Use only in **Test mode**; this simulates success.)
-
-### Card (only if UPI is unavailable)
+### Test card
 
 | Field | Value |
 |--------|--------|
 | Card number | `4111 1111 1111 1111` |
-| Expiry | Any future date (e.g. `12/30`) |
-| CVV | Any 3 digits (e.g. `123`) |
+| CVV | `123` |
+| Expiry | `12/26` (or any future date) |
 | Name | Any name |
 
-If you see **“International cards are not supported”**, switch to **UPI** above — do not retry with the same card.
+If OTP is asked, use **`123456`** or the OTP shown in the Razorpay test UI.
 
-If OTP is asked in test mode, enter **`123456`** or the OTP shown in the Razorpay test UI.
+If you see **“International cards are not supported”**, use **Test UPI** below instead.
+
+### Test UPI
+
+| Field | Value |
+|--------|--------|
+| UPI ID | `test@razorpay` |
+
+Type this in the **UPI** tab — do **not** scan the QR with real PhonePe / GPay (that can show `unprocessed` and will not count).
+
+(`success@razorpay` also works on some accounts; prefer `test@razorpay` from the dashboard.)
 
 ## 5) Confirm in Razorpay Dashboard
 

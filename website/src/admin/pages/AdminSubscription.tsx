@@ -68,11 +68,20 @@ export function AdminSubscription() {
       <p className="mt-1 text-sm text-muted">Pay with Razorpay to activate your library plan.</p>
 
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <p className="font-semibold">Test mode payment tip</p>
-        <p className="mt-1 leading-relaxed">
-          International cards are not supported. Use <strong>UPI</strong> in the Razorpay window: enter{' '}
-          <code className="rounded bg-amber-100 px-1">success@razorpay</code> or scan the QR code. Do not use
-          foreign cards or <code className="rounded bg-amber-100 px-1">4111…</code> if you see a card error.
+        <p className="font-semibold">Razorpay test transaction (no real charge)</p>
+        <ul className="mt-2 list-inside list-disc space-y-1 leading-relaxed">
+          <li>
+            <strong>Card:</strong> <code className="rounded bg-amber-100 px-1">4111 1111 1111 1111</code> · CVV{' '}
+            <code className="rounded bg-amber-100 px-1">123</code> · Expiry{' '}
+            <code className="rounded bg-amber-100 px-1">12/26</code>
+          </li>
+          <li>
+            <strong>UPI:</strong> <code className="rounded bg-amber-100 px-1">test@razorpay</code> (UPI tab — do not
+            scan QR with a real UPI app)
+          </li>
+        </ul>
+        <p className="mt-2 text-xs text-amber-900/80">
+          After success, refresh Razorpay Dashboard → “Do a test transaction” should complete.
         </p>
       </div>
 

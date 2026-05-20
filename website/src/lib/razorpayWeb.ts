@@ -78,7 +78,7 @@ function parsePaymentFailed(payload: RazorpayFailedPayload): string {
   if (/international card/i.test(msg)) {
     return (
       'International cards are not supported on this Razorpay account. ' +
-      'In test mode, pay with UPI: open the UPI tab and use success@razorpay, or scan the QR with a test UPI app.'
+      'In test mode, pay with UPI: open the UPI tab and use test@razorpay (or card 4111 1111 1111 1111).'
     );
   }
   return formatRazorpayError(msg, e?.code);
@@ -214,7 +214,7 @@ export async function openRazorpayCheckout(
   });
 
   try {
-    await apiRaw('/api/payment/verify', {
+    const verifyBody = await apiRaw<{ ok?: boolean; code?: string; message?: string }>('/api/payment/verify', {
       method: 'POST',
       body: JSON.stringify({
         planId: order.planId,
@@ -223,9 +223,19 @@ export async function openRazorpayCheckout(
         signature: payment.razorpay_signature,
       }),
     });
+    if (verifyBody?.code === 'PAYMENT_PENDING') {
+      throw new Error(verifyBody.message || 'Payment is still processing');
+    }
     logDebug('verify success', { orderId: payment.razorpay_order_id });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Payment verification failed';
+    if (/PAYMENT_PENDING|still processing|unprocessed/i.test(msg)) {
+      throw new Error(
+        'Payment is still processing (Razorpay status: unprocessed/pending). ' +
+          'In test mode, do not scan the QR with a real UPI app — type test@razorpay in the UPI field instead. ' +
+          'If money was debited, wait 2 minutes and try Pay now again, or check Razorpay Dashboard → Transactions.'
+      );
+    }
     throw new Error(
       msg.includes('verification') || msg.includes('VERIFY')
         ? msg

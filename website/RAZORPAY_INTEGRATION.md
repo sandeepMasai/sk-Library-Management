@@ -54,7 +54,7 @@ Flow:
 2. `cd website && npm run dev`
 3. Library login → `/admin/subscription` → Pay now
 4. Card: `4111 1111 1111 1111` · CVV `123` · OTP `123456`
-5. UPI: `success@razorpay`
+5. UPI: `test@razorpay` (or card `4111 1111 1111 1111` · CVV `123` · Expiry `12/26`)
 
 ## Railway + Vercel
 
