@@ -55,7 +55,19 @@ If you close the popup or see 401 in the console, Razorpay will not count the te
 
 ## 4) Razorpay test payment details
 
-### Card (recommended)
+### UPI (recommended — avoids “International cards are not supported”)
+
+Many Indian Razorpay test accounts **reject foreign / international test cards**. Use UPI instead:
+
+| Field | Value |
+|--------|--------|
+| UPI ID | `success@razorpay` |
+
+Or scan the **UPI QR** in the checkout and complete payment in your UPI app (test mode).
+
+(Use only in **Test mode**; this simulates success.)
+
+### Card (only if UPI is unavailable)
 
 | Field | Value |
 |--------|--------|
@@ -64,15 +76,9 @@ If you close the popup or see 401 in the console, Razorpay will not count the te
 | CVV | Any 3 digits (e.g. `123`) |
 | Name | Any name |
 
+If you see **“International cards are not supported”**, switch to **UPI** above — do not retry with the same card.
+
 If OTP is asked in test mode, enter **`123456`** or the OTP shown in the Razorpay test UI.
-
-### UPI (test)
-
-| Field | Value |
-|--------|--------|
-| UPI ID | `success@razorpay` |
-
-(Use only in **Test mode**; this simulates success.)
 
 ## 5) Confirm in Razorpay Dashboard
 

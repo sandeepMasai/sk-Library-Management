@@ -67,6 +67,15 @@ export function AdminSubscription() {
       <h1 className="text-2xl font-bold text-slate-900">Subscription</h1>
       <p className="mt-1 text-sm text-muted">Pay with Razorpay to activate your library plan.</p>
 
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <p className="font-semibold">Test mode payment tip</p>
+        <p className="mt-1 leading-relaxed">
+          International cards are not supported. Use <strong>UPI</strong> in the Razorpay window: enter{' '}
+          <code className="rounded bg-amber-100 px-1">success@razorpay</code> or scan the QR code. Do not use
+          foreign cards or <code className="rounded bg-amber-100 px-1">4111…</code> if you see a card error.
+        </p>
+      </div>
+
       {sub ? (
         <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-6">
           <p className="text-sm text-muted">Current status</p>

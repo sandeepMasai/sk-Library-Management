@@ -1,5 +1,5 @@
 import { apiRaw } from './http';
-import { assertBackendKeyMatchesEnv, assertKeyModeAlignment } from './razorpayConfig';
+import { assertBackendKeyMatchesEnv, assertKeyModeAlignment, razorpayKeyMode } from './razorpayConfig';
 
 export type RazorpayPaymentResult = {
   razorpay_payment_id: string;
@@ -75,7 +75,60 @@ function parsePaymentFailed(payload: RazorpayFailedPayload): string {
   const e = payload?.error;
   const parts = [e?.description, e?.reason, e?.code].filter(Boolean);
   const msg = parts.join(' — ') || 'Payment failed';
+  if (/international card/i.test(msg)) {
+    return (
+      'International cards are not supported on this Razorpay account. ' +
+      'In test mode, pay with UPI: open the UPI tab and use success@razorpay, or scan the QR with a test UPI app.'
+    );
+  }
   return formatRazorpayError(msg, e?.code);
+}
+
+/** Test/sandbox: show UPI first — avoids "international cards not supported" on default card form. */
+function buildCheckoutOptions(order: {
+  keyId: string;
+  amount: number;
+  currency: string;
+  orderId: string;
+  prefill?: { name?: string; email?: string; contact?: string };
+}): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    key: order.keyId,
+    amount: order.amount,
+    currency: order.currency,
+    name: 'SmartLibDesk',
+    description: 'Library subscription',
+    order_id: order.orderId,
+    prefill: {
+      name: order.prefill?.name,
+      email: order.prefill?.email,
+      contact: order.prefill?.contact,
+    },
+    theme: { color: '#1E5C52' },
+  };
+
+  if (razorpayKeyMode(order.keyId) === 'test') {
+    base.config = {
+      display: {
+        blocks: {
+          upi: {
+            name: 'Pay with UPI (recommended for test)',
+            instruments: [{ method: 'upi' }],
+          },
+          card: {
+            name: 'Cards (Indian cards only)',
+            instruments: [{ method: 'card' }],
+          },
+        },
+        sequence: ['block.upi', 'block.card'],
+        preferences: {
+          show_default_blocks: false,
+        },
+      },
+    };
+  }
+
+  return base;
 }
 
 export async function openRazorpayCheckout(
@@ -127,19 +180,16 @@ export async function openRazorpayCheckout(
   });
 
   const payment = await new Promise<RazorpayPaymentResult>((resolve, reject) => {
-    const rzp = new window.Razorpay!({
-      key: order.keyId,
+    const checkoutOpts = buildCheckoutOptions({
+      keyId: order.keyId,
       amount: order.amount,
       currency: order.currency,
-      name: 'SmartLibDesk',
-      description: 'Library subscription',
-      order_id: order.orderId,
-      prefill: {
-        name: prefill?.name,
-        email: prefill?.email,
-        contact: prefill?.contact,
-      },
-      theme: { color: '#1E5C52' },
+      orderId: order.orderId,
+      prefill,
+    });
+
+    const rzp = new window.Razorpay!({
+      ...checkoutOpts,
       handler: (response: RazorpayPaymentResult) => {
         logDebug('payment success handler', {
           order_id: response.razorpay_order_id,
