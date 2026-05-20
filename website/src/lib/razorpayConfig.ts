@@ -5,6 +5,10 @@
 export const EXPECTED_RAZORPAY_KEY_ID =
   import.meta.env.VITE_RAZORPAY_KEY_ID?.trim().replace(/\/$/, '') || '';
 
+/** Website stays on Razorpay TEST/sandbox only (no live checkout). Set false to allow live. */
+export const RAZORPAY_TEST_ONLY =
+  String(import.meta.env.VITE_RAZORPAY_TEST_ONLY ?? 'true').trim().toLowerCase() !== 'false';
+
 export function razorpayKeyMode(keyId: string): 'test' | 'live' | 'unknown' {
   if (keyId.startsWith('rzp_test_')) return 'test';
   if (keyId.startsWith('rzp_live_')) return 'live';
@@ -30,8 +34,20 @@ export function assertBackendKeyMatchesEnv(backendKeyId: string): void {
   }
 }
 
+/** Website policy: sandbox only — block live keys from backend. */
+export function assertWebsiteTestModeOnly(backendKeyId: string): void {
+  if (!RAZORPAY_TEST_ONLY) return;
+  if (razorpayKeyMode(backendKeyId) === 'live') {
+    throw new Error(
+      'This website uses Razorpay TEST mode only. On Railway set RAZORPAY_KEY_ID=rzp_test_* (not rzp_live_*), then redeploy the backend.'
+    );
+  }
+}
+
 /** Ensure test/live mode is consistent between frontend env and backend order. */
 export function assertKeyModeAlignment(backendKeyId: string): void {
+  assertWebsiteTestModeOnly(backendKeyId);
+
   const backendMode = razorpayKeyMode(backendKeyId);
   const envMode = EXPECTED_RAZORPAY_KEY_ID ? razorpayKeyMode(EXPECTED_RAZORPAY_KEY_ID) : null;
 
@@ -43,11 +59,11 @@ export function assertKeyModeAlignment(backendKeyId: string): void {
   ) {
     throw new Error(
       `Razorpay mode mismatch: backend uses ${backendMode} (${backendKeyId}) but VITE_RAZORPAY_KEY_ID is ${envMode}. ` +
-        'Both must be rzp_live_* (production) or both rzp_test_* (sandbox).'
+        'Both must be rzp_test_* while the website is in test-only mode.'
     );
   }
 
-  if (backendMode === 'live' && import.meta.env.DEV) {
-    console.warn('[razorpay] LIVE key in dev — real money will be charged.');
+  if (RAZORPAY_TEST_ONLY && envMode && envMode !== 'test') {
+    throw new Error('VITE_RAZORPAY_KEY_ID must be rzp_test_* — this website is configured for test mode only.');
   }
 }

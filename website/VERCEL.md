@@ -78,21 +78,30 @@ Use your production domain in Razorpay dashboard and Super Admin global settings
 - `https://www.smartlibdesk.in`
 - `https://smartlibdesk.in`
 
-## Razorpay LIVE keys (production)
+## Razorpay — website stays on **TEST mode only**
 
-See **[RAZORPAY_LIVE.md](./RAZORPAY_LIVE.md)**.
+The website is configured for sandbox payments only (`VITE_RAZORPAY_TEST_ONLY=true`).
 
-| Where | Variable | Value |
-|-------|----------|--------|
-| Railway (backend) | `RAZORPAY_KEY_ID` | `rzp_live_…` |
-| Railway (backend) | `RAZORPAY_KEY_SECRET` | live secret (never in frontend) |
-| Vercel (website) | `VITE_RAZORPAY_KEY_ID` | same `rzp_live_…` as backend |
+**Vercel (website):**
 
-Redeploy **both** backend and website after changing keys.
+```env
+VITE_RAZORPAY_TEST_ONLY=true
+VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
+VITE_API_URL=https://sk-library-management-production.up.railway.app
+```
 
-## Razorpay test transaction (sandbox)
+**Railway (backend)** must use the **same** test pair:
 
-See **[RAZORPAY_TEST.md](./RAZORPAY_TEST.md)** — use **`rzp_test_*`** keys and test card `4111 1111 1111 1111`.
+```env
+RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
+RAZORPAY_KEY_SECRET=your_test_secret
+```
+
+Redeploy **both** after changing keys. Test card: `4111 1111 1111 1111` · UPI: `success@razorpay`.
+
+Full steps: **[RAZORPAY_TEST.md](./RAZORPAY_TEST.md)**.
+
+> Live keys (`rzp_live_*`) are documented in [RAZORPAY_LIVE.md](./RAZORPAY_LIVE.md) for later; the website blocks live checkout while test-only is enabled.
 
 ## Payment errors (401 / “Authentication failed”)
 

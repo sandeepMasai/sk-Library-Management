@@ -1,5 +1,7 @@
 # Razorpay test payment (website)
 
+**This website is TEST-only** (`VITE_RAZORPAY_TEST_ONLY=true`). Use `rzp_test_*` keys on Railway and Vercel — live keys are blocked at checkout.
+
 Use this to satisfy Razorpay’s **“Do a test transaction”** check for [smartlibdesk.in](https://www.smartlibdesk.in).
 
 ## 1) Keys must be **Test mode**
