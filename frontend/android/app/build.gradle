@@ -81,10 +81,22 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-def keystorePropertiesFile = rootProject.file("keystore.properties")
-def keystoreProperties = new Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+// Flutter-style key.properties, with fallback to keystore.properties (Expo/RN).
+def signingPropertiesFile = rootProject.file("key.properties")
+if (!signingPropertiesFile.exists()) {
+    signingPropertiesFile = rootProject.file("keystore.properties")
+}
+def signingProperties = new Properties()
+if (signingPropertiesFile.exists()) {
+    signingProperties.load(new FileInputStream(signingPropertiesFile))
+}
+
+def resolveKeystoreFile(String storeFileProp) {
+    def f = file(storeFileProp)
+    if (f.isAbsolute()) {
+        return f
+    }
+    return file("${projectDir}/${storeFileProp}")
 }
 
 android {
@@ -93,13 +105,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.sk245444.libdesk'
+    namespace 'com.smartlibdesk.app'
     defaultConfig {
-        applicationId 'com.sk245444.libdesk'
+        applicationId 'com.smartlibdesk.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 3
+        versionName "1.0.2"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -111,12 +123,16 @@ android {
             keyPassword 'android'
         }
         release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+            if (!signingPropertiesFile.exists()) {
+                throw new GradleException(
+                    "Release signing missing. Create android/key.properties (see key.properties.example)."
+                )
             }
+            def storeFileProp = signingProperties['storeFile'] ?: 'upload-keystore.jks'
+            storeFile resolveKeystoreFile(storeFileProp)
+            storePassword signingProperties['storePassword']
+            keyAlias signingProperties['keyAlias']
+            keyPassword signingProperties['keyPassword']
         }
     }
     buildTypes {
@@ -124,7 +140,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

@@ -1,6 +1,5 @@
 const express = require("express");
 const crypto = require("crypto");
-const Razorpay = require("razorpay");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const Payment = require("../models/Payment");
@@ -10,19 +9,15 @@ const Plan = require("../models/Plan");
 const { activatePaidSubscription } = require("../utils/subscription");
 const { invalidateLibrarySubscriptionCache } = require("../utils/subscriptionCache");
 const { paiseToRupees } = require("../utils/money");
+const logger = require("../utils/logger");
+const {
+  getRazorpayClient,
+  logRazorpayError,
+  maskKeyId,
+  parseRazorpayError,
+} = require("../utils/razorpayClient");
 
 const router = express.Router();
-
-function getRazorpay() {
-  const keyId = process.env.RAZORPAY_KEY_ID || "";
-  const keySecret = process.env.RAZORPAY_KEY_SECRET || "";
-  if (!keyId || !keySecret) {
-    const err = new Error("Razorpay keys are not configured");
-    err.statusCode = 500;
-    throw err;
-  }
-  return { keyId, keySecret, client: new Razorpay({ key_id: keyId, key_secret: keySecret }) };
-}
 
 /**
  * POST /api/payment/create-order
@@ -61,8 +56,20 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
       return res.status(400).json({ message: "Trial can be used only once", code: "TRIAL_USED" });
     }
 
-    const { keyId, client } = getRazorpay();
+    const { keyId, mode, client } = getRazorpayClient();
     const amountPaise = Math.round(Number(plan.finalPrice) * 100);
+    if (!Number.isFinite(amountPaise) || amountPaise < 100) {
+      return res.status(400).json({ message: "Invalid plan amount", code: "INVALID_AMOUNT" });
+    }
+
+    logger.info("Razorpay create-order start", {
+      libraryId: String(libraryId),
+      planId,
+      planKey: plan.key,
+      amountPaise,
+      keyId: maskKeyId(keyId),
+      mode,
+    });
 
     // Razorpay receipt max length is 40 chars.
     // Keep it deterministic + short: lib_<last8OfLibraryId>_<base36Ts>
@@ -77,6 +84,14 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
       notes: { libraryId: String(libraryId), planId: String(planId), planKey: String(plan.key) },
     });
 
+    logger.info("Razorpay create-order success", {
+      libraryId: String(libraryId),
+      orderId: order.id,
+      amountPaise,
+      keyId: maskKeyId(keyId),
+      mode,
+    });
+
     return res.json({
       ok: true,
       orderId: order.id,
@@ -85,15 +100,27 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
       currency: "INR",
       planId,
       planKey: plan.key,
+      mode,
     });
   } catch (error) {
+    logRazorpayError(error, {
+      action: "create-order",
+      libraryId: String(req.user?.libraryId || ""),
+      planId: String(req.body?.planId || ""),
+    });
+    const { rpCode, message, authFailed } = parseRazorpayError(error);
+    if (authFailed || error?.code === "RAZORPAY_NOT_CONFIGURED") {
+      return res.status(503).json({
+        message:
+          "Razorpay authentication failed. Ensure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are a matching pair (both rzp_live_* or both rzp_test_*), then redeploy the backend.",
+        code: "RAZORPAY_AUTH_FAILED",
+        keyId: maskKeyId(process.env.RAZORPAY_KEY_ID),
+      });
+    }
     const status = error.statusCode || 500;
-    const rpDesc = error?.error?.description || error?.description || null;
-    const rpCode = error?.error?.code || error?.code || null;
-    const message = rpDesc || error.message || "Failed to create order";
     return res.status(status).json({
       message,
-      code: rpCode,
+      code: rpCode || error.code,
     });
   }
 });
@@ -143,7 +170,7 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     let verified = false;
     let verifyMode = "signature";
     try {
-      const { keySecret, client } = getRazorpay();
+      const { keySecret, client } = getRazorpayClient();
       if (signature) {
         const expected = crypto.createHmac("sha256", keySecret).update(`${orderId}|${paymentId}`).digest("hex");
         if (expected === signature) {

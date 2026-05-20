@@ -73,4 +73,33 @@ npx vercel env add VITE_API_URL production
 
 ## Razorpay merchant URLs
 
-Use your Vercel domain in Razorpay dashboard and Super Admin global settings.
+Use your production domain in Razorpay dashboard and Super Admin global settings:
+
+- `https://www.smartlibdesk.in`
+- `https://smartlibdesk.in`
+
+## Razorpay LIVE keys (production)
+
+See **[RAZORPAY_LIVE.md](./RAZORPAY_LIVE.md)**.
+
+| Where | Variable | Value |
+|-------|----------|--------|
+| Railway (backend) | `RAZORPAY_KEY_ID` | `rzp_live_…` |
+| Railway (backend) | `RAZORPAY_KEY_SECRET` | live secret (never in frontend) |
+| Vercel (website) | `VITE_RAZORPAY_KEY_ID` | same `rzp_live_…` as backend |
+
+Redeploy **both** backend and website after changing keys.
+
+## Razorpay test transaction (sandbox)
+
+See **[RAZORPAY_TEST.md](./RAZORPAY_TEST.md)** — use **`rzp_test_*`** keys and test card `4111 1111 1111 1111`.
+
+## Payment errors (401 / “Authentication failed”)
+
+| Error | Cause | Fix |
+|-------|--------|-----|
+| **401** on `/api/payment/create-order` | Login token missing or expired | Sign out, sign in again at `/login`. Use one canonical URL (`www` **or** apex — not both). |
+| **402** on dashboard / students | Subscription expired | Normal — pay on **Admin → Subscription** |
+| **`BAD_REQUEST_ERROR` Authentication failed** | Wrong/missing Razorpay keys on **Railway backend** | Railway → Variables: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (live keys for production) → **Redeploy** |
+
+Use **www only** (or apex only) in Vercel so login token stays in one `localStorage` bucket.

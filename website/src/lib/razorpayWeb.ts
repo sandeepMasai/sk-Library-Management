@@ -1,4 +1,5 @@
 import { apiRaw } from './http';
+import { assertBackendKeyMatchesEnv, assertKeyModeAlignment } from './razorpayConfig';
 
 export type RazorpayPaymentResult = {
   razorpay_payment_id: string;
@@ -6,10 +7,22 @@ export type RazorpayPaymentResult = {
   razorpay_signature: string;
 };
 
-type RazorpayConstructor = new (options: Record<string, unknown>) => {
-  open: () => void;
-  on: (event: string, cb: (r: RazorpayPaymentResult) => void) => void;
+type RazorpayFailedPayload = {
+  error?: {
+    code?: string;
+    description?: string;
+    reason?: string;
+    source?: string;
+    step?: string;
+  };
 };
+
+type RazorpayInstance = {
+  open: () => void;
+  on: (event: string, cb: (payload: RazorpayFailedPayload) => void) => void;
+};
+
+type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
 
 declare global {
   interface Window {
@@ -17,64 +30,140 @@ declare global {
   }
 }
 
+type CreateOrderResponse = {
+  ok?: boolean;
+  orderId?: string;
+  keyId?: string;
+  amount?: number;
+  currency?: string;
+  planId?: string;
+  planKey?: string;
+  mode?: string;
+  message?: string;
+  code?: string;
+};
+
+function logDebug(label: string, data: Record<string, unknown>) {
+  if (import.meta.env.DEV) {
+    console.debug(`[razorpay] ${label}`, data);
+  }
+}
+
+function formatRazorpayError(msg: string, code?: string): string {
+  if (code === 'RAZORPAY_AUTH_FAILED' || code === 'BAD_REQUEST_ERROR' || /authentication failed/i.test(msg)) {
+    return (
+      'Razorpay authentication failed — backend key/secret pair is wrong or test/live mode is mixed. ' +
+      'Set matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET (same mode: rzp_live_* or rzp_test_*) on the server, redeploy, and restart.'
+    );
+  }
+  return msg;
+}
+
 function loadScript(): Promise<void> {
   if (window.Razorpay) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.async = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Razorpay checkout'));
+    s.onerror = () => reject(new Error('Failed to load Razorpay checkout.js'));
     document.body.appendChild(s);
   });
 }
 
-export async function openRazorpayCheckout(planId: string, prefill?: { name?: string; email?: string }) {
-  const raw = await apiRaw<{
-    ok?: boolean;
-    orderId?: string;
-    keyId?: string;
-    amount?: number;
-    currency?: string;
-    planId?: string;
-    message?: string;
-  }>('/api/payment/create-order', {
+function parsePaymentFailed(payload: RazorpayFailedPayload): string {
+  const e = payload?.error;
+  const parts = [e?.description, e?.reason, e?.code].filter(Boolean);
+  const msg = parts.join(' — ') || 'Payment failed';
+  return formatRazorpayError(msg, e?.code);
+}
+
+export async function openRazorpayCheckout(
+  planId: string,
+  prefill?: { name?: string; email?: string; contact?: string }
+): Promise<RazorpayPaymentResult> {
+  const raw = await apiRaw<CreateOrderResponse>('/api/payment/create-order', {
     method: 'POST',
     body: JSON.stringify({ planId }),
   });
 
+  logDebug('create-order response', {
+    orderId: raw.orderId,
+    keyId: raw.keyId,
+    amount: raw.amount,
+    currency: raw.currency,
+    mode: raw.mode,
+    code: raw.code,
+  });
+
   if (!raw.orderId || !raw.keyId || raw.amount == null) {
-    throw new Error(raw.message || 'Could not create Razorpay order');
+    const msg = raw.message || 'Could not create Razorpay order';
+    throw new Error(formatRazorpayError(msg, raw.code));
   }
+
+  assertBackendKeyMatchesEnv(raw.keyId);
+  assertKeyModeAlignment(raw.keyId);
 
   const order = {
     orderId: raw.orderId,
     keyId: raw.keyId,
-    amount: raw.amount,
+    amount: Number(raw.amount),
     currency: raw.currency || 'INR',
     planId: raw.planId || planId,
   };
 
-  await loadScript();
-  if (!window.Razorpay) throw new Error('Razorpay not available');
+  if (!Number.isFinite(order.amount) || order.amount < 100) {
+    throw new Error('Invalid order amount from server (must be at least 100 paise).');
+  }
 
-  return new Promise<RazorpayPaymentResult>((resolve, reject) => {
+  await loadScript();
+  if (!window.Razorpay) throw new Error('Razorpay checkout script did not load');
+
+  logDebug('opening checkout', {
+    key: order.keyId,
+    order_id: order.orderId,
+    amount: order.amount,
+    currency: order.currency,
+  });
+
+  const payment = await new Promise<RazorpayPaymentResult>((resolve, reject) => {
     const rzp = new window.Razorpay!({
       key: order.keyId,
       amount: order.amount,
-      currency: order.currency || 'INR',
+      currency: order.currency,
       name: 'SmartLibDesk',
       description: 'Library subscription',
       order_id: order.orderId,
-      prefill: { name: prefill?.name, email: prefill?.email },
+      prefill: {
+        name: prefill?.name,
+        email: prefill?.email,
+        contact: prefill?.contact,
+      },
       theme: { color: '#1E5C52' },
-      handler: (response: RazorpayPaymentResult) => resolve(response),
+      handler: (response: RazorpayPaymentResult) => {
+        logDebug('payment success handler', {
+          order_id: response.razorpay_order_id,
+          payment_id: response.razorpay_payment_id,
+        });
+        resolve(response);
+      },
       modal: {
-        ondismiss: () => reject(new Error('Payment cancelled')),
+        ondismiss: () => {
+          logDebug('checkout dismissed', {});
+          reject(new Error('Payment cancelled'));
+        },
       },
     });
-    rzp.on('payment.failed', () => reject(new Error('Payment failed')));
+
+    rzp.on('payment.failed', (payload: RazorpayFailedPayload) => {
+      logDebug('payment.failed', payload as Record<string, unknown>);
+      reject(new Error(parsePaymentFailed(payload)));
+    });
+
     rzp.open();
-  }).then(async (payment) => {
+  });
+
+  try {
     await apiRaw('/api/payment/verify', {
       method: 'POST',
       body: JSON.stringify({
@@ -84,6 +173,15 @@ export async function openRazorpayCheckout(planId: string, prefill?: { name?: st
         signature: payment.razorpay_signature,
       }),
     });
-    return payment;
-  });
+    logDebug('verify success', { orderId: payment.razorpay_order_id });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Payment verification failed';
+    throw new Error(
+      msg.includes('verification') || msg.includes('VERIFY')
+        ? msg
+        : `Payment received but verification failed: ${msg}. Contact support with payment id ${payment.razorpay_payment_id}.`
+    );
+  }
+
+  return payment;
 }

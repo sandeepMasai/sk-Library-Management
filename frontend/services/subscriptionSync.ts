@@ -36,6 +36,21 @@ export async function syncSubscriptionMe(options?: {
 
   inflight = (async () => {
     try {
+      const { getAccessToken } = await import('./authTokenHolder');
+      let token = getAccessToken();
+      if (!token) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { useAppStore } = require('../store');
+          token = useAppStore.getState().token || useAppStore.getState().authToken;
+        } catch {
+          /* ignore */
+        }
+      }
+      if (!token) {
+        return { ok: false, user: lastUser ?? undefined };
+      }
+
       const me = await apiGet<SubscriptionMeResponse>('/api/subscription/me');
       if (me?.user) {
         lastUser = me.user;

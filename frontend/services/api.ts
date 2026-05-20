@@ -1,7 +1,24 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { resolveApiBaseUrl } from '../constants/apiUrl';
+import { getAccessToken } from './authTokenHolder';
 import { logoutAndClearAuth, refreshAccessToken } from './authSession';
 import { formatReachabilityError, isNetworkFailure } from './networkError';
+
+function setBearerHeader(config: InternalAxiosRequestConfig, token: string) {
+  const value = `Bearer ${token}`;
+  if (!config.headers) {
+    config.headers = {} as InternalAxiosRequestConfig['headers'];
+  }
+  const headers = config.headers as Record<string, unknown> & {
+    set?: (key: string, value: string) => void;
+  };
+  if (typeof headers.set === 'function') {
+    headers.set('Authorization', value);
+  } else {
+    headers.Authorization = value;
+    headers.authorization = value;
+  }
+}
 
 /**
  * Central API client (Axios)
@@ -71,12 +88,18 @@ async function enqueueRefresh(): Promise<string> {
 
 api.interceptors.request.use((config) => {
   config.baseURL = resolveApiBaseUrl();
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useAppStore } = require('../store');
-  const token = useAppStore.getState().token || useAppStore.getState().authToken;
+  let token = getAccessToken();
+  if (!token) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useAppStore } = require('../store');
+      token = useAppStore.getState().token || useAppStore.getState().authToken;
+    } catch {
+      /* store not ready */
+    }
+  }
   if (token) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
+    setBearerHeader(config, token);
   }
   return config;
 });
@@ -118,8 +141,7 @@ api.interceptors.response.use(
         originalRequest._retry = true;
         try {
           const nextToken = await enqueueRefresh();
-          originalRequest.headers = originalRequest.headers ?? {};
-          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+          setBearerHeader(originalRequest, nextToken);
           return api(originalRequest);
         } catch (refreshErr) {
           return Promise.reject(refreshErr);

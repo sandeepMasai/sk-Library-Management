@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getAuthToken } from '../lib/http';
+import { getAuthToken, getRefreshToken } from '../lib/http';
 import {
   loadStoredUser,
   logout as clearAuth,
@@ -32,9 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = getAuthToken();
+    const refresh = getRefreshToken();
     const stored = loadStoredUser();
-    if (token && stored) setUser(stored);
+    if (stored && (token || refresh)) setUser(stored);
     setIsLoading(false);
+
+    const onExpired = () => {
+      clearAuth();
+      setUser(null);
+    };
+    window.addEventListener('sld:auth-expired', onExpired);
+    return () => window.removeEventListener('sld:auth-expired', onExpired);
   }, []);
 
   const setSession = useCallback((session: AuthSession) => {
@@ -50,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       user,
-      isAuthenticated: Boolean(user && getAuthToken()),
+      isAuthenticated: Boolean(user && (getAuthToken() || getRefreshToken())),
       isLoading,
       setSession,
       logout,

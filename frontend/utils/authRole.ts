@@ -36,12 +36,28 @@ export function unwrapAuthLoginPayload(raw: unknown): AuthLoginPayload | null {
   if (body.success === true && body.data && typeof body.data === 'object') {
     const data = body.data as Record<string, unknown>;
     if (data.user && typeof data.user === 'object') {
-      return data as AuthLoginPayload;
+      const authToken =
+        (typeof data.authToken === 'string' && data.authToken) ||
+        (typeof data.accessToken === 'string' && data.accessToken) ||
+        (typeof data.token === 'string' && data.token) ||
+        null;
+      return {
+        ...(data as AuthLoginPayload),
+        authToken,
+      };
     }
   }
 
   if (body.user && typeof body.user === 'object') {
-    return body as AuthLoginPayload;
+    const authToken =
+      (typeof body.authToken === 'string' && body.authToken) ||
+      (typeof body.accessToken === 'string' && body.accessToken) ||
+      (typeof body.token === 'string' && body.token) ||
+      null;
+    return {
+      ...(body as AuthLoginPayload),
+      authToken,
+    };
   }
 
   return null;

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { getAuthToken } from '../../lib/http';
 import { openRazorpayCheckout } from '../../lib/razorpayWeb';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow } from '../api/libraryApi';
 
@@ -23,6 +25,10 @@ export function AdminSubscription() {
   async function pay(plan: PlanRow) {
     const planId = plan._id || plan.id;
     if (!planId) return;
+    if (!getAuthToken()) {
+      setError('Your session expired. Please sign in again before paying.');
+      return;
+    }
     setPaying(planId);
     setError('');
     try {
@@ -56,7 +62,16 @@ export function AdminSubscription() {
         </div>
       ) : null}
 
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p>{error}</p>
+          {/sign in|session expired/i.test(error) ? (
+            <Link to="/login" className="mt-2 inline-block font-semibold text-primary underline">
+              Go to login
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {plans.map((plan) => (

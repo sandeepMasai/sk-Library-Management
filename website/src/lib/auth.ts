@@ -1,4 +1,4 @@
-import { apiFetch, setAuthToken } from './http';
+import { apiFetch, setAuthToken, setRefreshToken } from './http';
 
 export type AuthRole = 'admin' | 'library' | 'student';
 
@@ -22,6 +22,7 @@ export type AuthUser = {
 export type AuthSession = {
   user: AuthUser;
   authToken: string;
+  refreshToken?: string;
   libraryCode?: string;
 };
 
@@ -31,10 +32,12 @@ function unwrapSession(raw: unknown): AuthSession | null {
   const data = o.data && typeof o.data === 'object' ? (o.data as Record<string, unknown>) : o;
   const user = data.user;
   const authToken = (data.authToken ?? data.accessToken) as string | undefined;
+  const refreshToken = data.refreshToken as string | undefined;
   if (!user || typeof user !== 'object' || !authToken) return null;
   return {
     user: user as AuthUser,
     authToken,
+    refreshToken,
     libraryCode: (data.libraryCode as string) ?? (user as AuthUser).libraryCode,
   };
 }
@@ -46,7 +49,7 @@ export async function loginLibrary(email: string, password: string): Promise<Aut
   });
   const session = unwrapSession(raw);
   if (!session) throw new Error('Invalid login response');
-  setAuthToken(session.authToken);
+  applySessionTokens(session);
   return session;
 }
 
@@ -58,7 +61,7 @@ export async function loginAdmin(username: string, pin: string): Promise<AuthSes
   const session = unwrapSession(raw);
   if (!session) throw new Error('Invalid login response');
   session.user.role = 'admin';
-  setAuthToken(session.authToken);
+  applySessionTokens(session);
   return session;
 }
 
@@ -75,8 +78,13 @@ export async function loginStudent(mobile: string, pin: string, libraryCode?: st
   });
   const session = unwrapSession(raw);
   if (!session) throw new Error('Invalid login response');
-  setAuthToken(session.authToken);
+  applySessionTokens(session);
   return session;
+}
+
+function applySessionTokens(session: AuthSession) {
+  setAuthToken(session.authToken);
+  if (session.refreshToken) setRefreshToken(session.refreshToken);
 }
 
 export async function sendRegisterOtp(email: string): Promise<{ resendAfterSeconds?: number }> {
@@ -122,7 +130,7 @@ export async function registerLibrary(payload: RegisterLibraryPayload): Promise<
   });
   const session = unwrapSession(raw);
   if (!session) throw new Error('Invalid registration response');
-  setAuthToken(session.authToken);
+  applySessionTokens(session);
   return session;
 }
 
@@ -135,6 +143,7 @@ export async function bulkCreateSeats(totalSeats: number): Promise<void> {
 
 export function logout() {
   setAuthToken(null);
+  setRefreshToken(null);
   try {
     localStorage.removeItem('sld_user');
     localStorage.removeItem('sld_library_code');
@@ -144,7 +153,7 @@ export function logout() {
 }
 
 export function persistSession(session: AuthSession) {
-  setAuthToken(session.authToken);
+  applySessionTokens(session);
   localStorage.setItem('sld_user', JSON.stringify(session.user));
   if (session.libraryCode) localStorage.setItem('sld_library_code', session.libraryCode);
 }

@@ -455,8 +455,15 @@ async function hydrateSessionAfterAuth(
   libraryCodeFromForm?: string | null
 ): Promise<{ ok: boolean; message?: string }> {
   const authenticatedUser = data.user;
-  const token = data.authToken || null;
+  const token =
+    data.authToken ||
+    (typeof (data as { accessToken?: string }).accessToken === 'string'
+      ? (data as { accessToken: string }).accessToken
+      : null);
   const refreshToken = data.refreshToken || null;
+
+  const { setAuthTokens } = await import('./services/authTokenHolder');
+  setAuthTokens({ accessToken: token, refreshToken });
   const sessionRole = normalizeAuthRole(authenticatedUser?.role);
 
   if (!sessionRole) {
@@ -964,8 +971,11 @@ export const useAppStore = create<AppState>()(
         return { ok: false, message: 'Invalid login response from server' };
       }
       const authenticatedUser = { ...data.user, role: 'admin' as const };
-      const token = data.authToken || null;
+      const token = data.authToken || (data as { accessToken?: string }).accessToken || null;
       const refreshToken = data.refreshToken || null;
+      void import('./services/authTokenHolder').then(({ setAuthTokens }) => {
+        setAuthTokens({ accessToken: token, refreshToken });
+      });
       set((state) => ({
         currentUser: authenticatedUser,
         authToken: token,
@@ -984,6 +994,7 @@ export const useAppStore = create<AppState>()(
   },
 
   logout: () => {
+    void import('./services/authTokenHolder').then(({ clearAuthTokens }) => clearAuthTokens());
     set({
       currentUser: null,
       authToken: null,
@@ -1831,6 +1842,15 @@ export const useAppStore = create<AppState>()(
         libraryId: state.libraryId,
         libraryCode: state.libraryCode,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        void import('./services/authTokenHolder').then(({ setAuthTokens }) => {
+          setAuthTokens({
+            accessToken: state.token || state.authToken || null,
+            refreshToken: state.refreshToken || null,
+          });
+        });
+      },
     }
   )
 );

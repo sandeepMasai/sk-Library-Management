@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { resolveApiBaseUrl } from '../constants/apiUrl';
+import { clearAuthTokens, setAuthTokens } from './authTokenHolder';
 
 const AUTH_LOG = __DEV__;
 
@@ -39,6 +40,8 @@ export function applyAuthTokensToStore(accessToken: string, refreshToken?: strin
   const { useAppStore } = require('../store');
   const prev = useAppStore.getState();
   const nextRefresh = refreshToken ?? prev.refreshToken ?? null;
+
+  setAuthTokens({ accessToken, refreshToken: nextRefresh });
 
   useAppStore.setState({
     authToken: accessToken,
@@ -81,6 +84,7 @@ export async function refreshAccessToken(): Promise<string> {
 
 export function logoutAndClearAuth(reason: string) {
   logAuth('logout', { reason });
+  clearAuthTokens();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { useAppStore } = require('../store');
   useAppStore.getState().logout();

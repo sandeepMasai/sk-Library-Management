@@ -15,6 +15,7 @@ local.properties
 !app/debug.keystore
 *.jks
 keystore.properties
+key.properties
 PLAY_UPLOAD_KEY_BACKUP.txt
 
 # Bundle artifacts

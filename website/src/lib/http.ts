@@ -25,19 +25,125 @@ export function setAuthToken(token: string | null) {
   else localStorage.removeItem('sld_auth_token');
 }
 
-export async function apiRaw<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+const REFRESH_KEY = 'sld_refresh_token';
+
+export function getRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRefreshToken(token: string | null) {
+  if (token) localStorage.setItem(REFRESH_KEY, token);
+  else localStorage.removeItem(REFRESH_KEY);
+}
+
+type RequestInitWithRetry = RequestInit & { _authRetry?: boolean };
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const existing = getRefreshToken();
+  if (!existing) return null;
+
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ refreshToken: existing }),
+        });
+        const body = (await res.json().catch(() => ({}))) as ApiEnvelope<{
+          authToken?: string;
+          accessToken?: string;
+          refreshToken?: string;
+        }> & { authToken?: string; accessToken?: string; refreshToken?: string };
+
+        if (!res.ok) return null;
+
+        const data =
+          body && typeof body === 'object' && 'success' in body && body.success === true && body.data
+            ? body.data
+            : body;
+
+        const nextAccess = data.authToken ?? data.accessToken;
+        if (!nextAccess) return null;
+
+        setAuthToken(nextAccess);
+        if (data.refreshToken) setRefreshToken(data.refreshToken);
+        return nextAccess;
+      } catch {
+        return null;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+
+  return refreshInFlight;
+}
+
+function parseApiErrorMessage(
+  body: ApiEnvelope<unknown> & { message?: string; code?: string },
+  status: number
+): string {
+  const data = body?.data;
+  const dataMsg =
+    data && typeof data === 'object' && !Array.isArray(data) && 'message' in data
+      ? String((data as { message?: string }).message || '')
+      : '';
+  const msg = String(body?.message || dataMsg || '').trim();
+
+  if (status === 401) return msg || 'Session expired. Please sign in again.';
+  if (status === 402) return msg || 'Subscription expired. Choose a plan to continue.';
+  if (body?.code === 'BAD_REQUEST_ERROR' || body?.code === 'RAZORPAY_AUTH_FAILED') {
+    return 'Razorpay is not configured on the server. Add live API keys on Railway and redeploy the backend.';
+  }
+  return msg || `Request failed (${status})`;
+}
+
+export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRetry = {}): Promise<T> {
+  const { _authRetry, ...fetchInit } = init;
   const token = getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(init.headers as Record<string, string>),
+    ...(fetchInit.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
-  const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T> & T & { message?: string };
+  const res = await fetch(`${API_URL}${path}`, {
+    ...fetchInit,
+    headers,
+    credentials: 'include',
+  });
+  const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T> &
+    T & { message?: string; code?: string };
 
   if (!res.ok) {
-    throw new Error(body.message || `Request failed (${res.status})`);
+    if (res.status === 401 && !_authRetry) {
+      const nextToken = await refreshAccessToken();
+      if (nextToken) {
+        return apiRaw<T>(path, { ...init, _authRetry: true });
+      }
+      setAuthToken(null);
+      setRefreshToken(null);
+      window.dispatchEvent(new CustomEvent('sld:auth-expired'));
+      throw new Error(
+        token
+          ? 'Session expired. Please sign in again at /login (use the same URL: www or non-www).'
+          : 'Not signed in. Please log in at /login before continuing.'
+      );
+    }
+    if (res.status === 401) {
+      setAuthToken(null);
+      setRefreshToken(null);
+      window.dispatchEvent(new CustomEvent('sld:auth-expired'));
+    }
+    throw new Error(parseApiErrorMessage(body, res.status));
   }
 
   return body as T;

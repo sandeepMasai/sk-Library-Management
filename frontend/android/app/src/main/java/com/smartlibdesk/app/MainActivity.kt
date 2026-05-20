@@ -1,4 +1,4 @@
-package com.sk245444.libdesk
+package com.smartlibdesk.app
 
 import android.os.Build
 import android.os.Bundle
