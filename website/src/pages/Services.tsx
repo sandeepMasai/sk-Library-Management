@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { LibraryWorkflow } from '../components/LibraryWorkflow';
 import { PageHero } from '../components/PageHero';
 import { Button } from '../components/ui/Button';
 import { SERVICES } from '../content/site';
@@ -10,6 +11,9 @@ export function Services() {
         title="Services"
         subtitle="Everything a modern study library needs — from first student to monthly billing."
       />
+      <section className="border-b border-slate-200 bg-slate-50 py-16">
+        <LibraryWorkflow className="py-0" />
+      </section>
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <div className="grid gap-8 md:grid-cols-2">
           {SERVICES.map((s) => (

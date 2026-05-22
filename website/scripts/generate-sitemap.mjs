@@ -9,6 +9,7 @@ const PATHS = [
   '/',
   '/about',
   '/contact',
+  '/download',
   '/courses',
   '/privacy-policy',
   '/refund-policy',

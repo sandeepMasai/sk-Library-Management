@@ -29,6 +29,12 @@ export function Dashboard() {
           <p className="text-sm text-muted">
             Use the {SITE.name} mobile app for attendance QR scan, notifications, and your membership details.
           </p>
+          <Link to="/download" className="mt-4 block">
+            <Button fullWidth>Download app</Button>
+          </Link>
+          <p className="mt-3 text-xs text-muted">
+            Open the app → <strong>Scan</strong> tab → scan your library&apos;s attendance QR at check-in time.
+          </p>
           {user.library?.libraryName ? (
             <p className="mt-4 text-sm">
               <span className="text-muted">Library: </span>

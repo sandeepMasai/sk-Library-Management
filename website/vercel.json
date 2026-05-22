@@ -8,6 +8,11 @@
       "has": [{ "type": "host", "value": "smartlibdesk.in" }],
       "destination": "https://www.smartlibdesk.in/:path*",
       "permanent": true
+    },
+    {
+      "source": "/apk",
+      "destination": "/downloads/SmartLibDesk-v1.0.2.apk",
+      "permanent": false
     }
   ],
   "headers": [
@@ -24,6 +29,13 @@
       "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/downloads/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600" },
+        { "key": "Content-Type", "value": "application/vnd.android.package-archive" }
       ]
     },
     {

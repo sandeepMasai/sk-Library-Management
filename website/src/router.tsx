@@ -13,6 +13,7 @@ import { About } from './pages/About';
 import { Services } from './pages/Services';
 import { Pricing } from './pages/Pricing';
 import { Contact } from './pages/Contact';
+import { DownloadApp } from './pages/DownloadApp';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { Terms } from './pages/Terms';
 import { RefundPolicy } from './pages/RefundPolicy';
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'courses', element: <Services /> },
       { path: 'pricing', element: <Pricing /> },
       { path: 'contact', element: <Contact /> },
+      { path: 'download', element: <DownloadApp /> },
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
       {

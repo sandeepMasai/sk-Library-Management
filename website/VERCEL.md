@@ -64,9 +64,32 @@ npx vercel env add VITE_API_URL production
 # paste: https://sk-library-management-production.up.railway.app
 ```
 
+## APK download (`/download`)
+
+The QR opens **`/download`**; users tap **Download APK**. The file must exist at `/downloads/SmartLibDesk-v1.0.2.apk` after deploy.
+
+**One-time (include APK in deploy):**
+
+```bash
+cd frontend && npm run build:apk   # or copy your release APK to frontend/dist/
+cd ../website && npm run copy-apk
+git add public/downloads/SmartLibDesk-v1.0.2.apk
+git commit -m "Add APK for website download"
+git push
+```
+
+Redeploy Vercel. Check: `curl -I https://www.smartlibdesk.in/downloads/SmartLibDesk-v1.0.2.apk` → **200**.
+
+**Or** host APK elsewhere and set on Vercel:
+
+```env
+VITE_APK_DOWNLOAD_URL=https://your-cdn.example.com/SmartLibDesk-v1.0.2.apk
+```
+
 ## Verify
 
 - Home page loads
+- `/download` → Download APK works (not 404)
 - `/contact` form works (backend must have contact route + `CONTACT_TO_EMAIL`)
 - `/login` → library login → `/admin`
 - Legal pages: `/privacy-policy`, `/terms`, `/refund-policy`

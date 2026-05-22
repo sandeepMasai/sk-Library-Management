@@ -82,10 +82,13 @@ export function AdminDashboard() {
           <h2 className="font-semibold text-slate-900">Quick actions</h2>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/admin/students" className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-              Manage students
+              + Add student
             </Link>
             <Link to="/admin/attendance" className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-              Attendance QR
+              Scan QR (display)
+            </Link>
+            <Link to="/download" className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
+              Download app
             </Link>
             <Link to="/admin/seats" className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
               Seats

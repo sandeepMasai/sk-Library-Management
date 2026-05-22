@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { LibraryWorkflow } from '../components/LibraryWorkflow';
 import { Logo } from '../components/Logo';
 import { Button } from '../components/ui/Button';
 import { FAQ, HOW_IT_WORKS, SERVICES, SITE, STATS, TESTIMONIALS } from '../content/site';
@@ -28,8 +29,13 @@ export function Home() {
                 <Link to="/register" className="w-full sm:w-auto">
                   <Button fullWidth className="sm:!w-auto">Start free registration</Button>
                 </Link>
-                <Link to="/login" className="w-full sm:w-auto">
+                <Link to="/download" className="w-full sm:w-auto">
                   <Button variant="outline" fullWidth className="sm:!w-auto">
+                    Download app
+                  </Button>
+                </Link>
+                <Link to="/login" className="w-full sm:w-auto">
+                  <Button variant="ghost" fullWidth className="sm:!w-auto">
                     Sign in
                   </Button>
                 </Link>
@@ -62,6 +68,10 @@ export function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="border-b border-slate-200 bg-slate-50 py-14 sm:py-20">
+        <LibraryWorkflow />
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">

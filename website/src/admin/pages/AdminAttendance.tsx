@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { QrImage } from '../../components/QrImage';
 import { Button } from '../../components/ui/Button';
 import { fetchAttendanceByDate, generateQrToken } from '../api/libraryApi';
-
-const qrUrl = (token: string) =>
-  `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(token)}`;
 
 export function AdminAttendance() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -45,12 +44,21 @@ export function AdminAttendance() {
   return (
     <div className="page-pad">
       <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-      <p className="mt-1 text-sm text-muted">Display QR for students to scan in the mobile app.</p>
+      <p className="mt-1 text-sm text-muted">
+        Display this QR for students to scan in the mobile app (<strong>Scan</strong> tab).{' '}
+        <Link to="/download" className="font-medium text-primary underline">
+          Download app
+        </Link>
+        {' · '}
+        <Link to="/admin/students" className="font-medium text-primary underline">
+          Add students
+        </Link>
+      </p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           {token ? (
-            <img src={qrUrl(token)} alt="Attendance QR" className="mx-auto rounded-xl" />
+            <QrImage data={token} size={280} alt="Attendance QR" className="mx-auto" />
           ) : (
             <p className="py-20 text-muted">No QR token</p>
           )}

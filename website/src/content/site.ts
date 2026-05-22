@@ -21,16 +21,47 @@ export const HOW_IT_WORKS = [
   { step: '04', title: 'Subscribe via Razorpay', desc: 'Choose a plan and pay securely inside the app.' },
 ] as const;
 
+/** Daily workflow — shown on home and admin areas. */
+export const DAILY_WORKFLOW = [
+  {
+    key: 'add-student',
+    icon: '👤',
+    title: 'Add student',
+    desc: 'Register members with name, mobile, username, and PIN from your library dashboard.',
+    adminPath: '/admin/students',
+    guestPath: '/login',
+    guestLabel: 'Library login',
+  },
+  {
+    key: 'scan-qr',
+    icon: '📷',
+    title: 'Scan QR code',
+    desc: 'Show today’s attendance QR on the website or app. Students scan it in the mobile app to check in.',
+    adminPath: '/admin/attendance',
+    guestPath: '/login',
+    guestLabel: 'Library login',
+  },
+  {
+    key: 'download-app',
+    icon: '📲',
+    title: 'Download app',
+    desc: 'Install SmartLibDesk on Android for owners and students — attendance, fees, seats, and notifications.',
+    adminPath: '/download',
+    guestPath: '/download',
+    guestLabel: 'Get the app',
+  },
+] as const;
+
 export const TESTIMONIALS = [
   {
     quote: 'Attendance used to be manual registers. Now one QR and we are done in minutes.',
-    author: 'Rahul K.',
-    role: 'Library owner, Pune',
+    author: 'Sandeep Kumar.',
+    role: 'Library owner, Alwar, Rajasthan',
   },
   {
     quote: 'Seat allocation and renewal requests saved us hours every week.',
-    author: 'Priya S.',
-    role: 'Study hall, Hyderabad',
+    author: 'Suhani Gautam.',
+    role: 'Study hall, Alwar, Rajasthan',
   },
 ] as const;
 
@@ -54,6 +85,7 @@ export const NAV_LINKS = [
   { to: '/about', label: 'About' },
   { to: '/services', label: 'Services' },
   { to: '/pricing', label: 'Pricing' },
+  { to: '/download', label: 'Download app' },
   { to: '/contact', label: 'Contact' },
 ] as const;
 
@@ -71,7 +103,7 @@ export const PLANS = [
     key: 'trial',
     name: 'Trial Plan',
     price: 99,
-    duration: '30 days',
+    duration: '10 days trial',
     tag: 'Start here',
     features: ['Full dashboard', 'Up to library seat limit', 'Email support'],
   },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { TableScroll } from '../../components/ui/TableScroll';
@@ -57,6 +58,20 @@ export function AdminStudents() {
 
   return (
     <div className="page-pad">
+      <div className="mb-6 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-slate-700 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <span>
+          After adding a student, share the app:{' '}
+          <Link to="/download" className="font-semibold text-primary underline">
+            Download SmartLibDesk
+          </Link>
+          . They check in via{' '}
+          <Link to="/admin/attendance" className="font-semibold text-primary underline">
+            Attendance QR
+          </Link>
+          .
+        </span>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Students</h1>

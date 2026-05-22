@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/generate-sitemap.mjs",
+    "copy-apk": "node scripts/copy-apk.mjs",
+    "prebuild": "node scripts/generate-sitemap.mjs && node scripts/copy-apk.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy:vercel": "vercel --prod",

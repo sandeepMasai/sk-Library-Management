@@ -100,6 +100,11 @@ export const EXTRA_SEO_ROUTES: PageSeo[] = [
     'Affordable SmartLibDesk plans for libraries — trial, monthly, 6-month, and yearly subscriptions via Razorpay.',
     '/pricing',
   ),
+  page(
+    'Download app',
+    'Download the SmartLibDesk Android app for library management, attendance, seats, and Razorpay payments.',
+    '/download',
+  ),
 ];
 
 export const SEO_BY_PATH = Object.fromEntries(
