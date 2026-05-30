@@ -1,136 +1,171 @@
 import { Link } from 'react-router-dom';
+import { AnimateIn } from '../components/ui/AnimateIn';
 import { LibraryWorkflow } from '../components/LibraryWorkflow';
-import { Logo } from '../components/Logo';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { FAQ, HOW_IT_WORKS, SERVICES, SITE, STATS, TESTIMONIALS } from '../content/site';
+import { FeaturePill } from '../components/ui/FeaturePill';
+import { GlassCard } from '../components/ui/GlassCard';
+import { MarqueeTicker } from '../components/ui/MarqueeTicker';
+import { Section } from '../components/ui/Section';
+import { StatCard } from '../components/ui/StatCard';
+import {
+  FAQ,
+  FEATURE_PILLS,
+  HOW_IT_WORKS,
+  SERVICES,
+  SITE,
+  STATS,
+  TESTIMONIALS,
+} from '../content/site';
 
 export function Home() {
   return (
     <>
-      <section className="mesh-bg relative overflow-hidden border-b border-slate-200/80">
-        <div className="pointer-events-none absolute -right-32 top-20 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-28 lg:py-32">
+      <section className="gradient-mesh relative overflow-hidden border-b border-white/10">
+        <div className="pointer-events-none absolute -right-32 top-20 h-96 w-96 rounded-full bg-primary/25 blur-3xl animate-blob" />
+        <div className="pointer-events-none absolute -left-20 bottom-10 h-64 w-64 rounded-full bg-accent/20 blur-3xl animate-blob-slow" />
+        <div className="pointer-events-none absolute left-1/2 top-1/3 h-48 w-48 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl animate-blob-delayed" />
+        <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-24 lg:py-32">
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary shadow-sm sm:px-4 sm:text-xs">
-                Library SaaS · India
-              </span>
-              <h1 className="mt-5 text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-900 sm:mt-6 sm:text-4xl md:text-5xl lg:text-6xl">
+              <AnimateIn immediate delay={0}>
+                <Badge variant="dark">Library SaaS · India</Badge>
+              </AnimateIn>
+              <AnimateIn immediate delay={80}>
+                <h1 className="font-display mt-5 text-3xl font-extrabold leading-[1.12] tracking-tight text-white sm:mt-6 sm:text-4xl md:text-5xl lg:text-6xl">
                 Run your study library like a{' '}
-                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  modern business
-                </span>
+                <span className="text-gradient-brand">modern business</span>
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-muted sm:mt-6 sm:text-lg">
+              </AnimateIn>
+              <AnimateIn immediate delay={160}>
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-white/75 sm:mt-6 sm:text-lg">
                 {SITE.name} brings attendance, seats, students, notifications, and Razorpay subscriptions into one
                 platform — built for reading rooms and coaching libraries.
               </p>
+              </AnimateIn>
+              <AnimateIn immediate delay={240}>
               <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link to="/register" className="w-full sm:w-auto">
-                  <Button fullWidth className="sm:!w-auto">Start free registration</Button>
+                  <Button fullWidth className="sm:!w-auto">
+                    Start free registration
+                  </Button>
+                </Link>
+                <Link to="/pricing" className="w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    fullWidth
+                    className="!border-white/30 !bg-white/5 !text-white hover:!bg-white/15 sm:!w-auto"
+                  >
+                    View pricing
+                  </Button>
                 </Link>
                 <Link to="/download" className="w-full sm:w-auto">
-                  <Button variant="outline" fullWidth className="sm:!w-auto">
+                  <Button variant="ghost-dark" fullWidth className="sm:!w-auto">
                     Download app
                   </Button>
                 </Link>
-                <Link to="/login" className="w-full sm:w-auto">
-                  <Button variant="ghost" fullWidth className="sm:!w-auto">
-                    Sign in
-                  </Button>
-                </Link>
               </div>
+              </AnimateIn>
             </div>
-            <div className="relative hidden flex-col items-center lg:flex">
-              <Logo size="lg" linkToHome={false} showName className="mb-8" />
-              <div className="w-full rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xl shadow-primary/10">
+            <AnimateIn immediate delay={320} className="relative hidden lg:block">
+              <GlassCard dark hover padding="lg" className="!rounded-3xl animate-pulse-glow">
                 <div className="grid grid-cols-2 gap-4">
                   {STATS.map((s) => (
-                    <div key={s.label} className="rounded-2xl bg-slate-50 p-5 text-center">
-                      <p className="text-2xl font-bold text-primary">{s.value}</p>
-                      <p className="mt-1 text-xs font-medium text-muted">{s.label}</p>
+                    <div key={s.label} className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+                      <p className="text-2xl font-bold text-teal-300">{s.value}</p>
+                      <p className="mt-1 text-xs font-medium text-white/60">{s.label}</p>
                     </div>
                   ))}
                 </div>
-                <p className="mt-6 text-center text-sm text-muted">Trusted by library owners across India</p>
-              </div>
-            </div>
+                <p className="mt-6 text-center text-sm text-white/50">Trusted by library owners across India</p>
+              </GlassCard>
+            </AnimateIn>
           </div>
-        </div>
-      </section>
 
-      <section className="border-b border-slate-200 bg-white py-12">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 sm:grid-cols-4 sm:px-6">
-          {STATS.map((s) => (
-            <div key={s.label} className="text-center lg:hidden">
-              <p className="text-2xl font-bold text-primary">{s.value}</p>
-              <p className="text-sm text-muted">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+          <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 lg:mt-16">
+            {STATS.map((s, i) => (
+              <AnimateIn key={s.label} delay={i * 80}>
+                <StatCard label={s.label} value={s.value} tone="dark" className="!p-4 sm:!p-5" />
+              </AnimateIn>
+            ))}
+          </div>
 
-      <section className="border-b border-slate-200 bg-slate-50 py-14 sm:py-20">
-        <LibraryWorkflow />
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Everything your library needs</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-muted">From daily check-in to subscription billing — no spreadsheets required.</p>
-        </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {SERVICES.map((s) => (
-            <article
-              key={s.title}
-              className="card-hover rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"
-            >
-              <span className="text-3xl">{s.icon}</span>
-              <h3 className="mt-4 text-lg font-semibold text-slate-900">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{s.description}</p>
-            </article>
-          ))}
-        </div>
-        <div className="mt-12 text-center">
-          <Link to="/services" className="text-sm font-semibold text-primary hover:underline">
-            Explore all services →
-          </Link>
-        </div>
-      </section>
-
-      <section className="border-y border-slate-200 bg-slate-50 py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-center text-2xl font-bold text-slate-900 sm:text-3xl">How it works</h2>
-          <div className="mt-14 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {HOW_IT_WORKS.map((step) => (
-              <div key={step.step} className="relative rounded-2xl bg-white p-6 shadow-sm">
-                <span className="text-4xl font-black text-primary/15">{step.step}</span>
-                <h3 className="mt-2 font-semibold text-slate-900">{step.title}</h3>
-                <p className="mt-2 text-sm text-muted">{step.desc}</p>
-              </div>
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            {FEATURE_PILLS.map((pill, i) => (
+              <AnimateIn key={pill.label} delay={i * 70}>
+                <FeaturePill label={pill.label} sublabel={pill.sublabel} />
+              </AnimateIn>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <h2 className="text-center text-2xl font-bold text-slate-900 sm:text-3xl">What owners say</h2>
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          {TESTIMONIALS.map((t) => (
-            <blockquote key={t.author} className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <p className="text-lg leading-relaxed text-slate-700">&ldquo;{t.quote}&rdquo;</p>
-              <footer className="mt-6">
+      <MarqueeTicker />
+
+      <Section emoji="⚡ Services" title="Everything your library needs" subtitle="From daily check-in to subscription billing — no spreadsheets required." variant="default">
+        <div className="mt-0 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {SERVICES.map((s, i) => (
+            <AnimateIn key={s.title} delay={i * 60}>
+            <GlassCard hover padding="lg" className="relative h-full">
+              <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                {String(i + 1).padStart(2, '0')} — {s.title.split(' ')[0]}
+              </span>
+              <span className="mt-4 block text-3xl">{s.icon}</span>
+              <h3 className="mt-3 text-lg font-semibold text-slate-900">{s.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{s.description}</p>
+              <Link to="/services" className="mt-4 inline-block text-sm font-semibold text-primary hover:underline">
+                Learn more →
+              </Link>
+            </GlassCard>
+            </AnimateIn>
+          ))}
+        </div>
+        <div className="mt-10 text-center">
+          <Link to="/services" className="text-sm font-semibold text-primary hover:underline">
+            Explore all services →
+          </Link>
+        </div>
+      </Section>
+
+      <section className="gradient-mesh-light border-y border-slate-200/60 py-14 sm:py-20">
+        <LibraryWorkflow />
+      </section>
+
+      <Section emoji="⚡ How it works" title="From registration to daily ops" subtitle="Four steps to run your library on SmartLibDesk." variant="muted">
+        <div className="mt-0 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {HOW_IT_WORKS.map((step, i) => (
+            <AnimateIn key={step.step} delay={i * 80}>
+            <GlassCard hover padding="md" className="relative h-full">
+              <span className="font-display text-4xl font-black text-primary/15">{step.step}</span>
+              <h3 className="mt-2 font-semibold text-slate-900">{step.title}</h3>
+              <p className="mt-2 text-sm text-muted">{step.desc}</p>
+            </GlassCard>
+            </AnimateIn>
+          ))}
+        </div>
+      </Section>
+
+      <Section emoji="⭐ Reviews" title="What owners say" variant="default">
+        <div className="mt-0 grid gap-6 md:grid-cols-2">
+          {TESTIMONIALS.map((t, i) => (
+            <AnimateIn key={t.author} delay={i * 100}>
+            <GlassCard hover padding="lg" className="h-full">
+              <p className="text-amber-400">★★★★★</p>
+              <p className="mt-4 text-lg leading-relaxed text-slate-700">&ldquo;{t.quote}&rdquo;</p>
+              <footer className="mt-6 border-t border-slate-100 pt-4">
                 <p className="font-semibold text-slate-900">{t.author}</p>
                 <p className="text-sm text-muted">{t.role}</p>
               </footer>
-            </blockquote>
+            </GlassCard>
+            </AnimateIn>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="bg-gradient-to-br from-primary via-primary to-accent px-4 py-20 text-white sm:px-6">
-        <div className="mx-auto max-w-6xl text-center">
-          <h2 className="text-2xl font-bold sm:text-3xl">Ready to go digital?</h2>
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary to-accent px-4 py-20 text-white sm:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.04\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50" />
+        <div className="relative mx-auto max-w-6xl text-center">
+          <h2 className="font-display text-2xl font-bold sm:text-3xl md:text-4xl">Ready to go digital?</h2>
           <p className="mx-auto mt-4 max-w-xl text-white/85">
             Register your library in minutes. Subscribe with Razorpay when you are ready — Trial from ₹99.
           </p>
@@ -141,7 +176,11 @@ export function Home() {
               </Button>
             </Link>
             <Link to="/pricing" className="w-full sm:w-auto">
-              <Button variant="outline" fullWidth className="!border-white/40 !text-white hover:!bg-white/10 sm:!w-auto">
+              <Button
+                variant="outline"
+                fullWidth
+                className="!border-white/40 !text-white hover:!bg-white/10 sm:!w-auto"
+              >
                 View pricing
               </Button>
             </Link>
@@ -149,17 +188,18 @@ export function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
-        <h2 className="text-center text-2xl font-bold text-slate-900">Frequently asked questions</h2>
-        <dl className="mt-10 space-y-6">
-          {FAQ.map((item) => (
-            <div key={item.q} className="rounded-2xl border border-slate-200 bg-white p-6">
+      <Section emoji="❓ FAQ" title="Frequently asked questions" variant="muted">
+        <dl className="mt-0 space-y-4">
+          {FAQ.map((item, i) => (
+            <AnimateIn key={item.q} delay={i * 60}>
+            <GlassCard padding="md">
               <dt className="font-semibold text-slate-900">{item.q}</dt>
               <dd className="mt-2 text-sm text-muted">{item.a}</dd>
-            </div>
+            </GlassCard>
+            </AnimateIn>
           ))}
         </dl>
-      </section>
+      </Section>
     </>
   );
 }

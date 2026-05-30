@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TableScroll } from '../../components/ui/TableScroll';
 import { apiRaw } from '../../lib/http';
 
 type AdminStudent = {
@@ -33,7 +34,7 @@ export function SuperAdminStudents() {
 
   return (
     <div className="page-pad">
-      <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+      <h1 className="font-display text-2xl font-bold text-slate-900">Students</h1>
       <p className="mt-1 text-sm text-muted">{total} students across all libraries</p>
 
       {error ? (
@@ -43,9 +44,10 @@ export function SuperAdminStudents() {
       {loading ? (
         <p className="mt-8 text-muted">Loading…</p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[560px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-muted">
+        <div className="mt-6">
+          <TableScroll>
+          <table className="w-full text-left text-sm">
+            <thead>
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Mobile</th>
@@ -64,6 +66,7 @@ export function SuperAdminStudents() {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         </div>
       )}
 

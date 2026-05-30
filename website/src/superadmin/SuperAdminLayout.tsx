@@ -7,7 +7,7 @@ export function SuperAdminLayout() {
   return (
     <>
       <SeoNoIndex title="Super Admin" />
-      <DashboardShell title="Super Admin" sidebar={({ onNavigate }) => <SuperAdminSidebar onNavigate={onNavigate} />}>
+      <DashboardShell theme="dark" title="Super Admin" sidebar={({ onNavigate }) => <SuperAdminSidebar onNavigate={onNavigate} />}>
         <Outlet />
       </DashboardShell>
     </>

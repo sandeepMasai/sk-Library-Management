@@ -7,6 +7,24 @@ export const SITE = {
   address: 'India',
 } as const;
 
+export const MARQUEE_ITEMS = [
+  'QR ATTENDANCE',
+  'SEAT ALLOCATION',
+  'RAZORPAY BILLING',
+  'STUDENT MANAGEMENT',
+  'NOTIFICATIONS',
+  'LIBRARY DASHBOARD',
+  'MULTI-TENANT',
+  'INDIA · STUDY HALLS',
+] as const;
+
+export const FEATURE_PILLS = [
+  { label: 'Attendance', sublabel: 'QR check-in' },
+  { label: 'Seats', sublabel: 'Maps & shifts' },
+  { label: 'Billing', sublabel: 'Razorpay' },
+  { label: 'Mobile app', sublabel: 'Android' },
+] as const;
+
 export const STATS = [
   { value: '10K+', label: 'Daily check-ins' },
   { value: '500+', label: 'Libraries onboarded' },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QrImage } from '../../components/QrImage';
 import { Button } from '../../components/ui/Button';
+import { GlassCard } from '../../components/ui/GlassCard';
 import { fetchAttendanceByDate, generateQrToken } from '../api/libraryApi';
 
 export function AdminAttendance() {
@@ -43,7 +44,7 @@ export function AdminAttendance() {
 
   return (
     <div className="page-pad">
-      <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
+      <h1 className="font-display text-2xl font-bold text-slate-900">Attendance</h1>
       <p className="mt-1 text-sm text-muted">
         Display this QR for students to scan in the mobile app (<strong>Scan</strong> tab).{' '}
         <Link to="/download" className="font-medium text-primary underline">
@@ -56,7 +57,7 @@ export function AdminAttendance() {
       </p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <GlassCard padding="md" className="text-center">
           {token ? (
             <QrImage data={token} size={280} alt="Attendance QR" className="mx-auto" />
           ) : (
@@ -74,7 +75,7 @@ export function AdminAttendance() {
             </Button>
           </div>
           {error ? <p className="mt-3 text-sm text-amber-700">{error}</p> : null}
-        </div>
+        </GlassCard>
 
         <div>
           <label className="text-sm font-medium text-slate-700">Date</label>
@@ -82,9 +83,9 @@ export function AdminAttendance() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm"
+            className="focus-ring-brand mt-1 w-full rounded-xl border border-slate-200/80 bg-white/90 px-4 py-2 text-sm shadow-sm"
           />
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <GlassCard padding="none" className="mt-4 overflow-hidden">
             <p className="border-b border-slate-100 px-4 py-3 font-semibold text-slate-900">
               Check-ins ({list.length})
             </p>
@@ -100,7 +101,7 @@ export function AdminAttendance() {
                 ))
               )}
             </ul>
-          </div>
+          </GlassCard>
         </div>
       </div>
     </div>

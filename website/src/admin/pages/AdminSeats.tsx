@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
+import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import { fetchSeats, setTotalSeats, type SeatRow } from '../api/libraryApi';
 
@@ -40,17 +41,19 @@ export function AdminSeats() {
 
   return (
     <div className="page-pad">
-      <h1 className="text-2xl font-bold text-slate-900">Seats</h1>
+      <h1 className="font-display text-2xl font-bold text-slate-900">Seats</h1>
       <p className="mt-1 text-sm text-muted">
         {seats.length} seats · {assigned} assigned
       </p>
 
-      <form onSubmit={applyTotal} className="mt-6 flex max-w-md flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <GlassCard padding="md" className="mt-6 flex max-w-md flex-wrap items-end gap-4">
+        <form onSubmit={applyTotal} className="flex w-full flex-wrap items-end gap-4">
         <Input label="Set total seats (1–5000)" type="number" min={1} max={5000} value={total} onChange={(e) => setTotal(e.target.value)} />
         <Button type="submit" disabled={saving}>
           {saving ? 'Updating…' : 'Apply'}
         </Button>
-      </form>
+        </form>
+      </GlassCard>
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 

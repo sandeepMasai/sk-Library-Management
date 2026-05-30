@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GlassCard } from '../../components/ui/GlassCard';
 import { useAuth } from '../../context/AuthContext';
 import { fetchLibraryProfile } from '../api/libraryApi';
 
@@ -16,10 +17,11 @@ export function AdminSettings() {
 
   return (
     <div className="page-pad">
-      <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+      <h1 className="font-display text-2xl font-bold text-slate-900">Settings</h1>
       <p className="mt-1 text-sm text-muted">Library profile and account details.</p>
 
-      <dl className="mt-8 max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-sm">
+      <GlassCard padding="md" className="mt-8 max-w-lg">
+      <dl className="space-y-4 text-sm">
         <Row label="Library name" value={String(p.name || user?.name || '—')} />
         <Row label="Owner" value={String(p.ownerName || user?.ownerName || '—')} />
         <Row label="Email" value={String(p.email || user?.email || '—')} />
@@ -28,6 +30,7 @@ export function AdminSettings() {
         <Row label="State" value={String(p.state || user?.state || '—')} />
         <Row label="Plan" value={String(p.currentPlanKey || user?.currentPlanKey || 'none')} />
       </dl>
+      </GlassCard>
 
       <p className="mt-6 text-sm text-muted">
         For password change, branding, and message templates, use the SmartLibDesk mobile app.

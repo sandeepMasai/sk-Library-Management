@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
+import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import { TableScroll } from '../../components/ui/TableScroll';
 import { createStudent, deleteStudent, fetchStudents, toggleBlockStudent, type StudentRow } from '../api/libraryApi';
@@ -58,8 +59,8 @@ export function AdminStudents() {
 
   return (
     <div className="page-pad">
-      <div className="mb-6 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-slate-700 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
-        <span>
+      <GlassCard padding="sm" className="mb-6 !bg-primary/5">
+        <p className="text-sm text-slate-700">
           After adding a student, share the app:{' '}
           <Link to="/download" className="font-semibold text-primary underline">
             Download SmartLibDesk
@@ -69,12 +70,12 @@ export function AdminStudents() {
             Attendance QR
           </Link>
           .
-        </span>
-      </div>
+        </p>
+      </GlassCard>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Students</h1>
+          <h1 className="font-display text-xl font-bold text-slate-900 sm:text-2xl">Students</h1>
           <p className="text-sm text-muted">{students.length} registered</p>
         </div>
         <Button className="w-full sm:w-auto" onClick={() => setShowForm((v) => !v)}>
@@ -83,7 +84,8 @@ export function AdminStudents() {
       </div>
 
       {showForm ? (
-        <form onSubmit={handleCreate} className="mt-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:grid-cols-2">
+        <GlassCard padding="md" className="mt-6 grid gap-4 sm:grid-cols-2">
+          <form onSubmit={handleCreate} className="contents">
           <Input label="Full name *" required value={name} onChange={(e) => setName(e.target.value)} />
           <Input label="Mobile *" required value={mobile} onChange={(e) => setMobile(e.target.value)} />
           <Input label="Username *" required value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -94,18 +96,19 @@ export function AdminStudents() {
               {saving ? 'Saving…' : 'Create student'}
             </Button>
           </div>
-        </form>
+          </form>
+        </GlassCard>
       ) : null}
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-6">
         {loading ? (
           <p className="p-8 text-muted">Loading…</p>
         ) : (
           <TableScroll>
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-muted">
+            <thead>
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Mobile</th>

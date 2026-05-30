@@ -7,7 +7,7 @@ export function AdminLayout() {
   return (
     <>
       <SeoNoIndex title="Library admin" />
-    <DashboardShell title="Library admin" sidebar={({ onNavigate }) => <AdminSidebar onNavigate={onNavigate} />}>
+    <DashboardShell theme="light" title="Library Admin" sidebar={({ onNavigate }) => <AdminSidebar onNavigate={onNavigate} />}>
       <Outlet />
     </DashboardShell>
     </>

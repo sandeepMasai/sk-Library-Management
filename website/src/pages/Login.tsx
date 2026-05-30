@@ -47,20 +47,20 @@ export function Login() {
       footer={
         <>
           New library?{' '}
-          <Link to="/register" className="font-semibold text-primary hover:underline">
+          <Link to="/register" className="font-semibold text-teal-400 hover:text-teal-300">
             Create account
           </Link>
         </>
       }
     >
-      <div className="mb-6 flex rounded-xl bg-slate-100 p-1">
+      <div className="mb-6 flex rounded-xl border border-white/10 bg-white/5 p-1">
         {(['library', 'student'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={`flex-1 rounded-lg py-2.5 text-sm font-semibold capitalize transition ${
-              tab === t ? 'bg-white text-primary shadow-sm' : 'text-slate-600'
+              tab === t ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
           >
             {t}
@@ -72,6 +72,7 @@ export function Login() {
         {tab === 'library' ? (
           <>
             <Input
+              dark
               label="Email"
               type="email"
               autoComplete="email"
@@ -81,6 +82,7 @@ export function Login() {
               placeholder="owner@library.com"
             />
             <Input
+              dark
               label="Password"
               type="password"
               autoComplete="current-password"
@@ -92,6 +94,7 @@ export function Login() {
         ) : (
           <>
             <Input
+              dark
               label="Mobile number"
               type="tel"
               required
@@ -101,6 +104,7 @@ export function Login() {
               hint="Registered with your library"
             />
             <Input
+              dark
               label="PIN"
               type="password"
               required
@@ -109,6 +113,7 @@ export function Login() {
               onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
             />
             <Input
+              dark
               label="Library code (optional)"
               value={libraryCode}
               onChange={(e) => setLibraryCode(e.target.value.toUpperCase())}
@@ -119,7 +124,7 @@ export function Login() {
         )}
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
         ) : null}
 
         <Button type="submit" fullWidth disabled={loading}>

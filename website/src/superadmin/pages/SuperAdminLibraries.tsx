@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Input } from '../../components/ui/Input';
+import { TableScroll } from '../../components/ui/TableScroll';
 import { fetchSuperAdminLibraries, type SuperAdminLibrary } from '../api/superadminApi';
 
 export function SuperAdminLibraries() {
@@ -26,7 +27,7 @@ export function SuperAdminLibraries() {
 
   return (
     <div className="page-pad">
-      <h1 className="text-2xl font-bold text-slate-900">Libraries</h1>
+      <h1 className="font-display text-2xl font-bold text-slate-900">Libraries</h1>
       <p className="mt-1 text-sm text-muted">{total} libraries on the platform</p>
 
       <form
@@ -60,9 +61,10 @@ export function SuperAdminLibraries() {
       {loading ? (
         <p className="mt-8 text-muted">Loading…</p>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-muted">
+        <div className="mt-6">
+          <TableScroll>
+          <table className="w-full text-left text-sm">
+            <thead>
               <tr>
                 <th className="px-4 py-3">Library</th>
                 <th className="px-4 py-3">Code</th>
@@ -94,6 +96,7 @@ export function SuperAdminLibraries() {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         </div>
       )}
 

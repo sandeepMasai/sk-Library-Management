@@ -136,17 +136,18 @@ export function Register() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary hover:underline">
+          <Link to="/login" className="font-semibold text-teal-400 hover:text-teal-300">
             Sign in
           </Link>
         </>
       }
     >
       <form onSubmit={onSubmit} className="space-y-4">
-        <Input label="Library name *" required value={libraryName} onChange={(e) => setLibraryName(e.target.value)} />
-        <Input label="Owner name *" required value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+        <Input dark label="Library name *" required value={libraryName} onChange={(e) => setLibraryName(e.target.value)} />
+        <Input dark label="Owner name *" required value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
 
         <Input
+          dark
           label="Email *"
           type="email"
           required
@@ -158,10 +159,10 @@ export function Register() {
           }}
         />
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-slate-800">Email verification</p>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p className="text-sm font-medium text-slate-200">Email verification</p>
           {emailVerified ? (
-            <p className="mt-2 text-sm text-emerald-700">✓ Email verified</p>
+            <p className="mt-2 text-sm text-emerald-400">✓ Email verified</p>
           ) : (
             <div className="mt-3 space-y-3">
               <div className="flex gap-2">
@@ -170,6 +171,7 @@ export function Register() {
                 </Button>
               </div>
               <Input
+                dark
                 label="6-digit OTP"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -183,6 +185,7 @@ export function Register() {
         </div>
 
         <Input
+          dark
           label="Password *"
           type="password"
           required
@@ -192,6 +195,7 @@ export function Register() {
           hint="Minimum 8 characters"
         />
         <Input
+          dark
           label="Mobile (optional)"
           type="tel"
           value={phone}
@@ -199,6 +203,7 @@ export function Register() {
         />
 
         <Select
+          dark
           label="State *"
           required
           value={state}
@@ -208,9 +213,10 @@ export function Register() {
           }}
           options={stateOptions}
         />
-        <Select label="City *" required value={city} onChange={(e) => setCity(e.target.value)} options={cityOptions} />
-        <Input label="Area / locality *" required value={place} onChange={(e) => setPlace(e.target.value)} />
+        <Select dark label="City *" required value={city} onChange={(e) => setCity(e.target.value)} options={cityOptions} />
+        <Input dark label="Area / locality *" required value={place} onChange={(e) => setPlace(e.target.value)} />
         <Input
+          dark
           label="PIN code *"
           required
           value={pincode}
@@ -218,6 +224,7 @@ export function Register() {
           maxLength={6}
         />
         <Input
+          dark
           label="Total seats"
           type="number"
           min={1}

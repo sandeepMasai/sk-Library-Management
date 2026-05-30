@@ -4,18 +4,29 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   error?: string;
   options: { value: string; label: string }[];
+  dark?: boolean;
 };
 
-export function Select({ label, error, options, className = '', id, ...props }: SelectProps) {
+export function Select({ label, error, options, dark = false, className = '', id, ...props }: SelectProps) {
   const selectId = id || label.replace(/\s+/g, '-').toLowerCase();
+
   return (
     <div className="space-y-1.5">
-      <label htmlFor={selectId} className="block text-sm font-medium text-slate-700">
+      <label
+        htmlFor={selectId}
+        className={`block text-sm font-medium ${dark ? 'text-slate-200' : 'text-slate-700'}`}
+      >
         {label}
       </label>
       <select
         id={selectId}
-        className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${error ? 'border-red-400' : 'border-slate-200'} ${className}`}
+        className={`focus-ring-brand w-full rounded-xl border px-4 py-3 text-sm shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+          error
+            ? 'border-red-400'
+            : dark
+              ? 'border-white/15 bg-white/5 text-white'
+              : 'border-slate-200/80 bg-white/90 text-slate-900 backdrop-blur-sm'
+        } ${className}`}
         {...props}
       >
         {options.map((o) => (
@@ -24,7 +35,7 @@ export function Select({ label, error, options, className = '', id, ...props }: 
           </option>
         ))}
       </select>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-xs text-red-500">{error}</p> : null}
     </div>
   );
 }

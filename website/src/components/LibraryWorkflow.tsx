@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { DAILY_WORKFLOW } from '../content/site';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
+import { GlassCard } from './ui/GlassCard';
+import { SectionHeader } from './ui/SectionHeader';
 
 type LibraryWorkflowProps = {
   title?: string;
@@ -19,10 +21,7 @@ export function LibraryWorkflow({
 
   return (
     <section className={`mx-auto max-w-6xl px-4 sm:px-6 ${className}`}>
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h2>
-        <p className="mx-auto mt-3 max-w-2xl text-muted">{subtitle}</p>
-      </div>
+      <SectionHeader emoji="⚡ Workflow" title={title} subtitle={subtitle} />
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {DAILY_WORKFLOW.map((step, index) => {
           const to = isLibrary ? step.adminPath : step.guestPath;
@@ -35,11 +34,10 @@ export function LibraryWorkflow({
             : step.guestLabel;
 
           return (
-            <article
-              key={step.key}
-              className="card-hover relative flex flex-col rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"
-            >
-              <span className="absolute right-5 top-5 text-3xl font-black text-primary/15">{String(index + 1).padStart(2, '0')}</span>
+            <GlassCard key={step.key} hover padding="lg" className="relative flex flex-col">
+              <span className="absolute right-5 top-5 font-display text-3xl font-black text-primary/15">
+                {String(index + 1).padStart(2, '0')}
+              </span>
               <span className="text-3xl">{step.icon}</span>
               <h3 className="mt-4 text-lg font-semibold text-slate-900">{step.title}</h3>
               <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{step.desc}</p>
@@ -48,7 +46,7 @@ export function LibraryWorkflow({
                   {cta}
                 </Button>
               </Link>
-            </article>
+            </GlassCard>
           );
         })}
       </div>
@@ -58,7 +56,7 @@ export function LibraryWorkflow({
           <Link to="/register" className="font-semibold text-primary hover:underline">
             Register free
           </Link>{' '}
-          — then use the steps above from your admin dashboard.
+          — then complete these steps from your admin dashboard.
         </p>
       ) : null}
     </section>
