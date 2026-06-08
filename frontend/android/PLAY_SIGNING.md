@@ -1,57 +1,70 @@
 # Google Play upload signing (SmartLibDesk)
 
-Package: `com.smartlibdesk.app`
+Package: `com.libdesk.app`
 
-## Expected upload key (Play Console)
+## Required upload key (Play Console — May 2026)
 
 ```
-SHA1: F1:C4:FE:7B:2E:AA:96:CF:C8:AA:02:AF:C3:54:10:08:7F:7B:B2:D1
+SHA1: 36:47:F1:EF:A2:6C:9E:B5:46:EE:45:8F:B4:0E:B0:8F:7E:9D:7F:5D
 ```
 
-## Wrong keys (do not use)
+## Other keys (do NOT upload AAB signed with these)
 
 | Source | SHA1 |
 |--------|------|
-| EAS "Generate new keystore" (2026-05-19) | `7B:AB:7B:70:4F:A6:53:D2:F0:9F:69:2F:76:EF:8F:02:88:37:F2:16` |
-| Local `upload-keystore.jks` (npm run keystore:generate) | `D1:B9:74:9B:B8:A5:FC:01:ED:CA:DF:1D:42:BF:C4:B8:C1:B7:74:67` |
+| EAS `upload-keystore.jks` (com.sk245444.libdesk) | `F1:C4:FE:7B:...` |
+| EAS “generate new keystore” | `7B:AB:7B:70:...` |
+| Local `npm run keystore:generate` | `D1:B9:74:9B:...` |
 
-## Fix steps
+Your last upload used **F1:C4:FE** — Play rejects it because this app expects **36:47:F1**.
 
-1. Locate the **original** upload `.jks` / `.keystore` (backup, old laptop, teammate, password manager).
-2. Copy it to `android/app/upload-keystore.jks` (or set absolute path in `key.properties`).
-3. Edit `android/key.properties` with correct `storePassword`, `keyAlias`, `keyPassword`.
-4. Verify:
+---
 
-   ```bash
-   npm run keystore:verify
-   ```
+## Option A — Find the original `36:47:F1` keystore (best)
 
-5. Build signed AAB locally:
-
-   ```bash
-   npm run build:aab
-   ```
-
-   Output: `android/app/build/outputs/bundle/release/app-release.aab`
-
-6. **EAS Build:** upload the same keystore to Expo (do not generate a new one):
-
-   ```bash
-   eas credentials
-   ```
-
-   → Android → production → Keystore → **Upload existing keystore**
-
-7. Upload AAB in [Google Play Console](https://play.google.com/console) → Release → Production.
-
-## Verify any keystore file
+Search backups, old laptop, email, teammate, or first machine that created the Play listing.
 
 ```bash
-keytool -list -v -keystore /path/to/your.keystore -alias YOUR_ALIAS
+keytool -list -v -keystore /path/to/file.jks -alias YOUR_ALIAS
 ```
 
-Compare the **SHA1** line with Play Console.
+When found:
 
-## Lost upload key?
+1. Copy to `android/app/upload-keystore.jks`
+2. Update `android/key.properties`
+3. `npm run keystore:verify` → must show **OK**
+4. `npm run build:aab`
+5. Upload new AAB to Play
 
-Play Console → **App integrity** → **Request upload key reset** (Google approval required). Do not generate another random keystore until reset is approved.
+---
+
+## Option B — Upload key reset (if `36:47` keystore is lost)
+
+1. Export certificate from the key you **want** to use (e.g. current EAS key):
+
+```bash
+cd frontend/android/app
+keytool -export -rfc \
+  -keystore upload-keystore.jks \
+  -alias "$(grep keyAlias ../key.properties | cut -d= -f2)" \
+  -storepass "$(grep storePassword ../key.properties | cut -d= -f2)" \
+  -file upload_certificate.pem
+```
+
+2. Play Console → **App integrity** → **Request upload key reset**
+3. Upload `upload_certificate.pem` (SHA1 `F1:C4:FE:...` after reset approval)
+4. Rebuild AAB: `npm run build:aab`
+5. Upload to Play
+
+Until Google approves the reset, only **36:47:F1** signed AABs work.
+
+---
+
+## Verify before upload
+
+```bash
+npm run keystore:verify
+keytool -printcert -jarfile android/app/build/outputs/bundle/release/app-release.aab | grep SHA1
+```
+
+Must match **36:47:F1:EF:...** (or your newly approved key after reset).

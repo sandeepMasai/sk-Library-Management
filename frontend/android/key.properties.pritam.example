@@ -1,0 +1,6 @@
+# Copy to key.properties AFTER placing the .jks file (see PLAY_SIGNING.md).
+# From: @pritamkumars-organization__libdesk-keystore-credentials.md
+storeFile=upload-keystore.jks
+storePassword=cc76e4842fb3ff6ac859971f7ed98a18
+keyAlias=6ea00d083879849ea23ef89b52551675
+keyPassword=79c0136a8c87034d3ff3a7d2824b27e1

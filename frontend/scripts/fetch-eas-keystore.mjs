@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 
 const EAS_CLI = '/opt/homebrew/lib/node_modules/eas-cli/build';
 const EXPECTED_SHA1 = 'F1:C4:FE:7B:2E:AA:96:CF:C8:AA:02:AF:C3:54:10:08:7F:7B:B2:D1';
-const PACKAGE = 'com.smartlibdesk.app';
+const PACKAGE = 'com.libdesk.app';
 const SLUG = 'libdesk';
 const OWNER = 'sk245444';
 
@@ -108,7 +108,7 @@ keyPassword=${ks.keyPassword}
       smartlibdeskDefault.id,
       ks.id,
     );
-    console.log('Linked Play upload key to EAS production credentials for com.smartlibdesk.app');
+    console.log('Linked Play upload key to EAS production credentials for com.libdesk.app');
   }
 
   console.log('\nOK — run: npm run keystore:verify && eas build -p android --profile production');

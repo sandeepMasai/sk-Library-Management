@@ -3,7 +3,7 @@
     "name": "SmartLibDesk",
     "scheme": "smartlibdesk",
     "slug": "libdesk",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,12 +17,13 @@
       "bundleIdentifier": "com.sk245444.libdesk"
     },
     "android": {
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#1E5C52",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.smartlibdesk.app"
+      "package": "com.libdesk.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

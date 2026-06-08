@@ -1,4 +1,4 @@
-package com.smartlibdesk.app
+package com.libdesk.app
 
 import android.app.Application
 import android.content.res.Configuration

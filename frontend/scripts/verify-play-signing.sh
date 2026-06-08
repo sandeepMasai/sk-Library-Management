@@ -6,8 +6,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ANDROID="$ROOT/android"
 APP="$ANDROID/app"
 
-# Google Play Console → App signing → Upload key certificate → SHA-1
-EXPECTED_SHA1="${PLAY_EXPECTED_SHA1:-F1:C4:FE:7B:2E:AA:96:CF:C8:AA:02:AF:C3:54:10:08:7F:7B:B2:D1}"
+# Google Play Console → App integrity → Upload key certificate → SHA-1
+# com.libdesk.app (May 2026)
+EXPECTED_SHA1="${PLAY_EXPECTED_SHA1:-36:47:F1:EF:A2:6C:9E:B5:46:EE:45:8F:B4:0E:B0:8F:7E:9D:7F:5D}"
 EXPECTED_NORM="$(echo "$EXPECTED_SHA1" | tr '[:lower:]' '[:upper:]' | tr -d ' ')"
 
 export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 17 2>/dev/null || echo /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home)}"
@@ -65,8 +66,9 @@ fi
 echo "MISMATCH — this keystore is NOT the Play upload key."
 echo ""
 echo "Known fingerprints from this project:"
-echo "  Local upload-keystore.jks (current): D1:B9:74:9B:B8:A5:FC:01:ED:CA:DF:1D:42:BF:C4:B8:C1:B7:74:67"
-echo "  EAS-generated (wrong upload):        7B:AB:7B:70:4F:A6:53:D2:F0:9F:69:2F:76:EF:8F:02:88:37:F2:16"
+echo "  Play com.libdesk.app (required): 36:47:F1:EF:A2:6C:9E:B5:46:EE:45:8F:B4:0E:B0:8F:7E:9D:7F:5D"
+echo "  EAS / current upload-keystore.jks:     F1:C4:FE:7B:2E:AA:96:CF:C8:AA:02:AF:C3:54:10:08:7F:7B:B2:D1"
+echo "  EAS newer (wrong):                     7B:AB:7B:70:4F:A6:53:D2:F0:9F:69:2F:76:EF:8F:02:88:37:F2:16"
 echo ""
 echo "Fix:"
 echo "  1. Find the original .jks used for first Play upload (SHA1 above)."
