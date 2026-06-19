@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal, type ConfirmTone } from '../../components/ConfirmModal';
+import { isStudentMembershipActiveForAttendance } from '../../utils/studentMembership';
 
 const ACCENT = '#4F46E5';
 const GREEN  = '#059669';
@@ -30,14 +31,19 @@ export default function StudentScanQR() {
   const [scanned,       setScanned]       = useState(false);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
   const markAttendance = useAppStore((s) => s.markAttendance);
+  const currentUser = useAppStore((s) => s.currentUser);
   const navigation     = useNavigation<any>();
   const [resultModal, setResultModal] = useState<{
     tone: ConfirmTone;
     title: string;
     description?: string;
     confirmText: string;
+    showCancel?: boolean;
+    cancelText?: string;
     afterOk?: () => void;
+    afterCancel?: () => void;
   } | null>(null);
+  const [membershipExpiredOpen, setMembershipExpiredOpen] = useState(false);
 
   // Adaptive square: fits screen without scrolling
   const usableH = height - insets.top - insets.bottom;
@@ -62,7 +68,9 @@ export default function StudentScanQR() {
     setScanned(true);
     setIsSubmitting(true);
     const result = await markAttendance(data);
-    if (result.ok && !result.alreadyMarked) {
+    if (result.membershipExpired) {
+      setMembershipExpiredOpen(true);
+    } else if (result.ok && !result.alreadyMarked) {
       setResultModal({
         tone: 'primary',
         title: 'Success',
@@ -95,6 +103,19 @@ export default function StudentScanQR() {
     }
     setIsSubmitting(false);
   };
+
+  const closeMembershipExpired = () => {
+    setMembershipExpiredOpen(false);
+    setScanned(false);
+  };
+
+  const openRenewPlan = () => {
+    setMembershipExpiredOpen(false);
+    setScanned(false);
+    navigation.getParent()?.navigate('RenewPlan');
+  };
+
+  const membershipInactive = currentUser ? !isStudentMembershipActiveForAttendance(currentUser) : false;
 
   // ── Permission: loading ────────────────────────────────────────────────
   if (hasPermission === null) {
@@ -135,6 +156,14 @@ export default function StudentScanQR() {
       <View style={styles.inner}>
 
         {/* ── Status row (above camera) ── */}
+        {membershipInactive ? (
+          <View style={styles.warnBanner}>
+            <Ionicons name="alert-circle" size={16} color="#B91C1C" />
+            <Text style={styles.warnBannerTxt}>
+              Membership inactive. Renew your plan to mark attendance.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.statusRow}>
           {status === 'verifying'
             ? <ActivityIndicator size={12} color={ACCENT} />
@@ -226,6 +255,20 @@ export default function StudentScanQR() {
       </View>
 
       <ConfirmModal
+        visible={membershipExpiredOpen}
+        tone="danger"
+        label="MEMBERSHIP"
+        title="Membership Expired"
+        description="Your library membership has expired. Please renew your plan to continue marking attendance."
+        showCancel
+        cancelText="Close"
+        confirmText="Renew Plan"
+        confirmIcon="refresh-outline"
+        onCancel={closeMembershipExpired}
+        onConfirm={openRenewPlan}
+      />
+
+      <ConfirmModal
         visible={!!resultModal}
         tone={resultModal?.tone ?? 'neutral'}
         label={resultModal?.tone === 'danger' ? 'ERROR' : resultModal?.tone === 'primary' ? 'SUCCESS' : 'INFO'}
@@ -272,6 +315,20 @@ function makeStyles() {
 
   // Root
   root: { flex: 1, backgroundColor: theme.colors.background },
+  warnBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.24)',
+  },
+  warnBannerTxt: { flex: 1, fontSize: 12, fontWeight: '700', color: '#B91C1C', lineHeight: 17 },
   inner: {
     flex: 1,
     alignItems: 'center',

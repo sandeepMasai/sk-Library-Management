@@ -29,6 +29,8 @@ function setBearerHeader(config: InternalAxiosRequestConfig, token: string) {
 export type ApiError = {
   status?: number;
   message: string;
+  code?: string;
+  membershipExpired?: boolean;
   details?: Record<string, unknown>;
 };
 
@@ -112,16 +114,15 @@ api.interceptors.response.use(
       err.response?.data?.message ||
       (typeof err.message === 'string' && err.message) ||
       'Request failed';
-    const errData = err.response?.data;
+    const body = err.response?.data;
+    const bodyObj = body && typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
     const details =
-      errData &&
-      typeof errData === 'object' &&
-      errData !== null &&
-      'data' in errData &&
-      errData.data != null &&
-      typeof errData.data === 'object' &&
-      !Array.isArray(errData.data)
-        ? (errData.data as Record<string, unknown>)
+      bodyObj &&
+      "data" in bodyObj &&
+      bodyObj.data != null &&
+      typeof bodyObj.data === "object" &&
+      !Array.isArray(bodyObj.data)
+        ? (bodyObj.data as Record<string, unknown>)
         : undefined;
 
     const originalRequest = err.config as RetryConfig | undefined;
@@ -154,6 +155,8 @@ api.interceptors.response.use(
     const apiError: ApiError = {
       status,
       message: !status && isNetworkFailure(err) ? formatReachabilityError(err) : message,
+      code: bodyObj?.code ? String(bodyObj.code) : undefined,
+      membershipExpired: Boolean(bodyObj?.membershipExpired),
       details,
     };
     return Promise.reject(apiError);
@@ -182,5 +185,12 @@ export const apiPatch = async <T>(path: string, body?: any) => {
 
 export const apiDelete = async <T>(path: string) => {
   const res = await api.delete<T>(path);
+  return res.data;
+};
+
+export const apiPostFormData = async <T>(path: string, formData: FormData) => {
+  const res = await api.post<T>(path, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return res.data;
 };

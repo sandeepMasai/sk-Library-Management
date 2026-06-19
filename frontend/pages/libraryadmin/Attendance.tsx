@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../theme';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import { useTheme } from '../../theme/ThemeProvider';
+import { apiGet } from '../../services/api';
 import {
   AttendanceEntryRow,
   type AttendanceEntryRowData,
@@ -31,6 +32,14 @@ const QR_IMAGE = (token: string, size: number) =>
 
 const PAGE_SIZE = 30;
 const POLL_INTERVAL_MS = 5000;
+
+type BlockedAttempt = {
+  id: string;
+  studentName: string;
+  membershipExpiryDate: string | null;
+  attemptedAt: string | null;
+  reason: string;
+};
 
 const ListSeparator = () => <View style={separatorStyle.separator} />;
 const separatorStyle = StyleSheet.create({ separator: { height: 8 } });
@@ -86,6 +95,22 @@ export default function AdminAttendance() {
 
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [printing, setPrinting] = useState(false);
+  const [blockedAttempts, setBlockedAttempts] = useState<BlockedAttempt[]>([]);
+  const [blockedLoading, setBlockedLoading] = useState(false);
+
+  const loadBlockedAttempts = useCallback(async () => {
+    setBlockedLoading(true);
+    try {
+      const res = await apiGet<{ ok: boolean; attempts: BlockedAttempt[] }>(`/api/attendance/blocked-attempts`, {
+        limit: 30,
+      });
+      setBlockedAttempts(Array.isArray(res.attempts) ? res.attempts : []);
+    } catch {
+      setBlockedAttempts([]);
+    } finally {
+      setBlockedLoading(false);
+    }
+  }, []);
   const [refreshing, setRefreshing] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -131,6 +156,7 @@ export default function AdminAttendance() {
     (async () => {
       await generateDailyQr();
       if (!cancelled) await fetchAttendanceByDate(format(new Date(), 'yyyy-MM-dd'));
+      if (!cancelled) await loadBlockedAttempts();
     })();
     return () => {
       cancelled = true;
@@ -159,11 +185,11 @@ export default function AdminAttendance() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchAttendanceByDate(selectedDate);
+      await Promise.all([fetchAttendanceByDate(selectedDate), loadBlockedAttempts()]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchAttendanceByDate, selectedDate]);
+  }, [fetchAttendanceByDate, selectedDate, loadBlockedAttempts]);
 
   const handlePrint = useCallback(async () => {
     if (!dailyQrToken) {
@@ -261,6 +287,45 @@ export default function AdminAttendance() {
 
   const listEmpty = useMemo(() => <EmptyCheckIns styles={styles} />, [styles]);
 
+  const listFooter = useMemo(
+    () => (
+      <View style={styles.blockedSection}>
+        <View style={styles.checkHeaderLeft}>
+          <Ionicons name="shield-outline" size={18} color={theme.colors.danger} />
+          <Text style={styles.listTitle}>Blocked scan attempts</Text>
+        </View>
+        <Text style={styles.blockedHint}>
+          Expired or unpaid students who tried to mark attendance
+        </Text>
+        {blockedLoading ? (
+          <Text style={styles.blockedEmpty}>Loading…</Text>
+        ) : blockedAttempts.length === 0 ? (
+          <Text style={styles.blockedEmpty}>No blocked attempts recently.</Text>
+        ) : (
+          blockedAttempts.map((row) => (
+            <View key={row.id} style={styles.blockedRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.blockedName} numberOfLines={1}>
+                  {row.studentName}
+                </Text>
+                <Text style={styles.blockedMeta}>
+                  Expiry:{' '}
+                  {row.membershipExpiryDate
+                    ? format(new Date(row.membershipExpiryDate), 'dd MMM yyyy')
+                    : '—'}
+                </Text>
+              </View>
+              <Text style={styles.blockedTime}>
+                {row.attemptedAt ? format(new Date(row.attemptedAt), 'dd MMM · HH:mm') : '—'}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+    ),
+    [blockedAttempts, blockedLoading, styles]
+  );
+
   const hasMore = visibleCount < enrichedRows.length;
 
   return (
@@ -272,6 +337,7 @@ export default function AdminAttendance() {
           keyExtractor={keyExtractor}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
           ItemSeparatorComponent={ListSeparator}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: scrollBottom }}
           showsVerticalScrollIndicator={false}
@@ -478,5 +544,27 @@ function makeStyles(mode: 'light' | 'dark') {
     },
     emptyTitle: { marginTop: 14, fontSize: 17, fontWeight: '800', color: theme.colors.text },
     emptySub: { marginTop: 6, fontSize: 14, color: theme.colors.mutedText, textAlign: 'center' },
+    blockedSection: {
+      marginTop: 20,
+      marginBottom: 24,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 14,
+    },
+    blockedHint: { marginTop: 6, marginBottom: 12, fontSize: 12, fontWeight: '600', color: theme.colors.mutedText },
+    blockedEmpty: { fontSize: 13, fontWeight: '700', color: theme.colors.mutedText, paddingVertical: 8 },
+    blockedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+    },
+    blockedName: { fontSize: 14, fontWeight: '800', color: theme.colors.text },
+    blockedMeta: { marginTop: 2, fontSize: 12, fontWeight: '600', color: theme.colors.mutedText },
+    blockedTime: { fontSize: 11, fontWeight: '700', color: theme.colors.mutedText, textAlign: 'right' },
   });
 }

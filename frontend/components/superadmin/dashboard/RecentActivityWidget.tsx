@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { theme } from '../../../theme';
 import { DashboardWidgetSkeleton } from './DashboardWidgetSkeleton';
 import type { ActivityType, RecentActivityRow } from './types';
@@ -34,6 +34,13 @@ const ACCENT: Record<ActivityType, string> = {
   login: '#64748B',
   other: '#94A3B8',
 };
+
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '—';
+  return format(d, 'h:mm a');
+}
 
 type Props = {
   activities: RecentActivityRow[];
@@ -89,37 +96,41 @@ export function RecentActivityWidget({
           <Text style={[styles.emptyTxt, { color: mutedColor }]}>No platform activity yet.</Text>
         </View>
       ) : (
-        <View style={styles.list}>
-          {activities.slice(0, 8).map((a) => {
+        <View style={styles.timeline}>
+          {activities.slice(0, 8).map((a, idx) => {
             const Icon = ICONS[a.type] || ICONS.other;
             const color = ACCENT[a.type] || ACCENT.other;
             const when = a.timestamp
               ? formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })
               : '—';
+            const clock = formatTime(a.timestamp);
+            const isLast = idx === Math.min(activities.length, 8) - 1;
             return (
-              <View
-                key={a.id}
-                style={[
-                  styles.item,
-                  compact && styles.itemCompact,
-                  { borderColor, backgroundColor: theme.colors.background },
-                ]}
-              >
-                <View style={[styles.iconWrap, { backgroundColor: color + '18' }]}>
-                  <Icon size={16} color={color} strokeWidth={2.2} />
+              <View key={a.id} style={styles.timelineRow}>
+                <View style={styles.timelineRail}>
+                  <Text style={[styles.timeLabel, { color: mutedColor }]}>{clock}</Text>
+                  <View style={[styles.dot, { backgroundColor: color, borderColor: surfaceColor }]} />
+                  {!isLast ? <View style={[styles.railLine, { backgroundColor: borderColor }]} /> : null}
                 </View>
-                <View style={styles.itemBody}>
-                  <Text style={[styles.itemTitle, { color: textColor }]} numberOfLines={1}>
-                    {a.title}
-                  </Text>
-                  <Text style={[styles.itemDesc, { color: mutedColor }]} numberOfLines={2}>
-                    {a.description}
-                  </Text>
-                  {compact ? (
+                <View
+                  style={[
+                    styles.item,
+                    { borderColor, backgroundColor: theme.colors.background },
+                  ]}
+                >
+                  <View style={[styles.iconWrap, { backgroundColor: color + '18' }]}>
+                    <Icon size={16} color={color} strokeWidth={2.2} />
+                  </View>
+                  <View style={styles.itemBody}>
+                    <Text style={[styles.itemTitle, { color: textColor }]} numberOfLines={1}>
+                      {a.title}
+                    </Text>
+                    <Text style={[styles.itemDesc, { color: mutedColor }]} numberOfLines={2}>
+                      {a.description}
+                    </Text>
                     <Text style={[styles.whenInline, { color: mutedColor }]}>{when}</Text>
-                  ) : null}
+                  </View>
                 </View>
-                {!compact ? <Text style={[styles.when, { color: mutedColor }]}>{when}</Text> : null}
               </View>
             );
           })}
@@ -161,16 +172,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   list: { gap: 8 },
+  timeline: { gap: 0 },
+  timelineRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
+  timelineRail: { width: 52, alignItems: 'center', paddingTop: 12 },
+  timeLabel: { fontSize: 9, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, zIndex: 1 },
+  railLine: { width: 2, flex: 1, minHeight: 24, marginTop: 2 },
   item: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
     padding: 10,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-  },
-  itemCompact: {
-    flexWrap: 'wrap',
+    marginBottom: 8,
   },
   iconWrap: {
     width: 36,
@@ -182,7 +198,6 @@ const styles = StyleSheet.create({
   itemBody: { flex: 1, minWidth: 0 },
   itemTitle: { fontSize: 13, fontWeight: '800' },
   itemDesc: { marginTop: 3, fontSize: 11, fontWeight: '600', lineHeight: 15 },
-  when: { fontSize: 10, fontWeight: '700', maxWidth: 72, textAlign: 'right', flexShrink: 0, marginTop: 2 },
   whenInline: { fontSize: 10, fontWeight: '700', marginTop: 6 },
   err: { paddingVertical: 16, gap: 10 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 10 },

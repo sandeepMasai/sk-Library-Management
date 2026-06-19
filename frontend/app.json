@@ -45,7 +45,21 @@
       "expo-asset",
       "expo-secure-store",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow SmartLibDesk to save notification images to your gallery.",
+          "savePhotosPermission": "Allow SmartLibDesk to save notification images to your gallery."
+        }
+      ]
     ]
   }
 }

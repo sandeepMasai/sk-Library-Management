@@ -115,7 +115,7 @@ export function PaymentKpiGrid({ overview, loading }: Props) {
             gradient={cfg.gradient}
             growthPercent={cfg.getGrowth(overview)}
             sparkValues={spark}
-            icon={<Icon size={20} color={cfg.iconColor} strokeWidth={2.2} />}
+            icon={<Icon size={20} color={cfg.gradient[0]} strokeWidth={2.2} />}
             containerStyle={{ width: cardBasis, marginBottom: 12 }}
           />
         );

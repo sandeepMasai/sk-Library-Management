@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Linking, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Linking, Platform, TouchableOpacity, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAppStore } from '../../store';
 import { getSettingsColors, settingsSpacing } from '../../ui/settingsTheme';
@@ -8,7 +8,7 @@ import ProBanner from '../../components/settings/ProBanner';
 import SettingsItem from '../../components/settings/SettingsItem';
 import SettingsSectionCard from '../../components/settings/SettingsSectionCard';
 import * as ImagePicker from 'expo-image-picker';
-import { api, apiGet } from '../../services/api';
+import { api, apiGet, apiPatch } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,6 +42,31 @@ export default function SettingsScreen() {
   const hydrateAttemptedRef = useRef(false);
   const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [attendanceActiveOnly, setAttendanceActiveOnly] = useState(
+    currentUser?.attendanceActiveMembersOnly !== false
+  );
+  const [attendanceToggleSaving, setAttendanceToggleSaving] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'library') return;
+    apiGet<{ ok: boolean; profile: { attendanceActiveMembersOnly?: boolean } }>(`/api/library/profile`)
+      .then((res) => setAttendanceActiveOnly(res.profile?.attendanceActiveMembersOnly !== false))
+      .catch(() => {});
+  }, [role]);
+
+  const onToggleAttendanceActive = async (next: boolean) => {
+    setAttendanceActiveOnly(next);
+    setAttendanceToggleSaving(true);
+    try {
+      await apiPatch(`/api/library/attendance-settings`, { attendanceActiveMembersOnly: next });
+      patchCurrentUser({ attendanceActiveMembersOnly: next });
+    } catch {
+      setAttendanceActiveOnly(!next);
+      setInfoModal({ title: 'Could not save', description: 'Please try again.' });
+    } finally {
+      setAttendanceToggleSaving(false);
+    }
+  };
 
   // Use real user values (no example placeholders).
   // - library: show ownerName + email
@@ -386,6 +411,62 @@ export default function SettingsScreen() {
           />
         </SettingsSectionCard>
 
+        {role === 'library' ? (
+          <>
+            {section('COMMUNICATION')}
+            <SettingsSectionCard>
+              <SettingsItem
+                title="Communication Center"
+                subtitle="Message students · track delivery"
+                icon="chatbubbles-outline"
+                iconColor="#25D366"
+                iconBgColor="rgba(37,211,102,0.12)"
+                onPress={() => navTo('CommunicationCenter')}
+              />
+              <SettingsItem
+                title="Quick Send"
+                subtitle="Broadcast text & image alerts"
+                icon="megaphone-outline"
+                iconColor="#2563EB"
+                iconBgColor="rgba(37,99,235,0.12)"
+                onPress={() => navTo('SendMessage')}
+              />
+              <SettingsItem
+                title="Inbox"
+                subtitle="Messages from platform"
+                icon="notifications-outline"
+                iconColor="#7C3AED"
+                iconBgColor="rgba(124,58,237,0.12)"
+                onPress={() => navTo('Notifications')}
+                hideDivider
+              />
+            </SettingsSectionCard>
+          </>
+        ) : null}
+
+        {role === 'library' ? (
+          <>
+            {section('ATTENDANCE')}
+            <SettingsSectionCard>
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleTitle}>Allow Attendance Only For Active Members</Text>
+                  <Text style={styles.toggleSub}>
+                    Block QR scan for expired or unpaid students
+                  </Text>
+                </View>
+                <Switch
+                  value={attendanceActiveOnly}
+                  onValueChange={(v) => void onToggleAttendanceActive(v)}
+                  disabled={attendanceToggleSaving}
+                  trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                  thumbColor={attendanceActiveOnly ? '#16A34A' : '#F8FAFC'}
+                />
+              </View>
+            </SettingsSectionCard>
+          </>
+        ) : null}
+
         {section('AUTOMATION')}
         <SettingsSectionCard>
           <SettingsItem
@@ -556,6 +637,16 @@ function makeStyles(colors: ReturnType<typeof getSettingsColors>) {
     },
     logoutTxt: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.2 },
     logoutHint: { marginTop: 10, fontSize: 12, fontWeight: '700', color: colors.subText, textAlign: 'center' },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    toggleTextCol: { flex: 1, minWidth: 0 },
+    toggleTitle: { fontSize: 14, fontWeight: '900', color: colors.text },
+    toggleSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: colors.subText, lineHeight: 17 },
   });
 }
 

@@ -1,19 +1,31 @@
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { DrawerToggleButton } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { APP_HEADER_BG, APP_HEADER_FG } from '../../constants/appHeader';
+import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { SuperAdminHeaderLogo } from './SuperAdminHeaderLogo';
+import { theme } from '../../theme';
+import { useTheme } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NavigationProp<ParamListBase>;
   options: { title?: string | ((props: unknown) => string) };
   showDrawerToggle?: boolean;
+  notificationCount?: number;
+  onNotificationsPress?: () => void;
 };
 
-export function SuperAdminTopHeader({ navigation, options, showDrawerToggle = true }: Props) {
+export function SuperAdminTopHeader({
+  navigation,
+  options,
+  showDrawerToggle = true,
+  notificationCount = 0,
+  onNotificationsPress,
+}: Props) {
   const insets = useSafeAreaInsets();
+  const { mode } = useTheme();
+  const isDark = mode === 'dark';
   const title =
     typeof options.title === 'string'
       ? options.title
@@ -27,19 +39,38 @@ export function SuperAdminTopHeader({ navigation, options, showDrawerToggle = tr
         styles.bar,
         {
           paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 8 : 0),
-          backgroundColor: APP_HEADER_BG,
-          borderBottomColor: 'rgba(6,95,70,0.12)',
+          backgroundColor: theme.colors.surface,
+          borderBottomColor: theme.colors.border,
         },
       ]}
     >
       <View style={styles.row}>
         <View style={styles.left}>
-          {showDrawerToggle ? <DrawerToggleButton tintColor={APP_HEADER_FG} /> : <View style={{ width: 8 }} />}
+          {showDrawerToggle ? (
+            <DrawerToggleButton tintColor={theme.colors.text} />
+          ) : (
+            <View style={{ width: 8 }} />
+          )}
         </View>
-        <Text style={[styles.title, { color: APP_HEADER_FG }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
           {title}
         </Text>
-        <SuperAdminHeaderLogo navigation={navigation} size={34} />
+        <View style={styles.right}>
+          <TouchableOpacity
+            onPress={onNotificationsPress || (() => navigation.navigate('Notifications' as never))}
+            style={[styles.bellBtn, { borderColor: theme.colors.border, backgroundColor: isDark ? 'rgba(148,163,184,0.08)' : theme.colors.background }]}
+            activeOpacity={0.85}
+            accessibilityLabel="Notifications"
+          >
+            <Ionicons name="notifications-outline" size={20} color={theme.colors.text} />
+            {notificationCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeTxt}>{notificationCount > 9 ? '9+' : notificationCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+          <SuperAdminHeaderLogo navigation={navigation} size={32} />
+        </View>
       </View>
     </View>
   );
@@ -48,6 +79,10 @@ export function SuperAdminTopHeader({ navigation, options, showDrawerToggle = tr
 const styles = StyleSheet.create({
   bar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 0 rgba(15,23,42,0.06)' } as object,
+      default: {},
+    }),
   },
   row: {
     flexDirection: 'row',
@@ -64,7 +99,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: '800',
-    letterSpacing: -0.3,
-    paddingHorizontal: 8,
+    letterSpacing: -0.4,
+    paddingHorizontal: 4,
   },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeTxt: { color: '#fff', fontSize: 9, fontWeight: '900' },
 });

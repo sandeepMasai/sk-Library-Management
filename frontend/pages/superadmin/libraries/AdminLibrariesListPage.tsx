@@ -6,7 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -21,6 +21,8 @@ import ForbiddenScreen from '../../../screens/common/ForbiddenScreen';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { PlanTypeFilter } from '../../../components/superadmin/filters';
 import { navigateToAdminLibraryDetail } from '../../../components/superadmin/navigateToAdminLibraryDetail';
+import { SaasEmptyState } from '../../../components/superadmin/ui';
+import { DashboardWidgetSkeleton } from '../../../components/superadmin/dashboard';
 import type { LibrariesStackParamList } from './types';
 import { PLAN_FILTER_SCREEN_TITLES } from './types';
 
@@ -65,6 +67,8 @@ export default function AdminLibrariesListPage() {
   const searchQuery = route.params?.search ?? '';
 
   const { mode } = useTheme();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 640;
   const styles = useMemo(() => makeStyles(mode), [mode]);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const role = useAppStore((s) => s.role);
@@ -158,29 +162,56 @@ export default function AdminLibrariesListPage() {
         keyExtractor={(i) => i.id}
         contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.xl }}
         renderItem={({ item }) => {
-          const bg = item.isActive ? '#ECFDF5' : '#FEF2F2';
-          const fg = item.isActive ? '#059669' : '#DC2626';
-          const border = item.isActive ? '#A7F3D0' : '#FECACA';
+          const activeBg = mode === 'dark' ? 'rgba(16,185,129,0.14)' : '#ECFDF5';
+          const activeFg = '#059669';
+          const activeBorder = mode === 'dark' ? 'rgba(16,185,129,0.28)' : '#A7F3D0';
+          const blockedBg = mode === 'dark' ? 'rgba(239,68,68,0.14)' : '#FEF2F2';
+          const blockedFg = '#DC2626';
+          const blockedBorder = mode === 'dark' ? 'rgba(239,68,68,0.28)' : '#FECACA';
+          const bg = item.isActive ? activeBg : blockedBg;
+          const fg = item.isActive ? activeFg : blockedFg;
+          const border = item.isActive ? activeBorder : blockedBorder;
+          const expiry = item.planExpiryDate
+            ? new Date(item.planExpiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—';
           return (
             <View style={styles.card}>
-              <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.meta} numberOfLines={1}>
-                {item.ownerName} · {item.email}
-              </Text>
-              <Text style={styles.meta2} numberOfLines={1}>
-                Code: {item.libraryCode || '—'} · Students: {item.studentCount ?? '—'}
-              </Text>
-              <View style={styles.row}>
-                <View style={[styles.badge, { backgroundColor: bg, borderColor: border }]}>
-                  <Text style={[styles.badgeTxt, { color: fg }]}>{item.isActive ? 'Active' : 'Blocked'}</Text>
+              <View style={styles.cardTop}>
+                <View style={[styles.libAvatar, { backgroundColor: withAlpha(theme.colors.primary, 0.12) }]}>
+                  <Text style={[styles.libAvatarTxt, { color: theme.colors.primary }]}>
+                    {String(item.name || 'L').slice(0, 1).toUpperCase()}
+                  </Text>
                 </View>
-                <Text style={styles.plan}>{planChipLabel(item)}</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.meta} numberOfLines={1}>{item.ownerName}</Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: bg, borderColor: border }]}>
+                  <Text style={[styles.badgeTxt, { color: fg }]}>{item.isActive ? '🟢 Active' : '🔴 Blocked'}</Text>
+                </View>
+              </View>
+              <View style={styles.metaGrid}>
+                <View style={styles.metaCell}>
+                  <Text style={styles.metaLbl}>Plan</Text>
+                  <Text style={styles.metaVal}>{planChipLabel(item)}</Text>
+                </View>
+                <View style={styles.metaCell}>
+                  <Text style={styles.metaLbl}>Expiry</Text>
+                  <Text style={styles.metaVal}>{expiry}</Text>
+                </View>
+                <View style={styles.metaCell}>
+                  <Text style={styles.metaLbl}>Students</Text>
+                  <Text style={styles.metaVal}>{item.studentCount ?? '—'}</Text>
+                </View>
+              </View>
+              <View style={[styles.row, isCompact && { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <Text style={styles.codeTxt} numberOfLines={1}>Code: {item.libraryCode || '—'}</Text>
+                <View style={[styles.actionRow, isCompact && { marginTop: 8 }]}>
                   <TouchableOpacity
                     onPress={() => navigateToAdminLibraryDetail(navigation, item.id)}
-                    style={[styles.smallBtn, { backgroundColor: theme.colors.surface }]}
+                    style={[styles.smallBtn, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
                   >
-                    <Text style={[styles.smallTxt, { color: theme.colors.text }]}>Details</Text>
+                    <Text style={[styles.smallTxt, { color: theme.colors.surface }]}>Details</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => onToggle(item)} style={styles.smallBtn}>
                     <Text style={styles.smallTxt}>{item.isActive ? 'Block' : 'Unblock'}</Text>
@@ -192,12 +223,19 @@ export default function AdminLibrariesListPage() {
         }}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.emptyLoad}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.empty}>Loading…</Text>
+            <View style={{ gap: 10, paddingVertical: 8 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <View key={i} style={styles.card}>
+                  <DashboardWidgetSkeleton lines={3} />
+                </View>
+              ))}
             </View>
           ) : (
-            <Text style={styles.empty}>No libraries in this category.</Text>
+            <SaasEmptyState
+              icon="business-outline"
+              title="No Libraries Found"
+              description="Try a different plan filter or search term."
+            />
           )
         }
       />
@@ -232,7 +270,7 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function makeStyles(_mode: 'light' | 'dark') {
+function makeStyles(mode: 'light' | 'dark') {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.colors.background },
     topBar: {
@@ -268,13 +306,35 @@ function makeStyles(_mode: 'light' | 'dark') {
     },
     card: {
       backgroundColor: theme.colors.surface,
-      borderRadius: 18,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: theme.colors.border,
       padding: 14,
       marginBottom: 10,
       ...theme.shadow.card,
     },
+    cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    libAvatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    libAvatarTxt: { fontSize: 16, fontWeight: '900' },
+    metaGrid: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    metaCell: {
+      flex: 1,
+      backgroundColor: mode === 'dark' ? 'rgba(148,163,184,0.06)' : theme.colors.background,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 8,
+    },
+    metaLbl: { fontSize: 9, fontWeight: '800', color: theme.colors.mutedText, textTransform: 'uppercase', letterSpacing: 0.4 },
+    metaVal: { marginTop: 3, fontSize: 12, fontWeight: '900', color: theme.colors.text },
+    codeTxt: { fontSize: 11, fontWeight: '700', color: theme.colors.mutedText, flex: 1 },
+    actionRow: { flexDirection: 'row', gap: 8, marginLeft: 'auto' },
     name: { fontSize: 16, fontWeight: '900', color: theme.colors.text },
     meta: { marginTop: 4, fontSize: 12, fontWeight: '700', color: theme.colors.mutedText },
     meta2: { marginTop: 2, fontSize: 12, fontWeight: '800', color: theme.colors.mutedText },

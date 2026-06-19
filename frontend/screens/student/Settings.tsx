@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,7 +7,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { theme } from '../../theme';
 import { useAppStore } from '../../store';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { getLibraryContact, toApiErrorMessage as toLibraryErr } from '../../services/libraryContact';
+import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert';
+import { LibraryContactSection } from '../../components/student/LibraryContactSection';
 import { getGlobalSettings, isValidHttpUrl, toApiErrorMessage } from '../../services/globalSettings';
 import { APP_DISPLAY_NAME } from '../../constants/branding';
 
@@ -27,79 +28,21 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
   const currentUser = useAppStore((s) => s.currentUser);
   const logout = useAppStore((s) => s.logout);
 
-  const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
+  const [infoAlert, setInfoAlert] = useState<{
+    title: string;
+    message?: string;
+    tone?: SimpleAlertTone;
+  } | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [contact, setContact] = useState<Awaited<ReturnType<typeof getLibraryContact>> | null>(null);
 
-  useEffect(() => {
-    getLibraryContact()
-      .then(setContact)
-      .catch(() => setContact(null));
-  }, []);
+  const showAlert = (title: string, message?: string, tone: SimpleAlertTone = 'info') => {
+    setInfoAlert({ title, message, tone });
+  };
 
   const name = (currentUser?.name ?? 'Student').toUpperCase();
   const mobile = (currentUser as any)?.mobile ?? '';
   const username = (currentUser as any)?.username ?? '';
   const photoUrl = String((currentUser as any)?.photoUrl || '').trim();
-
-  const openWhatsApp = async () => {
-    try {
-      const c = await getLibraryContact();
-      if (!c.communication?.whatsapp) {
-        setInfoModal({ title: 'WhatsApp', description: 'Library WhatsApp number is not set yet.' });
-        return;
-      }
-      const msg = 'Hello, I need help with my library account';
-      const url = `https://wa.me/${c.communication.whatsapp}?text=${encodeURIComponent(msg)}`;
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) {
-        setInfoModal({ title: 'WhatsApp', description: 'WhatsApp is not available on this device.' });
-        return;
-      }
-      await Linking.openURL(url);
-    } catch (e) {
-      setInfoModal({ title: 'WhatsApp', description: toLibraryErr(e) });
-    }
-  };
-
-  const openChannel = async () => {
-    try {
-      const c = await getLibraryContact();
-      const url = String(c.communication?.channel || '').trim();
-      if (!url) {
-        setInfoModal({ title: 'Channel', description: 'Library channel link is not set yet.' });
-        return;
-      }
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) {
-        setInfoModal({ title: 'Channel', description: 'Link is not available on this device.' });
-        return;
-      }
-      await Linking.openURL(url);
-    } catch (e) {
-      setInfoModal({ title: 'Channel', description: toLibraryErr(e) });
-    }
-  };
-
-  const openEmail = async () => {
-    try {
-      const c = await getLibraryContact();
-      const email = String(c.communication?.email || '').trim();
-      if (!email) {
-        setInfoModal({ title: 'Email', description: 'Library email is not set yet.' });
-        return;
-      }
-      const url = `mailto:${email}`;
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) {
-        setInfoModal({ title: 'Email', description: 'Email app is not available on this device.' });
-        return;
-      }
-      await Linking.openURL(url);
-    } catch (e) {
-      setInfoModal({ title: 'Email', description: toLibraryErr(e) });
-    }
-  };
 
   const onLogout = () => setShowLogoutModal(true);
 
@@ -154,17 +97,11 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
           />
         </Section>
 
-        <Section title="SUPPORT">
-          {contact?.communication?.whatsapp ? (
-            <Item icon="logo-whatsapp" title="WhatsApp Chat" sub="Contact library on WhatsApp" onPress={openWhatsApp} last={!contact?.communication?.channel && !contact?.communication?.email} />
-          ) : null}
-          {contact?.communication?.channel ? (
-            <Item icon="megaphone-outline" title="Join Channel" sub="Library announcements" onPress={openChannel} last={!contact?.communication?.email} />
-          ) : null}
-          {contact?.communication?.email ? (
-            <Item icon="mail-outline" title="Email Support" sub="Send email to library" onPress={openEmail} last />
-          ) : null}
-        </Section>
+        <LibraryContactSection
+          studentName={currentUser?.name}
+          studentUsername={(currentUser as { username?: string })?.username}
+          onAlert={showAlert}
+        />
 
         <Section title="LEGAL">
           <Item
@@ -176,12 +113,12 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
                 const s = await getGlobalSettings();
                 const url = String(s.privacyPolicyUrl || '').trim();
                 if (!isValidHttpUrl(url)) {
-                  setInfoModal({ title: 'Not configured', description: 'Privacy Policy link is not set yet.' });
+                  showAlert('Not configured', 'Privacy Policy link is not set yet.', 'warning');
                   return;
                 }
                 navigation.getParent()?.navigate('StudentLegalWebView', { title: 'Privacy Policy', url });
               } catch (e) {
-                setInfoModal({ title: 'Failed', description: toApiErrorMessage(e) });
+                showAlert('Failed', toApiErrorMessage(e), 'error');
               }
             }}
           />
@@ -194,12 +131,12 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
                 const s = await getGlobalSettings();
                 const url = String(s.termsUrl || '').trim();
                 if (!isValidHttpUrl(url)) {
-                  setInfoModal({ title: 'Not configured', description: 'Terms link is not set yet.' });
+                  showAlert('Not configured', 'Terms link is not set yet.', 'warning');
                   return;
                 }
                 navigation.getParent()?.navigate('StudentLegalWebView', { title: 'Terms & Conditions', url });
               } catch (e) {
-                setInfoModal({ title: 'Failed', description: toApiErrorMessage(e) });
+                showAlert('Failed', toApiErrorMessage(e), 'error');
               }
             }}
           />
@@ -207,9 +144,7 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
             icon="information-circle-outline"
             title="About App"
             sub="Version & info"
-            onPress={() =>
-              setInfoModal({ title: 'About', description: `${APP_DISPLAY_NAME} (Student) v1.0.0` })
-            }
+            onPress={() => showAlert('About', `${APP_DISPLAY_NAME} (Student) v1.0.0`, 'info')}
             last
           />
         </Section>
@@ -247,17 +182,12 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
         }}
       />
 
-      <ConfirmModal
-        visible={!!infoModal}
-        tone="neutral"
-        label="INFO"
-        title={infoModal?.title ?? 'Info'}
-        description={infoModal?.description}
-        showCancel={false}
-        confirmText="OK"
-        confirmIcon="checkmark-outline"
-        onCancel={() => setInfoModal(null)}
-        onConfirm={() => setInfoModal(null)}
+      <SimpleAlert
+        visible={!!infoAlert}
+        tone={infoAlert?.tone ?? 'info'}
+        title={infoAlert?.title ?? ''}
+        message={infoAlert?.message}
+        onClose={() => setInfoAlert(null)}
       />
     </SafeAreaView>
   );

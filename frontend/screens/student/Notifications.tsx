@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow, isToday, isYesterday, format } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { registerStudentPushTokenIfNeeded } from '../../services/pushNotifications';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import { resolveNotificationCategory } from '../../constants/notificationCategoryUi';
 import { theme } from '../../theme';
@@ -24,6 +25,7 @@ import {
   type StudentNotificationRowData,
   type StudentNotificationRowStyles,
 } from '../../components/student/StudentNotificationRow';
+import { NotificationImageViewer } from '../../components/student/NotificationImageViewer';
 
 type RowItem = StudentNotificationRowData;
 
@@ -86,6 +88,7 @@ export default function StudentNotifications() {
   const [markingAll, setMarkingAll] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [viewer, setViewer] = useState<{ url: string; title: string } | null>(null);
 
   const allRows: RowItem[] = useMemo(() => {
     if (!currentUser) return [];
@@ -98,6 +101,7 @@ export default function StudentNotifications() {
           id: n.id,
           title: n.title,
           message: n.message,
+          imageUrl: n.imageUrl || null,
           timeLabel: timeLabel(n.date),
           isSystem,
           category: resolveNotificationCategory(n.category, isSystem),
@@ -150,6 +154,7 @@ export default function StudentNotifications() {
 
   useFocusEffect(
     useCallback(() => {
+      void registerStudentPushTokenIfNeeded();
       if (currentUser) void fetchNotifications(currentUser.id);
     }, [currentUser, fetchNotifications])
   );
@@ -178,6 +183,10 @@ export default function StudentNotifications() {
 
   const keyExtractor = useCallback((item: RowItem) => item.id, []);
 
+  const handleImagePress = useCallback((imageUrl: string, title: string) => {
+    setViewer({ url: imageUrl, title });
+  }, []);
+
   const renderItem = useCallback(
     ({ item }: { item: RowItem }) => (
       <StudentNotificationRow
@@ -185,9 +194,10 @@ export default function StudentNotifications() {
         isOpen={expanded.has(item.id)}
         styles={rowStyles}
         onPress={handleNotificationPress}
+        onImagePress={handleImagePress}
       />
     ),
-    [expanded, rowStyles, handleNotificationPress]
+    [expanded, rowStyles, handleNotificationPress, handleImagePress]
   );
 
   const listHeader = useMemo(
@@ -297,7 +307,7 @@ export default function StudentNotifications() {
           data={rows}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          extraData={`${expanded.size}-${unreadCount}`}
+          extraData={`${expanded.size}-${unreadCount}-${viewer?.url || ''}`}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
           ItemSeparatorComponent={ListSeparator}
@@ -309,6 +319,11 @@ export default function StudentNotifications() {
           drawDistance={240}
         />
       </View>
+      <NotificationImageViewer
+        imageUrl={viewer?.url ?? null}
+        title={viewer?.title}
+        onClose={() => setViewer(null)}
+      />
     </SafeAreaView>
   );
 }

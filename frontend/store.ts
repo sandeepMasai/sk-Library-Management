@@ -5,7 +5,7 @@ import { resolveApiBaseUrl } from './constants/apiUrl';
 import { prepareAttendanceQrPayload } from './utils/attendanceQr';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, apiDelete, apiGet, apiPatch, apiPost, apiPut, type ApiError } from './services/api';
+import { api, apiDelete, apiGet, apiPatch, apiPost, apiPostFormData, apiPut, type ApiError } from './services/api';
 import { isNotificationUnread } from './utils/notificationRead';
 import { normalizeAuthRole, unwrapAuthLoginPayload } from './utils/authRole';
 
@@ -78,6 +78,8 @@ export interface User {
   isEmailVerified?: boolean;
   /** Timestamp when email was verified (library only). */
   emailVerifiedAt?: string | null;
+  /** Library: block attendance scan for expired/unpaid students when true (default). */
+  attendanceActiveMembersOnly?: boolean;
 }
 
 export interface Attendance {
@@ -167,6 +169,8 @@ export interface Notification {
   title: string;
   message: string;
   date: string;
+  imageUrl?: string | null;
+  messageType?: 'text' | 'image' | 'text_image';
   targetId?: string; // 'all' or studentId
   targetType?: 'all' | 'student' | 'library';
   category?: NotificationCategory;
@@ -175,6 +179,31 @@ export interface Notification {
   /** Legacy global read flag (library inbox); still returned for compatibility. */
   isRead?: boolean;
   readAt?: string | null;
+}
+
+export type CommunicationAudience = 'all' | 'active' | 'expired' | 'shift' | 'selected';
+export type CommunicationMessageType = 'text' | 'image' | 'text_image';
+
+export interface CommunicationCampaign {
+  id: string;
+  title: string;
+  message: string;
+  imageUrl?: string | null;
+  messageType: CommunicationMessageType;
+  audience: CommunicationAudience;
+  audienceLabel: string;
+  recipientCount: number;
+  pushSentCount: number;
+  readCount?: number;
+  sentAt: string | null;
+}
+
+export interface CommunicationStats {
+  totalSent: number;
+  delivered: number;
+  read: number;
+  pending: number;
+  campaignCount: number;
 }
 
 export interface StudentInput {
@@ -385,6 +414,25 @@ interface AppState {
   markNotificationRead: (id: string) => Promise<{ ok: boolean }>;
   markAllNotificationsRead: (studentId: string) => Promise<{ ok: boolean; count: number }>;
 
+  // Admin - Communications (text / image messages to students)
+  sendCommunicationMessage: (payload: {
+    title: string;
+    message?: string;
+    messageType: CommunicationMessageType;
+    audience: CommunicationAudience;
+    studentIds?: string[];
+    shiftId?: string | null;
+    category?: NotificationCategory;
+    imageUri?: string | null;
+  }) => Promise<{ ok: boolean; message?: string; recipientCount?: number }>;
+  fetchCommunicationHistory: () => Promise<CommunicationCampaign[]>;
+  fetchCommunicationStats: () => Promise<CommunicationStats | null>;
+  previewCommunicationRecipientCount: (params: {
+    audience: CommunicationAudience;
+    studentIds?: string[];
+    shiftId?: string | null;
+  }) => Promise<number>;
+
   // Renewal requests
   fetchRenewContext: () => Promise<{ ok: boolean; context?: RenewContext; message?: string }>;
   fetchRenewDashboard: () => Promise<{
@@ -421,7 +469,9 @@ interface AppState {
 
   // Student - Attendance
   fetchStudentAttendance: (studentId: string, year?: number, month?: number) => Promise<void>;
-  markAttendance: (token: string) => Promise<{ ok: boolean; alreadyMarked?: boolean; message?: string }>;
+  markAttendance: (
+    token: string
+  ) => Promise<{ ok: boolean; alreadyMarked?: boolean; membershipExpired?: boolean; message?: string }>;
 
   // Helpers
   getTodayAttendance: () => Attendance[];
@@ -507,13 +557,25 @@ async function hydrateSessionAfterAuth(
         : [initialAdmin, userWithRole, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
   }));
 
-  if (sessionRole === 'student' && !nextLibraryId && token) {
+  if (sessionRole === 'student' && token) {
+    void import('./services/libraryContact').then(({ clearLibraryContactCache }) => clearLibraryContactCache());
     try {
-      const me = await apiGet<{ ok: boolean; student?: { libraryId?: string | null } }>(`/api/student/me`);
-      const hydratedLibraryId = me?.student?.libraryId ?? null;
-      if (hydratedLibraryId) {
-        nextLibraryId = hydratedLibraryId;
-        set({ libraryId: hydratedLibraryId });
+      const me = await apiGet<{ ok: boolean; student?: User }>(`/api/student/me`);
+      const hydratedStudent = me?.student;
+      if (hydratedStudent?.id) {
+        const hydratedLibraryId = hydratedStudent.libraryId ?? null;
+        if (hydratedLibraryId) nextLibraryId = hydratedLibraryId;
+        set((state) => ({
+          currentUser: { ...hydratedStudent, role: 'student' as const },
+          libraryId: hydratedLibraryId ?? state.libraryId,
+          users: [
+            ...state.users.filter((u) => u.id !== hydratedStudent.id),
+            { ...hydratedStudent, role: 'student' as const },
+          ],
+          notifications: Array.isArray((me as { notifications?: Notification[] }).notifications)
+            ? (me as { notifications: Notification[] }).notifications
+            : state.notifications,
+        }));
       }
     } catch {
       /* ignore */
@@ -994,6 +1056,10 @@ export const useAppStore = create<AppState>()(
   },
 
   logout: () => {
+    const prevLibraryId = get().libraryId;
+    void import('./services/libraryContact').then(({ clearLibraryContactCache }) =>
+      clearLibraryContactCache(prevLibraryId)
+    );
     void import('./services/authTokenHolder').then(({ clearAuthTokens }) => clearAuthTokens());
     set({
       currentUser: null,
@@ -1057,6 +1123,7 @@ export const useAppStore = create<AppState>()(
               plan: p?.plan ?? cu?.plan,
               planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
               subscriptionStatus: p?.subscriptionStatus ?? cu?.subscriptionStatus,
+              attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
             } as any,
           });
           return { ok: true };
@@ -1094,6 +1161,7 @@ export const useAppStore = create<AppState>()(
             logoUrl: p?.logoUrl ?? cu?.logoUrl,
             plan: p?.plan ?? cu?.plan,
             planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
+            attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
           } as any,
         });
         return { ok: true };
@@ -1529,6 +1597,74 @@ export const useAppStore = create<AppState>()(
     }
   },
 
+  sendCommunicationMessage: async ({
+    title,
+    message = '',
+    messageType,
+    audience,
+    studentIds = [],
+    shiftId = null,
+    category = 'general',
+    imageUri = null,
+  }) => {
+    try {
+      const form = new FormData();
+      form.append('title', title.trim());
+      form.append('message', message.trim());
+      form.append('messageType', messageType);
+      form.append('audience', audience);
+      form.append('category', category);
+      if (studentIds.length) form.append('studentIds', JSON.stringify(studentIds));
+      if (shiftId) form.append('shiftId', shiftId);
+      if (imageUri) {
+        const name = imageUri.split('/').pop() || 'message.jpg';
+        form.append('image', { uri: imageUri, name, type: 'image/jpeg' } as unknown as Blob);
+      }
+      const result = await apiPostFormData<{
+        ok: boolean;
+        recipientCount: number;
+      }>(`/api/communications/send`, form);
+      await get().fetchNotifications();
+      return { ok: true, recipientCount: result.recipientCount };
+    } catch (e) {
+      const err = e as ApiError;
+      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  fetchCommunicationHistory: async () => {
+    try {
+      const res = await apiGet<{ ok: boolean; history: CommunicationCampaign[] }>(`/api/communications/history`);
+      return res.history || [];
+    } catch {
+      return [];
+    }
+  },
+
+  fetchCommunicationStats: async () => {
+    try {
+      const res = await apiGet<{ ok: boolean; stats: CommunicationStats }>(`/api/communications/stats`);
+      return res.stats || null;
+    } catch {
+      return null;
+    }
+  },
+
+  previewCommunicationRecipientCount: async ({ audience, studentIds = [], shiftId = null }) => {
+    if (audience === 'selected' && studentIds.length === 0) return 0;
+    if (audience === 'shift' && !shiftId) return 0;
+    try {
+      const res = await apiGet<{ ok: boolean; count: number }>(`/api/communications/preview-count`, {
+        audience,
+        ...(studentIds.length ? { studentIds: studentIds.join(',') } : {}),
+        ...(shiftId ? { shiftId } : {}),
+      });
+      return res.count ?? 0;
+    } catch {
+      return 0;
+    }
+  },
+
   markNotificationRead: async (id) => {
     if (!id || id.startsWith('sys-')) return { ok: true };
     set((s) => ({
@@ -1771,7 +1907,11 @@ export const useAppStore = create<AppState>()(
       return { ok: true, alreadyMarked: Boolean(data.alreadyMarked), message: data.message };
     } catch (e) {
       const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+      return {
+        ok: false,
+        membershipExpired: Boolean(err.membershipExpired || err.code === 'MEMBERSHIP_EXPIRED'),
+        message: err?.message || `Backend unavailable (${API_URL})`,
+      };
     }
   },
 

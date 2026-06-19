@@ -17,7 +17,9 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { APP_DISPLAY_NAME } from '../../constants/branding';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
-import { ConfirmModal } from '../../components/ConfirmModal';
+import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert';
+import { LibraryContactSection } from '../../components/student/LibraryContactSection';
+import FlashToast from '../../components/auth/FlashToast';
 
 const { width } = Dimensions.get('window');
 const CARD_W = width - 40;
@@ -38,11 +40,22 @@ export default function StudentProfile() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
-  const [infoModal, setInfoModal] = useState<{ title: string; description?: string } | null>(null);
+  const [infoAlert, setInfoAlert] = useState<{
+    title: string;
+    message?: string;
+    tone?: SimpleAlertTone;
+    autoCloseMs?: number;
+  } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' | 'neutral' } | null>(null);
   const [verifyEmailOpen, setVerifyEmailOpen] = useState(false);
+  const [verifyFeedback, setVerifyFeedback] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [verifyOtp, setVerifyOtp] = useState('');
   const [verifySendLoading, setVerifySendLoading] = useState(false);
   const [verifySubmitLoading, setVerifySubmitLoading] = useState(false);
+
+  const showAlert = (title: string, message?: string, tone: SimpleAlertTone = 'info', autoCloseMs?: number) => {
+    setInfoAlert({ title, message, tone, autoCloseMs });
+  };
 
   // Bootstrap on direct navigation / reload (when token exists but currentUser is not hydrated yet).
   useEffect(() => {
@@ -135,10 +148,7 @@ export default function StudentProfile() {
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      setInfoModal({
-        title: 'Permission required',
-        description: 'Allow photo library access to update your profile photo.',
-      });
+      showAlert('Permission required', 'Allow photo library access to update your profile photo.', 'warning');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -152,10 +162,9 @@ export default function StudentProfile() {
     const r = await uploadMyPhoto(result.assets[0].uri);
     setUploading(false);
     if (!r.ok) {
-      setInfoModal({
-        title: 'Upload failed',
-        description: r.message || 'Could not upload photo.',
-      });
+      setToast({ msg: r.message || 'Could not upload photo.', tone: 'error' });
+    } else {
+      setToast({ msg: 'Profile photo updated.', tone: 'success' });
     }
   };
 
@@ -184,24 +193,23 @@ export default function StudentProfile() {
 
   const openStudentVerifyEmail = () => {
     if (!studentEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentEmail)) {
-      setInfoModal({
-        title: 'Email required',
-        description: 'Ask your library to add an email address to your student profile before you can verify it.',
-      });
+      showAlert('Email required', 'Ask your library to add an email address to your student profile before you can verify it.', 'info');
       return;
     }
     setVerifyOtp('');
+    setVerifyFeedback(null);
     setVerifyEmailOpen(true);
   };
 
   const sendStudentProfileEmailOtp = async () => {
     setVerifySendLoading(true);
+    setVerifyFeedback(null);
     try {
       await apiPost('/api/student/me/send-verification-email');
-      setInfoModal({ title: 'OTP sent', description: 'Enter the code we sent to your email.' });
+      setVerifyFeedback({ msg: 'OTP sent. Check your email inbox.', tone: 'success' });
     } catch (e: any) {
       const err = e as ApiError;
-      setInfoModal({ title: 'Could not send', description: err?.message || 'Failed to send OTP' });
+      setVerifyFeedback({ msg: err?.message || 'Failed to send OTP', tone: 'error' });
     } finally {
       setVerifySendLoading(false);
     }
@@ -210,10 +218,11 @@ export default function StudentProfile() {
   const submitStudentProfileEmailOtp = async () => {
     const digits = verifyOtp.replace(/\D/g, '');
     if (digits.length < 6) {
-      setInfoModal({ title: 'OTP', description: 'Enter the 6-digit verification code.' });
+      setVerifyFeedback({ msg: 'Enter the 6-digit verification code.', tone: 'error' });
       return;
     }
     setVerifySubmitLoading(true);
+    setVerifyFeedback(null);
     try {
       const res = await apiPost<{ ok: boolean; isEmailVerified?: boolean; student?: { id?: string } }>(
         '/api/student/me/verify-email',
@@ -228,10 +237,11 @@ export default function StudentProfile() {
       }
       setVerifyEmailOpen(false);
       setVerifyOtp('');
-      setInfoModal({ title: 'Verified', description: 'Your email address is verified.' });
+      setVerifyFeedback(null);
+      showAlert('Email verified!', 'Your email address has been verified successfully.', 'success', 2800);
     } catch (e: any) {
       const err = e as ApiError;
-      setInfoModal({ title: 'Verification failed', description: err?.message || 'Invalid or expired OTP' });
+      setVerifyFeedback({ msg: err?.message || 'Invalid or expired OTP', tone: 'error' });
     } finally {
       setVerifySubmitLoading(false);
     }
@@ -481,6 +491,12 @@ export default function StudentProfile() {
           </View>
         </View>
 
+        <LibraryContactSection
+          studentName={currentUser.name}
+          studentUsername={currentUser.username}
+          onAlert={showAlert}
+        />
+
         {/* ── Sign out ── */}
         <TouchableOpacity onPress={onLogout} activeOpacity={0.85} style={styles.signOutBtn}>
           <View style={styles.signOutIconBox}>
@@ -506,6 +522,28 @@ export default function StudentProfile() {
             <Text style={styles.verifyModalHint}>
               We will email a code to {studentEmail || 'your address on file'}.
             </Text>
+            {verifyFeedback ? (
+              <View
+                style={[
+                  styles.verifyFeedbackBanner,
+                  verifyFeedback.tone === 'success' ? styles.verifyFeedbackSuccess : styles.verifyFeedbackError,
+                ]}
+              >
+                <Ionicons
+                  name={verifyFeedback.tone === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                  size={16}
+                  color={verifyFeedback.tone === 'success' ? '#059669' : '#DC2626'}
+                />
+                <Text
+                  style={[
+                    styles.verifyFeedbackTxt,
+                    verifyFeedback.tone === 'success' ? styles.verifyFeedbackTxtSuccess : styles.verifyFeedbackTxtError,
+                  ]}
+                >
+                  {verifyFeedback.msg}
+                </Text>
+              </View>
+            ) : null}
             <TouchableOpacity
               style={styles.verifyModalSendBtn}
               onPress={sendStudentProfileEmailOtp}
@@ -515,7 +553,10 @@ export default function StudentProfile() {
             </TouchableOpacity>
             <TextInput
               value={verifyOtp}
-              onChangeText={setVerifyOtp}
+              onChangeText={(t) => {
+                setVerifyOtp(t);
+                if (verifyFeedback?.tone === 'error') setVerifyFeedback(null);
+              }}
               keyboardType="number-pad"
               placeholder="Enter 6-digit OTP"
               placeholderTextColor={theme.colors.mutedText}
@@ -550,17 +591,20 @@ export default function StudentProfile() {
         onConfirm={confirmSignOut}
       />
 
-      <ConfirmModal
-        visible={!!infoModal}
-        tone="neutral"
-        label="INFO"
-        title={infoModal?.title ?? 'Info'}
-        description={infoModal?.description}
-        showCancel={false}
-        confirmText="OK"
-        confirmIcon="checkmark-outline"
-        onCancel={() => setInfoModal(null)}
-        onConfirm={() => setInfoModal(null)}
+      <SimpleAlert
+        visible={!!infoAlert}
+        tone={infoAlert?.tone ?? 'info'}
+        title={infoAlert?.title ?? ''}
+        message={infoAlert?.message}
+        autoCloseMs={infoAlert?.autoCloseMs}
+        onClose={() => setInfoAlert(null)}
+      />
+
+      <FlashToast
+        visible={!!toast}
+        message={toast?.msg || ''}
+        tone={toast?.tone}
+        onHide={() => setToast(null)}
       />
     </SafeAreaView>
   );
@@ -836,6 +880,27 @@ function makeStyles() {
     verifyModalBtnGhostTxt: { fontSize: 14, fontWeight: '900', color: theme.colors.text },
     verifyModalBtnPrimary: { backgroundColor: '#6366F1' },
     verifyModalBtnPrimaryTxt: { fontSize: 14, fontWeight: '900', color: '#fff' },
+    verifyFeedbackBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+    },
+    verifyFeedbackSuccess: {
+      backgroundColor: 'rgba(16,185,129,0.10)',
+      borderColor: 'rgba(16,185,129,0.28)',
+    },
+    verifyFeedbackError: {
+      backgroundColor: 'rgba(239,68,68,0.10)',
+      borderColor: 'rgba(239,68,68,0.28)',
+    },
+    verifyFeedbackTxt: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 18 },
+    verifyFeedbackTxtSuccess: { color: '#047857' },
+    verifyFeedbackTxtError: { color: '#B91C1C' },
 
     // ── Sign out ──
     signOutBtn: {

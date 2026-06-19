@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { subColors, subRadius, subShadow, subSpacing } from '../../ui/subscriptionTheme';
 import { useAppStore } from '../../store';
@@ -12,14 +12,21 @@ const SUBSCRIPTION_SYNC_MS = 60_000;
 
 type PlanRow = {
   id: string;
-  key: 'trial' | 'monthly' | '6month' | 'yearly';
+  key: string;
   name: string;
   price: number;
   discount: number;
   finalPrice: number;
+  originalPrice?: number | null;
+  strikePrice?: number | null;
+  savings?: number;
   duration: number;
   isActive: boolean;
   tag?: string | null;
+  isOneTimeOffer?: boolean;
+  badges?: { recommended?: boolean; bestValue?: boolean; limitedTime?: boolean; exclusive?: boolean };
+  promoDaysRemaining?: number | null;
+  description?: string;
 };
 
 function formatSubscriptionDateEnIn(iso: string | null | undefined): string {
@@ -51,6 +58,9 @@ function formatExpiryForLibrary(iso: string | null | undefined, plan: 'none' | '
  */
 export default function SubscriptionScreen() {
   const navigation = useNavigation<any>();
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompact = windowWidth < 480;
+  const layoutStyles = useMemo(() => makeLayoutStyles(isCompact), [isCompact]);
   const currentUser = useAppStore((s) => s.currentUser);
   const cancelSubscription = useAppStore((s) => s.cancelSubscription);
   const saveRetentionChoice = useAppStore((s) => s.saveRetentionChoice);
@@ -113,7 +123,7 @@ export default function SubscriptionScreen() {
 
   const [plans, setPlans] = useState<PlanRow[]>([]);
   // Selected plan key (syncs with backend's current plan type).
-  const [selectedPlan, setSelectedPlan] = useState<PlanRow['key'] | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -123,14 +133,21 @@ export default function SubscriptionScreen() {
         if (!alive) return;
         const rows: PlanRow[] = (res?.plans || []).map((p: any) => ({
           id: String(p._id),
-          key: String(p.key) as any,
+          key: String(p.key),
           name: String(p.name),
           price: Number(p.price || 0),
           discount: Number(p.discount || 0),
           finalPrice: Number(p.finalPrice || 0),
+          originalPrice: p.originalPrice != null ? Number(p.originalPrice) : null,
+          strikePrice: p.strikePrice != null ? Number(p.strikePrice) : null,
+          savings: Number(p.savings || 0),
           duration: Number(p.duration || 0),
           isActive: Boolean(p.isActive),
           tag: p.tag ?? null,
+          isOneTimeOffer: Boolean(p.isOneTimeOffer),
+          badges: p.badges || {},
+          promoDaysRemaining: p.promoDaysRemaining ?? null,
+          description: p.description || '',
         }));
         setPlans(rows);
         if (!selectedPlan && rows.length) setSelectedPlan(rows[0].key);
@@ -352,12 +369,12 @@ export default function SubscriptionScreen() {
           {subscriptionPeriodSummary ?? '--'}
         </Text>
 
-        <View style={styles.currentMetaRow}>
-          <View style={styles.metaItem}>
+        <View style={[styles.currentMetaRow, isCompact && layoutStyles.metaRowStack]}>
+          <View style={[styles.metaItem, isCompact && layoutStyles.metaItemFull]}>
             <Text style={styles.metaLbl}>JOIN DATE</Text>
             <Text style={styles.metaVal}>{formatSubscriptionDateEnIn(planStartDate)}</Text>
           </View>
-          <View style={styles.metaItem}>
+          <View style={[styles.metaItem, isCompact && layoutStyles.metaItemFull]}>
             <Text style={styles.metaLbl}>EXPIRY DATE</Text>
             <Text style={styles.metaVal}>{formatExpiryForLibrary(expiryDate, plan)}</Text>
           </View>
@@ -441,7 +458,11 @@ export default function SubscriptionScreen() {
         {visiblePlans.map((p) => {
           const active = selectedPlan === p.key;
           const showYearlySave = p.key === 'yearly' && saveVsMonthly > 0;
-          const hasDiscount = Number(p.discount || 0) > 0 && Number(p.finalPrice) < Number(p.price);
+          const strike = p.strikePrice ?? (p.originalPrice != null && p.originalPrice > p.finalPrice ? p.originalPrice : null);
+          const hasDiscount =
+            (strike != null && strike > p.finalPrice) ||
+            (Number(p.discount || 0) > 0 && Number(p.finalPrice) < Number(p.price));
+          const savings = p.savings ?? (strike != null ? Math.max(0, Number(strike) - Number(p.finalPrice)) : 0);
           const isPaidTick = Boolean(hasActiveProAccess && activePlanKey && p.key === activePlanKey);
           const isTrialTick = Boolean(hasActiveProAccess && activePlanKey === 'trial' && p.key === 'trial');
           const isCurrentPlan = Boolean(activePlanKey && p.key === activePlanKey && !isExpired);
@@ -452,16 +473,17 @@ export default function SubscriptionScreen() {
               onPress={() => (planChangeLocked ? null : setSelectedPlan(p.key))}
               style={[
                 styles.planCard,
+                layoutStyles.planCard,
                 active && styles.planCardSelected,
                 planChangeLocked && { opacity: 0.55 },
               ]}
               disabled={payBusy || planChangeLocked}
             >
-              <View style={[styles.radioOuter, active && styles.radioOuterOn]}>
+              <View style={[styles.radioOuter, active && styles.radioOuterOn, isCompact && layoutStyles.radioTop]}>
                 {active ? <View style={styles.radioInner} /> : null}
               </View>
 
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flex: 1, minWidth: 0, width: isCompact ? '100%' : undefined }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <Text style={styles.planTitle}>{p.name}</Text>
                   {isCurrentPlan ? (
@@ -474,11 +496,38 @@ export default function SubscriptionScreen() {
                       <Text style={[styles.tagTxt, p.tag === 'Popular' ? styles.tagTxtPopular : styles.tagTxtBest]}>{String(p.tag)}</Text>
                     </View>
                   ) : null}
+                  {p.isOneTimeOffer ? (
+                    <View style={[styles.tagPill, styles.tagBest]}>
+                      <Text style={[styles.tagTxt, styles.tagTxtBest]}>One-Time</Text>
+                    </View>
+                  ) : null}
+                  {p.badges?.recommended ? (
+                    <View style={[styles.tagPill, styles.tagPopular]}>
+                      <Text style={[styles.tagTxt, styles.tagTxtPopular]}>⭐ Popular</Text>
+                    </View>
+                  ) : null}
+                  {p.badges?.bestValue ? (
+                    <View style={[styles.tagPill, styles.tagBest]}>
+                      <Text style={[styles.tagTxt, styles.tagTxtBest]}>🔥 Best Value</Text>
+                    </View>
+                  ) : null}
+                  {p.badges?.limitedTime || (p.promoDaysRemaining != null && p.promoDaysRemaining <= 14) ? (
+                    <View style={[styles.tagPill, styles.tagPopular]}>
+                      <Text style={[styles.tagTxt, styles.tagTxtPopular]}>
+                        ⏰ {p.promoDaysRemaining != null ? `${p.promoDaysRemaining}d left` : 'Limited'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {p.badges?.exclusive ? (
+                    <View style={[styles.tagPill, styles.tagBest]}>
+                      <Text style={[styles.tagTxt, styles.tagTxtBest]}>🎁 Exclusive</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-                    {hasDiscount ? <Text style={styles.priceStrike}>₹{p.price}</Text> : null}
+                    {hasDiscount && strike != null ? <Text style={styles.priceStrike}>₹{strike}</Text> : hasDiscount ? <Text style={styles.priceStrike}>₹{p.price}</Text> : null}
                     <Text style={styles.planPrice}>
                       ₹{hasDiscount ? p.finalPrice : p.price}
                       {p.key === 'trial'
@@ -491,10 +540,15 @@ export default function SubscriptionScreen() {
                     </Text>
                     {hasDiscount ? (
                       <View style={styles.offPill}>
-                        <Text style={styles.offTxt}>{Math.round(Number(p.discount || 0))}% OFF</Text>
+                        <Text style={styles.offTxt}>
+                          {Number(p.discount || 0) > 0 ? `${Math.round(Number(p.discount || 0))}% OFF` : 'Special Offer'}
+                        </Text>
                       </View>
                     ) : null}
                   </View>
+                  {savings > 0 ? (
+                    <Text style={styles.savingsTxt}>You save ₹{savings}</Text>
+                  ) : null}
                   {showYearlySave ? <Text style={styles.saveTxt}>Save ₹{saveVsMonthly} vs monthly</Text> : null}
                   <Text style={styles.planSub} numberOfLines={1}>
                     {p.key === 'trial'
@@ -508,7 +562,7 @@ export default function SubscriptionScreen() {
                 </>
               </View>
 
-              <View style={{ alignItems: 'flex-end', paddingLeft: 10 }}>
+              <View style={[layoutStyles.planSideCol, isCompact && { width: '100%', flexDirection: 'row', justifyContent: 'flex-start', marginTop: 8, paddingLeft: 0 }]}>
                 {isPaidTick ? (
                   <View style={styles.paidTick}>
                     <Ionicons name="checkmark-circle" size={18} color={subColors.accent} />
@@ -865,6 +919,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   offTxt: { color: subColors.accent, fontWeight: '900', fontSize: 10, letterSpacing: 0.6 },
+  savingsTxt: { marginTop: 4, color: subColors.accent, fontWeight: '800', fontSize: 12 },
   tagPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: subRadius.pill, borderWidth: 1 },
   tagTxt: { fontWeight: '900', fontSize: 10, letterSpacing: 0.6 },
   tagPopular: { backgroundColor: 'rgba(16,185,129,0.18)', borderColor: 'rgba(16,185,129,0.28)' },
@@ -968,3 +1023,14 @@ const styles = StyleSheet.create({
   confirmCancelTxt: { color: '#EF4444', fontWeight: '900' },
 });
 
+function makeLayoutStyles(isCompact: boolean) {
+  return StyleSheet.create({
+    planCard: isCompact
+      ? { flexDirection: 'column', alignItems: 'flex-start' }
+      : {},
+    radioTop: isCompact ? { alignSelf: 'flex-start' } : {},
+    planSideCol: { alignItems: 'flex-end', paddingLeft: 10 },
+    metaItemFull: { flex: undefined, width: '100%' },
+    metaRowStack: isCompact ? { flexDirection: 'column' } : {},
+  });
+}

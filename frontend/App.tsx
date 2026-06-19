@@ -28,6 +28,8 @@ import {
   AdminStudentDetail,
   AdminAttendance,
   AdminNotifications,
+  SendMessageScreen,
+  CommunicationCenterScreen,
   AdminFees,
   RenewalRequestsScreen,
 } from './pages/libraryadmin';
@@ -236,6 +238,8 @@ function LibraryMainStack() {
     <Stack.Navigator key={gate ? 'gate_on' : 'gate_off'} initialRouteName={initialRouteName}>
       <Stack.Screen name="LibraryTabs" component={LibraryTabs} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={AdminNotifications} options={{ headerShown: false }} />
+      <Stack.Screen name="SendMessage" component={SendMessageScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CommunicationCenter" component={CommunicationCenterScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="RenewalRequests"
         component={RenewalRequestsScreen}

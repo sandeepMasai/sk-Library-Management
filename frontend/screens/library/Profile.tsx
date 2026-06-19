@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
-  Alert,
   ActivityIndicator,
   Platform,
   Linking,
@@ -23,6 +22,7 @@ import { api, apiGet, apiPost, apiPut, type ApiError } from '../../services/api'
 import { useAppStore } from '../../store';
 import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
+import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert';
 
 /**
  * Library ProfileScreen
@@ -66,12 +66,17 @@ export default function ProfileScreen() {
   const [resendSeconds, setResendSeconds] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [resendTimerKey, setResendTimerKey] = useState(0);
-  const [verifySuccessModalOpen, setVerifySuccessModalOpen] = useState(false);
+  const [alert, setAlert] = useState<{ title: string; message?: string; tone?: SimpleAlertTone; autoCloseMs?: number } | null>(null);
+  const [verifyFeedback, setVerifyFeedback] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const otpInputRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null]);
   const cursorBlink = useRef(new Animated.Value(1)).current;
   const [verifySendLoading, setVerifySendLoading] = useState(false);
   const [verifySubmitLoading, setVerifySubmitLoading] = useState(false);
   const resendRestartNextSend = useRef(false);
+
+  const showAlert = (title: string, message?: string, tone: SimpleAlertTone = 'info', autoCloseMs?: number) => {
+    setAlert({ title, message, tone, autoCloseMs });
+  };
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [seatCount, setSeatCount] = useState(0);
@@ -167,19 +172,19 @@ export default function ProfileScreen() {
   const saveSeatTotal = async () => {
     const n = Number(String(totalSeatsDraft).trim());
     if (!Number.isInteger(n) || n < 1 || n > 5000) {
-      Alert.alert('Invalid', 'Total seats must be a whole number between 1 and 5000.');
+      showAlert('Invalid', 'Total seats must be a whole number between 1 and 5000.', 'warning');
       return;
     }
     setSeatsSaving(true);
     try {
       const res = await setTotalSeats(n);
       if (!res.ok) {
-        Alert.alert('Could not update', res.message || 'Failed to update seats.');
+        showAlert('Could not update', res.message || 'Failed to update seats.', 'error');
         return;
       }
       setEditSeatsOpen(false);
       setSeatCount(n);
-      Alert.alert('Updated', `Library now has ${n} seats (numbered 1–${n}).`);
+      showAlert('Updated', `Library now has ${n} seats (numbered 1–${n}).`, 'success', 2600);
     } finally {
       setSeatsSaving(false);
     }
@@ -232,16 +237,10 @@ export default function ProfileScreen() {
     return () => clearTimeout(t);
   }, [verifyEmailOpen]);
 
-  useEffect(() => {
-    if (!verifySuccessModalOpen) return undefined;
-    const id = setTimeout(() => setVerifySuccessModalOpen(false), 2500);
-    return () => clearTimeout(id);
-  }, [verifySuccessModalOpen]);
-
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      showAlert('Permission required', 'Please allow access to your photo library.', 'warning');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -271,10 +270,10 @@ export default function ProfileScreen() {
       const p = response.data?.profile;
       setForm((s) => ({ ...s, logoUrl: p?.logoUrl || s.logoUrl }));
       setLogoPreview(null);
-      Alert.alert('Updated', 'Logo updated.');
+      showAlert('Updated', 'Logo updated.', 'success', 2600);
     } catch (e: any) {
       const err = e as ApiError;
-      Alert.alert('Error', err?.message || 'Failed to upload logo');
+      showAlert('Error', err?.message || 'Failed to upload logo', 'error');
     } finally {
       setUploading(false);
     }
@@ -282,7 +281,7 @@ export default function ProfileScreen() {
 
   const save = async () => {
     if (!form.name.trim() || !form.libraryName.trim() || !form.city.trim()) {
-      Alert.alert('Required', 'Name, Library name and City are required.');
+      showAlert('Required', 'Name, Library name and City are required.', 'warning');
       return;
     }
     setSaving(true);
@@ -305,7 +304,7 @@ export default function ProfileScreen() {
           telegram: form.telegram.trim(),
         },
       });
-      Alert.alert('Saved', 'Profile updated.');
+      showAlert('Saved', 'Profile updated.', 'success', 2600);
       // keep local form fresh
       const p = res.profile;
       setIsEmailVerified(Boolean(p?.isEmailVerified));
@@ -327,7 +326,7 @@ export default function ProfileScreen() {
       }));
     } catch (e: any) {
       const err = e as ApiError;
-      Alert.alert('Error', err?.message || 'Failed to update profile');
+      showAlert('Error', err?.message || 'Failed to update profile', 'error');
     } finally {
       setSaving(false);
     }
@@ -336,26 +335,28 @@ export default function ProfileScreen() {
   const openVerifyEmail = () => {
     const em = String(form.email || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      Alert.alert('Email required', 'Save a valid email on your profile first, then verify.');
+      showAlert('Email required', 'Save a valid email on your profile first, then verify.', 'info');
       return;
     }
     setOtpDigits(['', '', '', '', '', '']);
     setOtpFocusIndex(0);
+    setVerifyFeedback(null);
     setVerifyEmailOpen(true);
   };
 
   const sendProfileEmailOtp = async () => {
     setVerifySendLoading(true);
+    setVerifyFeedback(null);
     try {
       await apiPost('/api/library/send-verification-email');
       if (resendRestartNextSend.current) {
         resendRestartNextSend.current = false;
         setResendTimerKey((k) => k + 1);
       }
-      Alert.alert('OTP sent', 'Enter the code we sent to your library email.');
+      setVerifyFeedback({ msg: 'OTP sent. Check your library email inbox.', tone: 'success' });
     } catch (e: any) {
       const err = e as ApiError;
-      Alert.alert('Could not send', err?.message || 'Failed to send OTP');
+      setVerifyFeedback({ msg: err?.message || 'Failed to send OTP', tone: 'error' });
     } finally {
       setVerifySendLoading(false);
     }
@@ -364,10 +365,11 @@ export default function ProfileScreen() {
   const submitProfileEmailOtp = async () => {
     const digits = otpDigits.join('').replace(/\D/g, '');
     if (digits.length < 6) {
-      Alert.alert('OTP', 'Enter the 6-digit verification code.');
+      setVerifyFeedback({ msg: 'Enter the 6-digit verification code.', tone: 'error' });
       return;
     }
     setVerifySubmitLoading(true);
+    setVerifyFeedback(null);
     try {
       const res = await apiPost<{ ok: boolean; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>(
         '/api/library/verify-email',
@@ -381,10 +383,11 @@ export default function ProfileScreen() {
       });
       setVerifyEmailOpen(false);
       setOtpDigits(['', '', '', '', '', '']);
-      setVerifySuccessModalOpen(true);
+      setVerifyFeedback(null);
+      showAlert('Email verified!', 'Your library email has been verified successfully.', 'success', 2800);
     } catch (e: any) {
       const err = e as ApiError;
-      Alert.alert('Verification failed', err?.message || 'Invalid or expired OTP');
+      setVerifyFeedback({ msg: err?.message || 'Invalid or expired OTP', tone: 'error' });
     } finally {
       setVerifySubmitLoading(false);
     }
@@ -392,6 +395,7 @@ export default function ProfileScreen() {
 
   const handleOtpCellChange = (index: number, text: string) => {
     const cleaned = text.replace(/\D/g, '');
+    if (verifyFeedback?.tone === 'error') setVerifyFeedback(null);
     if (cleaned.length > 1) {
       const chars = cleaned.slice(0, 6).split('');
       setOtpDigits((prev) => {
@@ -453,31 +457,31 @@ export default function ProfileScreen() {
       try {
         const ok = await Linking.canOpenURL(direct);
         if (!ok) {
-          Alert.alert('Maps', 'Invalid map link URL.');
+          showAlert('Maps', 'Invalid map link URL.', 'error');
           return;
         }
         await Linking.openURL(direct);
         return;
       } catch {
-        Alert.alert('Maps', 'Invalid map link URL.');
+        showAlert('Maps', 'Invalid map link URL.', 'error');
         return;
       }
     }
     const q = [form.libraryName, form.address, form.city].map((s) => String(s || '').trim()).filter(Boolean).join(', ');
     if (!q) {
-      Alert.alert('Missing address', 'Please add your library address/city first.');
+      showAlert('Missing address', 'Please add your library address/city first.', 'warning');
       return;
     }
     const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
     try {
       const ok = await Linking.canOpenURL(url);
       if (!ok) {
-        Alert.alert('Maps', 'Could not open Google Maps.');
+        showAlert('Maps', 'Could not open Google Maps.', 'error');
         return;
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Maps', 'Could not open Google Maps.');
+      showAlert('Maps', 'Could not open Google Maps.', 'error');
     }
   };
 
@@ -809,6 +813,29 @@ export default function ProfileScreen() {
               <Text style={styles.verifyMobileSaveHint}>Save Profile</Text> first.
             </Text>
 
+            {verifyFeedback ? (
+              <View
+                style={[
+                  styles.verifyFeedbackBanner,
+                  verifyFeedback.tone === 'success' ? styles.verifyFeedbackSuccess : styles.verifyFeedbackError,
+                ]}
+              >
+                <Ionicons
+                  name={verifyFeedback.tone === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                  size={16}
+                  color={verifyFeedback.tone === 'success' ? '#059669' : '#DC2626'}
+                />
+                <Text
+                  style={[
+                    styles.verifyFeedbackTxt,
+                    verifyFeedback.tone === 'success' ? styles.verifyFeedbackTxtSuccess : styles.verifyFeedbackTxtError,
+                  ]}
+                >
+                  {verifyFeedback.msg}
+                </Text>
+              </View>
+            ) : null}
+
             <TouchableOpacity
               style={styles.verifyMobileSendRow}
               onPress={() => void sendProfileEmailOtp()}
@@ -909,30 +936,14 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={verifySuccessModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setVerifySuccessModalOpen(false)}
-      >
-        <View style={styles.verifyMobileBackdrop}>
-          <View style={styles.verifySuccessCard}>
-            <View style={styles.verifySuccessIconCircle}>
-              <Ionicons name="checkmark-circle-outline" size={40} color="#0d9488" />
-            </View>
-            <Text style={styles.verifySuccessTitle}>Email verified!</Text>
-            <Text style={styles.verifySuccessDesc}>Your library email has been verified successfully.</Text>
-            <TouchableOpacity
-              style={styles.verifySuccessDoneBtn}
-              onPress={() => setVerifySuccessModalOpen(false)}
-              activeOpacity={0.88}
-            >
-              <Ionicons name="checkmark" size={15} color="#fff" />
-              <Text style={styles.verifySuccessDoneTxt}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <SimpleAlert
+        visible={!!alert}
+        tone={alert?.tone ?? 'info'}
+        title={alert?.title ?? ''}
+        message={alert?.message}
+        autoCloseMs={alert?.autoCloseMs}
+        onClose={() => setAlert(null)}
+      />
     </>
   );
 }
@@ -1154,6 +1165,27 @@ function makeStyles() {
     verifyMobileTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
     verifyMobileSubtitle: { marginTop: 4, fontSize: 10, color: theme.colors.mutedText },
     verifyMobileDesc: { marginTop: 14, fontSize: 11, color: theme.colors.mutedText, lineHeight: 17 },
+    verifyFeedbackBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginTop: 12,
+      borderWidth: 1,
+    },
+    verifyFeedbackSuccess: {
+      backgroundColor: 'rgba(16,185,129,0.10)',
+      borderColor: 'rgba(16,185,129,0.28)',
+    },
+    verifyFeedbackError: {
+      backgroundColor: 'rgba(239,68,68,0.10)',
+      borderColor: 'rgba(239,68,68,0.28)',
+    },
+    verifyFeedbackTxt: { flex: 1, fontSize: 12, fontWeight: '700', lineHeight: 17 },
+    verifyFeedbackTxtSuccess: { color: '#047857' },
+    verifyFeedbackTxtError: { color: '#B91C1C' },
     verifyMobileSaveHint: { color: '#0d9488', fontWeight: '700' },
     verifyMobileSendRow: {
       marginTop: 12,
@@ -1227,39 +1259,6 @@ function makeStyles() {
     },
     verifyMobileVerifyBtnDisabled: { opacity: 0.5 },
     verifyMobileVerifyTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
-    verifySuccessCard: {
-      width: '100%',
-      maxWidth: 360,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 20,
-      padding: 22,
-      alignItems: 'center',
-      ...theme.shadow.card,
-    },
-    verifySuccessIconCircle: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: '#f0fdfa',
-      borderWidth: 1,
-      borderColor: '#0d9488',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    verifySuccessTitle: { marginTop: 16, fontSize: 16, fontWeight: '700', color: theme.colors.text },
-    verifySuccessDesc: { marginTop: 8, fontSize: 12, color: theme.colors.mutedText, textAlign: 'center', lineHeight: 18 },
-    verifySuccessDoneBtn: {
-      marginTop: 20,
-      width: '100%',
-      height: 42,
-      borderRadius: 12,
-      backgroundColor: '#0d9488',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-    },
-    verifySuccessDoneTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
   });
 }
 

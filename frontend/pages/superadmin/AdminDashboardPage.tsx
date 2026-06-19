@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -19,6 +18,7 @@ import {
 import {
   AnalyticsMetricCard,
   CancelledLibrariesModal,
+  DashboardWidgetSkeleton,
   NewLibrariesWidget,
   RecentActivityWidget,
   RevenueOverviewWidget,
@@ -26,6 +26,7 @@ import {
   type CancelledLibraryRow,
   type DashboardInsightSection,
 } from '../../components/superadmin/dashboard';
+import { KpiGridSkeleton, QuickActionsPanel } from '../../components/superadmin/ui';
 import { navigateToAdminLibraryDetail } from '../../components/superadmin/navigateToAdminLibraryDetail';
 import { apiGet, type ApiError } from '../../services/api';
 import { useAppStore } from '../../store';
@@ -61,7 +62,7 @@ export default function AdminDashboardPage() {
   const scrollRef = React.useRef<ScrollView>(null);
   const sectionOffsets = React.useRef<Partial<Record<DashboardInsightSection, number>>>({});
   const { mode } = useTheme();
-  const styles = useMemo(() => makeStyles(mode), [mode]);
+  const styles = useMemo(() => makeStyles(mode, isCompact), [mode, isCompact]);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const role = useAppStore((s) => s.role);
 
@@ -88,6 +89,12 @@ export default function AdminDashboardPage() {
     expired: 0,
     cancelled: 0,
   });
+  const [planOverview, setPlanOverview] = useState({
+    totalLibraries: 0,
+    activeSubscribers: 0,
+    monthlyRevenue: 0,
+    expiringPlans: 0,
+  });
   const [cancelledModalOpen, setCancelledModalOpen] = useState(false);
   const [cancelledLoading, setCancelledLoading] = useState(false);
   const [cancelledError, setCancelledError] = useState<string | null>(null);
@@ -107,6 +114,23 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  const loadPlanOverview = useCallback(async () => {
+    try {
+      const res = await apiGet<{
+        ok: boolean;
+        overview: { totalLibraries: number; activeSubscribers: number; monthlyRevenue: number; expiringPlans: number };
+      }>(`/api/superadmin/plan-management-overview`);
+      const o = res.overview;
+      setPlanOverview({
+        totalLibraries: o?.totalLibraries ?? 0,
+        activeSubscribers: o?.activeSubscribers ?? 0,
+        monthlyRevenue: o?.monthlyRevenue ?? 0,
+        expiringPlans: o?.expiringPlans ?? 0,
+      });
+    } catch {
+      // keep previous values
+    }
+  }, []);
   const loadSubscriptionOverview = useCallback(async () => {
     setSubOverviewLoading(true);
     setSubOverviewError(null);
@@ -162,7 +186,8 @@ export default function AdminDashboardPage() {
     if (!isAuthenticated()) return;
     if (role && role !== 'admin') return;
     loadSubscriptionOverview();
-  }, [isAuthenticated, role, loadSubscriptionOverview]);
+    void loadPlanOverview();
+  }, [isAuthenticated, role, loadSubscriptionOverview, loadPlanOverview]);
 
   const scrollToInsight = useCallback((section: DashboardInsightSection) => {
     const y = sectionOffsets.current[section];
@@ -180,7 +205,8 @@ export default function AdminDashboardPage() {
     void load();
     void refreshAnalytics(false);
     void loadSubscriptionOverview();
-  }, [load, refreshAnalytics, loadSubscriptionOverview]);
+    void loadPlanOverview();
+  }, [load, refreshAnalytics, loadSubscriptionOverview, loadPlanOverview]);
 
   const premiumMetrics = useMemo(() => {
     const s = stats || { totalLibraries: 0, activeLibraries: 0, totalStudents: 0, revenue: 0 };
@@ -188,37 +214,89 @@ export default function AdminDashboardPage() {
     const spark = rev?.sparkline?.map((p) => p.revenue) || [];
     return [
       {
-        label: 'Total Libraries',
-        value: String(s.totalLibraries),
-        gradient: ['#4F46E5', '#6366F1'] as [string, string],
-        icon: <LibraryBig color="#fff" size={20} strokeWidth={2.2} />,
-      },
-      {
         label: 'Active Libraries',
         value: String(s.activeLibraries),
         gradient: ['#059669', '#10B981'] as [string, string],
-        icon: <Building2 color="#fff" size={20} strokeWidth={2.2} />,
+        icon: <Building2 color="#059669" size={20} strokeWidth={2.2} />,
+        trendLabel: 'Live on platform',
       },
       {
         label: 'Total Students',
         value: String(s.totalStudents),
         gradient: ['#0284C7', '#0EA5E9'] as [string, string],
-        icon: <GraduationCap color="#fff" size={20} strokeWidth={2.2} />,
+        icon: <GraduationCap color="#0284C7" size={20} strokeWidth={2.2} />,
+        trendLabel: 'Across libraries',
       },
       {
-        label: 'Subscription revenue',
+        label: 'Payment Revenue',
         value: rev ? `₹${Math.round(rev.monthlyRevenue).toLocaleString('en-IN')}` : '—',
         gradient: ['#D97706', '#F59E0B'] as [string, string],
-        icon: <IndianRupee color="#fff" size={20} strokeWidth={2.2} />,
+        icon: <IndianRupee color="#D97706" size={20} strokeWidth={2.2} />,
         growthPercent: rev?.growthPercent,
         sparkValues: spark.length ? spark : undefined,
-        muted: rev ? `This month · today ₹${Math.round(rev.todayRevenue).toLocaleString('en-IN')}` : 'Loading payment data…',
+        muted: rev ? `Today ₹${Math.round(rev.todayRevenue).toLocaleString('en-IN')}` : undefined,
+      },
+      {
+        label: 'Platform Revenue',
+        value: `₹${Math.round(s.revenue || 0).toLocaleString('en-IN')}`,
+        gradient: ['#8B5CF6', '#6D28D9'] as [string, string],
+        icon: <IndianRupee color="#8B5CF6" size={20} strokeWidth={2.2} />,
+        trendLabel: 'All time',
       },
     ];
   }, [stats, revenueSlice.data]);
 
+  const primaryKpis = useMemo(
+    () => [
+      {
+        label: 'Total Libraries',
+        value: String(planOverview.totalLibraries || stats?.totalLibraries || 0),
+        gradient: ['#4F46E5', '#6366F1'] as [string, string],
+        icon: <LibraryBig color="#4F46E5" size={20} strokeWidth={2.2} />,
+        trendLabel: 'Registered',
+      },
+      {
+        label: 'Active Subscribers',
+        value: String(planOverview.activeSubscribers || subOverview.active),
+        gradient: ['#059669', '#10B981'] as [string, string],
+        icon: <Building2 color="#059669" size={20} strokeWidth={2.2} />,
+        trendLabel: 'Paid plans',
+      },
+      {
+        label: 'Monthly Revenue',
+        value: `₹${(planOverview.monthlyRevenue || 0).toLocaleString('en-IN')}`,
+        gradient: ['#D97706', '#F59E0B'] as [string, string],
+        icon: <IndianRupee color="#D97706" size={20} strokeWidth={2.2} />,
+        growthPercent: revenueSlice.data?.growthPercent,
+        trendLabel: revenueSlice.data?.growthPercent == null ? 'This month' : undefined,
+      },
+      {
+        label: 'Expiring Plans',
+        value: String(planOverview.expiringPlans || subOverview.expiringSoon),
+        gradient: ['#DC2626', '#EF4444'] as [string, string],
+        icon: <TrendingUp color="#DC2626" size={20} strokeWidth={2.2} />,
+        trendLabel: 'Next 7 days',
+      },
+    ],
+    [planOverview, stats?.totalLibraries, subOverview, revenueSlice.data?.growthPercent]
+  );
+
+  const quickActions = useMemo(
+    () => [
+      { key: 'plan', label: 'Create Plan', icon: 'add-circle-outline' as const, color: '#4F46E5', onPress: () => navigation.navigate('Plans') },
+      { key: 'lib', label: 'Add Library', icon: 'business-outline' as const, color: '#059669', onPress: () => navigation.navigate('Libraries') },
+      { key: 'sub', label: 'Subscriptions', icon: 'card-outline' as const, color: '#D97706', onPress: () => navigation.navigate('Subscriptions') },
+      { key: 'pay', label: 'View Payments', icon: 'wallet-outline' as const, color: '#0284C7', onPress: () => navigation.navigate('Payments') },
+    ],
+    [navigation]
+  );
+
+  const todayRevenue = revenueSlice.data?.todayRevenue ?? planOverview.monthlyRevenue;
+  const activeLibraries = stats?.activeLibraries ?? planOverview.totalLibraries;
+
   const metricCardWidth = useMemo(() => {
-    if (windowWidth < 480) return '100%' as const;
+    if (windowWidth < 400) return '100%' as const;
+    if (windowWidth < 720) return '48%' as const;
     if (windowWidth < 900) return '48%' as const;
     return '23.5%' as const;
   }, [windowWidth]);
@@ -234,12 +312,15 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <View style={[styles.shell, styles.center]}>
-        <View style={[styles.loadCard, { borderColor: theme.colors.border }]}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadLabel, { color: theme.colors.mutedText }]}>Syncing platform metrics…</Text>
+      <ScrollView style={styles.root} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={[styles.welcomeCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+          <DashboardWidgetSkeleton lines={3} />
         </View>
-      </View>
+        <KpiGridSkeleton count={4} />
+        <View style={[styles.panel, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+          <DashboardWidgetSkeleton lines={5} height={180} />
+        </View>
+      </ScrollView>
     );
   }
 
@@ -265,30 +346,78 @@ export default function AdminDashboardPage() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.hero}>
-        <View style={styles.heroAccent} />
-        <View style={styles.heroInner}>
-          <View style={styles.heroTop}>
-            <View style={[styles.rolePill, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-              <View style={[styles.roleDot, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.rolePillTxt, { color: theme.colors.mutedText }]}>Platform admin</Text>
-            </View>
-            <TouchableOpacity onPress={onSyncAll} style={[styles.refreshPill, { borderColor: theme.colors.border }]} activeOpacity={0.88}>
-              <Ionicons name="refresh" size={16} color={theme.colors.primary} />
-              <Text style={[styles.refreshPillTxt, { color: theme.colors.text }]}>
+      <View style={[styles.welcomeCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+        <View style={styles.welcomeTop}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.welcomeKicker, { color: theme.colors.primary }]}>SUPER ADMIN</Text>
+            <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>
+              Welcome back, Super Admin 👋
+            </Text>
+            <Text style={[styles.welcomeSub, { color: theme.colors.mutedText }]}>
+              Manage libraries, subscriptions, revenue, plans and platform growth.
+            </Text>
+          </View>
+          <TouchableOpacity onPress={onSyncAll} style={[styles.syncBtn, { borderColor: theme.colors.border }]} activeOpacity={0.88}>
+            <Ionicons name="refresh" size={16} color={theme.colors.primary} />
+            {!isCompact ? (
+              <Text style={[styles.syncTxt, { color: theme.colors.text }]}>
                 {analyticsRefreshing ? 'Syncing…' : 'Sync'}
               </Text>
-            </TouchableOpacity>
+            ) : null}
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.welcomeStats, { borderTopColor: theme.colors.border }]}>
+          <View style={styles.welcomeStat}>
+            <Text style={[styles.welcomeStatLbl, { color: theme.colors.mutedText }]}>Today's Revenue</Text>
+            <Text style={[styles.welcomeStatVal, { color: theme.colors.text }]}>
+              ₹{Math.round(todayRevenue || 0).toLocaleString('en-IN')}
+            </Text>
           </View>
-          <Text style={[styles.heroTitle, { color: theme.colors.text }]}>Operations</Text>
-          <Text style={[styles.heroSubtitle, { color: theme.colors.mutedText }]}>Libraries, revenue, subscriptions & audit trail.</Text>
-          <Text style={[styles.heroMono, { color: theme.colors.mutedText }]}>
-            Library subscriptions & Razorpay payments · refreshes every minute
-          </Text>
+          <View style={[styles.welcomeDivider, { backgroundColor: theme.colors.border }]} />
+          <View style={styles.welcomeStat}>
+            <Text style={[styles.welcomeStatLbl, { color: theme.colors.mutedText }]}>Active Libraries</Text>
+            <Text style={[styles.welcomeStatVal, { color: theme.colors.text }]}>{activeLibraries}</Text>
+          </View>
         </View>
       </View>
 
-      <View style={styles.sectionNav}>
+      <QuickActionsPanel actions={quickActions} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Key Metrics</Text>
+      <View style={styles.grid}>
+        {primaryKpis.map((c) => (
+          <AnalyticsMetricCard
+            key={c.label}
+            label={c.label}
+            value={c.value}
+            icon={c.icon}
+            gradient={c.gradient}
+            growthPercent={c.growthPercent}
+            trendLabel={c.trendLabel}
+            containerStyle={{ width: metricCardWidth }}
+          />
+        ))}
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Platform Overview</Text>
+      <View style={styles.grid}>
+        {premiumMetrics.map((c) => (
+          <AnalyticsMetricCard
+            key={c.label}
+            label={c.label}
+            value={c.value}
+            icon={c.icon}
+            gradient={c.gradient}
+            growthPercent={c.growthPercent}
+            sparkValues={c.sparkValues}
+            muted={c.muted}
+            trendLabel={c.trendLabel}
+            containerStyle={{ width: metricCardWidth }}
+          />
+        ))}
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavScroll}>
         {INSIGHT_SECTIONS.map((s) => (
           <TouchableOpacity
             key={s.key}
@@ -302,23 +431,7 @@ export default function AdminDashboardPage() {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
-
-      <View style={styles.grid}>
-        {premiumMetrics.map((c) => (
-          <AnalyticsMetricCard
-            key={c.label}
-            label={c.label}
-            value={c.value}
-            icon={c.icon}
-            gradient={c.gradient}
-            growthPercent={c.growthPercent}
-            sparkValues={c.sparkValues}
-            muted={c.muted}
-            containerStyle={{ width: metricCardWidth }}
-          />
-        ))}
-      </View>
+      </ScrollView>
 
       <View
         style={styles.sectionBlock}
@@ -406,10 +519,7 @@ export default function AdminDashboardPage() {
           </View>
 
           {subOverviewLoading ? (
-            <View style={styles.panelLoading}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <Text style={[styles.mutedBold, { color: theme.colors.mutedText }]}>Aggregating rows…</Text>
-            </View>
+            <DashboardWidgetSkeleton lines={4} height={120} />
           ) : subOverviewError ? (
             <View style={styles.panelError}>
               <Text style={[styles.errTitle, { color: theme.colors.danger }]}>Could not load overview</Text>
@@ -491,7 +601,7 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function makeStyles(mode: 'light' | 'dark') {
+function makeStyles(mode: 'light' | 'dark', isCompact: boolean) {
   const isDark = mode === 'dark';
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.colors.background },
@@ -560,6 +670,46 @@ function makeStyles(mode: 'light' | 'dark') {
     heroTitle: { fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
     heroSubtitle: { marginTop: 6, fontSize: 14, fontWeight: '600', lineHeight: 20 },
     heroMono: { marginTop: 10, fontSize: 12, fontWeight: '600', opacity: 0.9 },
+
+    welcomeCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      marginBottom: theme.spacing.md,
+      overflow: 'hidden',
+      ...theme.shadow.card,
+    },
+    welcomeTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      padding: theme.spacing.lg,
+    },
+    welcomeKicker: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+    welcomeTitle: { marginTop: 6, fontSize: isCompact ? 22 : 26, fontWeight: '900', letterSpacing: -0.6, lineHeight: 32 },
+    welcomeSub: { marginTop: 8, fontSize: 14, fontWeight: '600', lineHeight: 21 },
+    syncBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: theme.radius.pill,
+      borderWidth: 1,
+      backgroundColor: withAlpha(theme.colors.primary, isDark ? 0.12 : 0.06),
+    },
+    syncTxt: { fontSize: 12, fontWeight: '800' },
+    welcomeStats: {
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      paddingVertical: 14,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    welcomeStat: { flex: 1 },
+    welcomeStatLbl: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+    welcomeStatVal: { marginTop: 4, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+    welcomeDivider: { width: 1, marginHorizontal: 16 },
+    sectionTitle: { fontSize: 15, fontWeight: '900', letterSpacing: -0.3, marginBottom: 10, marginTop: 4 },
+    sectionNavScroll: { gap: 8, paddingBottom: theme.spacing.sm, paddingRight: 8 },
     loadCard: {
       paddingVertical: 32,
       paddingHorizontal: 28,

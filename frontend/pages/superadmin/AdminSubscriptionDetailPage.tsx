@@ -8,6 +8,8 @@ import {
   Modal,
   Pressable,
   Alert,
+  TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -104,7 +106,9 @@ function withAlpha(hex: string, alpha: number) {
 
 function useStyles() {
   const { mode } = useTheme();
-  return useMemo(() => makeStyles(mode), [mode]);
+  const { width } = useWindowDimensions();
+  const isCompact = width < 640;
+  return useMemo(() => makeStyles(mode, isCompact), [mode, isCompact]);
 }
 
 /** en-IN calendar display: DD MMM YYYY (null-safe). */
@@ -141,12 +145,15 @@ function formatSubscriptionPeriodLabel(
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function planName(p: Detail['subscription']['plan']) {
+function planName(p: Detail['subscription']['plan'] | string) {
   if (p === 'monthly') return 'Monthly Plan';
   if (p === '6month') return '6 Month Plan';
   if (p === 'yearly') return 'Yearly Plan';
   if (p === 'trial') return 'Trial Plan';
-  return 'No plan';
+  if (p === 'none') return 'No plan';
+  const key = String(p || '').trim();
+  if (!key) return 'No plan';
+  return key.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function money(n: number) {
@@ -302,6 +309,14 @@ export default function AdminSubscriptionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignStep, setAssignStep] = useState<'pick' | 'confirm'>('pick');
+  const [assignPlans, setAssignPlans] = useState<{ _id: string; name: string; key: string; duration: number }[]>([]);
+  const [assignPlanId, setAssignPlanId] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extendDays, setExtendDays] = useState('30');
+  const [extending, setExtending] = useState(false);
 
   const payments: PaymentRow[] = useMemo(() => {
     const list = detail?.payments || [];
@@ -384,10 +399,71 @@ export default function AdminSubscriptionDetailPage() {
     }
   }, [libraryId, load]);
 
-  const onUpgrade = useCallback(() => {
-    // Navigate to the AdminRoot tab navigator → Subscriptions tab
-    navigation.navigate('AdminRoot', { screen: 'Subscriptions' });
-  }, [navigation]);
+  const onChangePlan = useCallback(async () => {
+    setAssignStep('pick');
+    setAssignOpen(true);
+    try {
+      const res = await apiGet<{ ok: boolean; plans: { _id: string; name: string; key: string; duration: number }[] }>(
+        `/api/plans`,
+        { all: 1 }
+      );
+      const rows = (res.plans || []).filter((p) => p && p._id);
+      setAssignPlans(rows);
+      if (rows.length) setAssignPlanId(String(rows[0]._id));
+    } catch {
+      setAssignPlans([]);
+    }
+  }, []);
+
+  const selectedAssignPlan = useMemo(
+    () => assignPlans.find((p) => String(p._id) === String(assignPlanId)) || null,
+    [assignPlanId, assignPlans]
+  );
+
+  const onConfirmAssignPlan = useCallback(async () => {
+    if (!libraryId || !assignPlanId || !detail) return;
+    setAssigning(true);
+    try {
+      await apiPost(`/api/admin/library/${libraryId}/assign-plan`, {
+        planId: assignPlanId,
+        previousPlanKey: detail.subscription.plan,
+      });
+      setAssignOpen(false);
+      setAssignStep('pick');
+      await load();
+      Alert.alert('Plan updated', 'Library subscription activated with the selected plan.');
+    } catch (e: any) {
+      const err = e as ApiError;
+      Alert.alert('Failed', err?.message || 'Could not assign plan');
+    } finally {
+      setAssigning(false);
+    }
+  }, [assignPlanId, detail, libraryId, load]);
+
+  const onExtendPlan = useCallback(() => {
+    setExtendDays('30');
+    setExtendOpen(true);
+  }, []);
+
+  const onConfirmExtendPlan = useCallback(async () => {
+    const days = Number(extendDays);
+    if (!libraryId || !Number.isFinite(days) || days < 1) {
+      Alert.alert('Invalid', 'Enter a valid number of days (1–3650).');
+      return;
+    }
+    setExtending(true);
+    try {
+      await apiPost(`/api/admin/library/${libraryId}/extend-plan`, { extraDays: days });
+      setExtendOpen(false);
+      await load();
+      Alert.alert('Plan extended', `Subscription extended by ${days} day(s).`);
+    } catch (e: any) {
+      const err = e as ApiError;
+      Alert.alert('Failed', err?.message || 'Could not extend plan');
+    } finally {
+      setExtending(false);
+    }
+  }, [extendDays, libraryId, load]);
 
   const onDownloadPaymentPdf = useCallback(
     async (p: PaymentRow) => {
@@ -514,7 +590,7 @@ export default function AdminSubscriptionDetailPage() {
         </Card>
 
         {/* Actions */}
-        <ActionButtons onCancel={() => setCancelOpen(true)} onUpgrade={onUpgrade} />
+        <ActionButtons onCancel={() => setCancelOpen(true)} onChangePlan={onChangePlan} onExtendPlan={onExtendPlan} />
 
         {/* Recent payments (mock) */}
         <Card
@@ -552,6 +628,119 @@ export default function AdminSubscriptionDetailPage() {
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirmCancel} style={[styles.modalBtn, styles.modalBtnDanger]} activeOpacity={0.85}>
               <Text style={[styles.modalBtnTxt, { color: theme.colors.surface }]}>Confirm Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={assignOpen} transparent animationType="fade" onRequestClose={() => { setAssignOpen(false); setAssignStep('pick'); }}>
+        <Pressable style={styles.modalBackdrop} onPress={() => { setAssignOpen(false); setAssignStep('pick'); }} />
+        <View style={styles.modalSheet}>
+          {assignStep === 'pick' ? (
+            <>
+              <Text style={styles.modalTitle}>Change Library Plan</Text>
+              <Text style={styles.modalSub}>Assign a plan immediately without payment.</Text>
+              <ScrollView style={{ maxHeight: 220, marginTop: 10 }}>
+                {assignPlans.map((p) => {
+                  const active = assignPlanId === String(p._id);
+                  return (
+                    <TouchableOpacity
+                      key={p._id}
+                      style={[styles.planPickRow, active && styles.planPickRowOn]}
+                      onPress={() => setAssignPlanId(String(p._id))}
+                    >
+                      <Text style={styles.planPickName}>{p.name}</Text>
+                      <Text style={styles.planPickMeta}>{p.key} · {p.duration} days</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.modalRow}>
+                <TouchableOpacity onPress={() => setAssignOpen(false)} style={styles.modalBtn} activeOpacity={0.85}>
+                  <Text style={styles.modalBtnTxt}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setAssignStep('confirm')}
+                  style={[styles.modalBtn, styles.modalBtnPrimary]}
+                  activeOpacity={0.85}
+                  disabled={!assignPlanId}
+                >
+                  <Text style={[styles.modalBtnTxt, { color: theme.colors.surface }]}>Continue</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.modalTitle}>Confirm Plan Change</Text>
+              <Text style={styles.modalSub}>
+                Change {detail.libraryName} from {planName(detail.subscription.plan)} to{' '}
+                {selectedAssignPlan?.name || 'selected plan'}?
+              </Text>
+              <Text style={[styles.modalSub, { marginTop: 8, fontWeight: '700' }]}>
+                This activates the new plan immediately.
+              </Text>
+              <View style={styles.modalRow}>
+                <TouchableOpacity onPress={() => setAssignStep('pick')} style={styles.modalBtn} activeOpacity={0.85}>
+                  <Text style={styles.modalBtnTxt}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void onConfirmAssignPlan()}
+                  style={[styles.modalBtn, styles.modalBtnPrimary]}
+                  activeOpacity={0.85}
+                  disabled={assigning || !assignPlanId}
+                >
+                  <Text style={[styles.modalBtnTxt, { color: theme.colors.surface }]}>
+                    {assigning ? 'Applying…' : 'Confirm'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
+
+      <Modal visible={extendOpen} transparent animationType="fade" onRequestClose={() => setExtendOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setExtendOpen(false)} />
+        <View style={styles.modalSheet}>
+          <Text style={styles.modalTitle}>Extend Plan</Text>
+          <Text style={styles.modalSub}>Add extra days to the current subscription expiry.</Text>
+          <View style={styles.extendChips}>
+            {[7, 30, 90, 180].map((d) => {
+              const active = extendDays === String(d);
+              return (
+                <TouchableOpacity
+                  key={d}
+                  onPress={() => setExtendDays(String(d))}
+                  style={[styles.extendChip, active && styles.extendChipOn]}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.extendChipTxt, active && styles.extendChipTxtOn]}>{d} days</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[styles.k, { marginTop: 12 }]}>Custom days</Text>
+          <TextInput
+            value={extendDays}
+            onChangeText={setExtendDays}
+            keyboardType="number-pad"
+            placeholder="30"
+            placeholderTextColor={theme.colors.mutedText}
+            style={styles.extendInput}
+          />
+          <View style={styles.modalRow}>
+            <TouchableOpacity onPress={() => setExtendOpen(false)} style={styles.modalBtn} activeOpacity={0.85}>
+              <Text style={styles.modalBtnTxt}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => void onConfirmExtendPlan()}
+              style={[styles.modalBtn, styles.modalBtnPrimary]}
+              activeOpacity={0.85}
+              disabled={extending}
+            >
+              <Text style={[styles.modalBtnTxt, { color: theme.colors.surface }]}>
+                {extending ? 'Extending…' : 'Extend'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -695,6 +884,8 @@ function PeriodCard({
   daysLeft: number | null;
 }) {
   const styles = useStyles();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 640;
   const noExpiryNone =
     libraryPlan === 'none' && subscription.plan === 'none' && !hasValidIsoDate(subscription.expiryDate);
   const daysLeftLabel =
@@ -713,8 +904,8 @@ function PeriodCard({
             {formatSubscriptionPeriodLabel(subscription.startDate, 'start', libraryPlan, subscription.plan)}
           </Text>
         </View>
-        <View style={{ width: 12 }} />
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <View style={{ width: isCompact ? 0 : 12 }} />
+        <View style={{ flex: 1, alignItems: isCompact ? 'flex-start' : 'flex-end' }}>
           <Text style={styles.k}>Expiry Date</Text>
           <Text style={styles.v}>
             {formatSubscriptionPeriodLabel(subscription.expiryDate, 'expiry', libraryPlan, subscription.plan)}
@@ -735,7 +926,15 @@ function PeriodCard({
  * - Cancel (outline red)
  * - Upgrade (gradient, using theme colors)
  */
-function ActionButtons({ onCancel, onUpgrade }: { onCancel: () => void; onUpgrade: () => void }) {
+function ActionButtons({
+  onCancel,
+  onChangePlan,
+  onExtendPlan,
+}: {
+  onCancel: () => void;
+  onChangePlan: () => void;
+  onExtendPlan: () => void;
+}) {
   const styles = useStyles();
   return (
     <Card title="Actions">
@@ -744,16 +943,22 @@ function ActionButtons({ onCancel, onUpgrade }: { onCancel: () => void; onUpgrad
           <Ionicons name="close-circle-outline" size={18} color={theme.colors.danger} />
           <Text style={[styles.actionTxt, { color: theme.colors.danger }]}>Cancel Subscription</Text>
         </TouchableOpacity>
+      </View>
+      <View style={[styles.actionRow, { marginTop: 10 }]}>
+        <TouchableOpacity onPress={onExtendPlan} style={[styles.actionBtn, styles.actionBtnOutline]} activeOpacity={0.9}>
+          <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
+          <Text style={[styles.actionTxt, { color: theme.colors.primary }]}>Extend Plan</Text>
+        </TouchableOpacity>
 
-        <TouchableOpacity onPress={onUpgrade} activeOpacity={0.9} style={{ flex: 1 }}>
+        <TouchableOpacity onPress={onChangePlan} activeOpacity={0.9} style={{ flex: 1 }}>
           <LinearGradient
             colors={[theme.colors.primary, theme.colors.dark]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.actionBtnGradient}
           >
-            <Ionicons name="arrow-up-circle-outline" size={18} color={theme.colors.surface} />
-            <Text style={[styles.actionTxt, { color: theme.colors.surface }]}>Upgrade Plan</Text>
+            <Ionicons name="swap-horizontal-outline" size={18} color={theme.colors.surface} />
+            <Text style={[styles.actionTxt, { color: theme.colors.surface }]}>Change Plan</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -761,7 +966,7 @@ function ActionButtons({ onCancel, onUpgrade }: { onCancel: () => void; onUpgrad
   );
 }
 
-function makeStyles(_mode: 'light' | 'dark') {
+function makeStyles(_mode: 'light' | 'dark', isCompact: boolean) {
   return StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   root: { flex: 1, backgroundColor: theme.colors.background },
@@ -869,7 +1074,7 @@ function makeStyles(_mode: 'light' | 'dark') {
   methodTxt: { fontWeight: '800', color: theme.colors.mutedText, fontSize: 12 },
 
   // Period
-  periodRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  periodRow: { flexDirection: isCompact ? 'column' : 'row', alignItems: 'flex-start', gap: isCompact ? 10 : 0 },
   k: { fontWeight: '900', color: theme.colors.mutedText, fontSize: 12 },
   v: { marginTop: 4, fontWeight: '900', color: theme.colors.text, fontSize: 13 },
   progressTrack: {
@@ -886,7 +1091,7 @@ function makeStyles(_mode: 'light' | 'dark') {
   // Stats grid
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   statCard: {
-    width: '48%',
+    width: isCompact ? '47%' : '48%',
     backgroundColor: theme.colors.background,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -907,9 +1112,10 @@ function makeStyles(_mode: 'light' | 'dark') {
   statLabel: { marginTop: 4, fontWeight: '800', color: theme.colors.mutedText, fontSize: 12 },
 
   // Actions
-  actionRow: { flexDirection: 'row', gap: 12 },
+  actionRow: { flexDirection: isCompact ? 'column' : 'row', gap: 12 },
   actionBtn: {
-    flex: 1,
+    flex: isCompact ? undefined : 1,
+    width: isCompact ? '100%' : undefined,
     minHeight: 46,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
@@ -921,6 +1127,7 @@ function makeStyles(_mode: 'light' | 'dark') {
     gap: 8,
   },
   actionBtnDanger: { borderColor: withAlpha(theme.colors.danger, 0.4), backgroundColor: withAlpha(theme.colors.danger, 0.06) },
+  actionBtnOutline: { borderColor: withAlpha(theme.colors.primary, 0.35), backgroundColor: withAlpha(theme.colors.primary, 0.06) },
   actionBtnGradient: {
     minHeight: 46,
     borderRadius: theme.radius.lg,
@@ -950,11 +1157,13 @@ function makeStyles(_mode: 'light' | 'dark') {
   // Modal
   modalBackdrop: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: withAlpha(theme.colors.dark, 0.55) },
   modalSheet: {
-    marginHorizontal: theme.spacing.lg,
+    marginHorizontal: isCompact ? 0 : theme.spacing.lg,
     marginTop: 'auto',
-    marginBottom: theme.spacing.xl,
+    marginBottom: isCompact ? 0 : theme.spacing.xl,
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.xl,
+    borderTopLeftRadius: isCompact ? 20 : theme.radius.xl,
+    borderTopRightRadius: isCompact ? 20 : theme.radius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
     padding: theme.spacing.lg,
@@ -974,7 +1183,42 @@ function makeStyles(_mode: 'light' | 'dark') {
     justifyContent: 'center',
   },
   modalBtnDanger: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },
+  modalBtnPrimary: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   modalBtnTxt: { fontWeight: '900', color: theme.colors.text },
+  planPickRow: {
+    padding: 12,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginBottom: 8,
+    backgroundColor: theme.colors.background,
+  },
+  planPickRowOn: { borderColor: theme.colors.primary, backgroundColor: withAlpha(theme.colors.primary, 0.08) },
+  planPickName: { fontWeight: '900', color: theme.colors.text, fontSize: 14 },
+  planPickMeta: { marginTop: 4, fontWeight: '700', color: theme.colors.mutedText, fontSize: 12 },
+  extendChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  extendChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  extendChipOn: { borderColor: theme.colors.primary, backgroundColor: withAlpha(theme.colors.primary, 0.1) },
+  extendChipTxt: { fontWeight: '800', fontSize: 12, color: theme.colors.mutedText },
+  extendChipTxtOn: { color: theme.colors.primary },
+  extendInput: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontWeight: '800',
+    color: theme.colors.text,
+    backgroundColor: theme.colors.background,
+  },
   });
 }
 

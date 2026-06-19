@@ -18,6 +18,7 @@ import { CATEGORY_META, resolveNotificationCategory } from '../../constants/noti
 import { theme } from '../../theme';
 import { apiGet, type ApiError } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
+import { membershipExpiryLabel } from '../../utils/studentMembership';
 
 export default function StudentHome() {
   const navigation = useNavigation<any>();
@@ -153,6 +154,18 @@ export default function StudentHome() {
             </View>
           </View>
           <LibraryCard user={currentUser} />
+          <View style={styles.expiryChip}>
+            <Ionicons name="calendar-outline" size={14} color={isExpired ? theme.colors.danger : isExpiringSoon ? theme.colors.warning : theme.colors.primary} />
+            <Text style={styles.expiryChipLbl}>Membership expires:</Text>
+            <Text
+              style={[
+                styles.expiryChipVal,
+                { color: isExpired ? theme.colors.danger : isExpiringSoon ? theme.colors.warning : theme.colors.text },
+              ]}
+            >
+              {membershipExpiryLabel(currentUser)}
+            </Text>
+          </View>
         </View>
 
         {/* ─────────────────────────────────────────
@@ -271,12 +284,12 @@ export default function StudentHome() {
                 </View>
                 <View style={styles.alertBody}>
                   <Text style={styles.alertTitle}>
-                    {isExpired ? 'Membership Expired' : `Expiring in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
+                    {isExpired ? 'Membership Expired' : 'Membership expiring soon'}
                   </Text>
                   <Text style={styles.alertSub}>
                     {isExpired
                       ? 'Tap to request plan renewal from your library.'
-                      : 'Tap to renew or extend before expiry.'}
+                      : 'Your membership will expire soon. Renew now.'}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.85)" />
@@ -406,6 +419,20 @@ function makeStyles() {
     },
     identityTitle: { fontSize: 14, fontWeight: '900', color: theme.colors.text, letterSpacing: -0.2 },
     identitySub: { marginTop: 2, fontSize: 12, fontWeight: '700', color: theme.colors.mutedText },
+    expiryChip: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    expiryChipLbl: { fontSize: 12, fontWeight: '700', color: theme.colors.mutedText },
+    expiryChipVal: { fontSize: 12, fontWeight: '900' },
 
     // ── Stats row ──
     statsRow: {
