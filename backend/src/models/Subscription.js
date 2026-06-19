@@ -27,9 +27,15 @@ const subscriptionSchema = new mongoose.Schema(
 
     plan: {
       type: String,
-      enum: ["trial", "monthly", "6month", "yearly"],
       required: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 40,
       index: true,
+      validate: {
+        validator: (v) => /^[a-z0-9_-]{1,40}$/.test(String(v || "")),
+        message: "Invalid plan key",
+      },
     },
 
     price: {

@@ -7,12 +7,39 @@ const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { normalizeIndianMobile, normalizeIndianMobileOptional, hasNonIndiaPlusPrefix } = require("../utils/mobile");
 const { toLibraryProfile } = require("./library.serialize");
+const { toLibraryContactDto } = require("../utils/libraryContact");
 const {
   sendLibraryVerificationEmail,
   verifyLibraryEmail,
 } = require("../controllers/emailOtp.controller");
 
 const router = express.Router();
+
+/**
+ * PATCH /api/library/attendance-settings
+ * Toggle: allow attendance only for active paid members.
+ */
+router.patch("/attendance-settings", requireAuth, requireRole("library"), async (req, res) => {
+  try {
+    const id = req.user?.libraryId;
+    if (!id) return res.status(400).json({ message: "libraryId missing" });
+    if (req.body?.attendanceActiveMembersOnly === undefined) {
+      return res.status(400).json({ message: "attendanceActiveMembersOnly is required" });
+    }
+    const lib = await Library.findByIdAndUpdate(
+      id,
+      { $set: { attendanceActiveMembersOnly: Boolean(req.body.attendanceActiveMembersOnly) } },
+      { new: true, runValidators: true }
+    ).lean();
+    if (!lib) return res.status(404).json({ message: "Library not found" });
+    return res.json({
+      ok: true,
+      attendanceActiveMembersOnly: lib.attendanceActiveMembersOnly !== false,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update attendance settings", error: error.message });
+  }
+});
 
 /**
  * GET /api/library/profile
@@ -23,8 +50,18 @@ const router = express.Router();
  */
 router.get("/profile", requireAuth, requireRole("library", "student"), async (req, res) => {
   try {
-    const id = req.user?.libraryId;
+    let id = req.user?.libraryId;
     if (!id) return res.status(400).json({ message: "libraryId missing" });
+
+    if (req.user?.role === "student") {
+      const userId = String(req.user.userId || "").trim();
+      const Student = require("../models/Student");
+      const student = await Student.findOne({ _id: userId, isDeleted: false }).select("libraryId").lean();
+      if (!student?.libraryId) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      id = student.libraryId;
+    }
 
     const libPromise = Library.findById(id).lean();
     const seatCountPromise =
@@ -35,16 +72,7 @@ router.get("/profile", requireAuth, requireRole("library", "student"), async (re
     const [lib, totalSeats] = await Promise.all([libPromise, seatCountPromise]);
     if (!lib) return res.status(404).json({ message: "Library not found" });
     if (req.user?.role === "student") {
-      const whatsapp = String(lib.communication?.whatsapp || lib.whatsappNumber || "").trim();
-      const channel = String(lib.communication?.channel || lib.communityLinks?.whatsappChannel || "").trim();
-      const email = String(lib.communication?.email || "").trim();
-      return res.json({
-        ok: true,
-        profile: {
-          libraryName: lib.name,
-          communication: { whatsapp, channel, email },
-        },
-      });
+      return res.json({ ok: true, profile: toLibraryContactDto(lib) });
     }
     return res.json({ ok: true, profile: toLibraryProfile(lib, { totalSeats }) });
   } catch (error) {

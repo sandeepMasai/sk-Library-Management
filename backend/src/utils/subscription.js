@@ -1,5 +1,6 @@
 const Library = require("../models/Library");
 const Subscription = require("../models/Subscription");
+const mongoose = require("mongoose");
 const { getPlanDef } = require("./paymentPlans");
 
 /**
@@ -262,7 +263,7 @@ module.exports = {
    *
    * Plan: monthly | 6month | yearly
    */
-  activatePaidSubscription: async ({ libraryId, plan }) => {
+  activatePaidSubscription: async ({ libraryId, plan, planMeta = null }) => {
     // plan can be a key string or an object from admin-managed Plan collection.
     const def =
       typeof plan === "string" ? await getPlanDef(plan) : { key: plan.key, price: plan.price, durationDays: plan.durationDays };
@@ -287,8 +288,15 @@ module.exports = {
     library.plan = "pro";
     library.currentPlanKey = def.key;
     library.subscriptionStatus = "active";
-    if (def.key === "trial") {
-      library.trialUsed = true;
+    if (def.key === "trial" || planMeta?.isOneTimeOffer || planMeta?.isTrial) {
+      library.trialUsed = def.key === "trial" ? true : library.trialUsed;
+      const key = String(def.key || "").trim().toLowerCase();
+      if (key) {
+        const used = Array.isArray(library.usedOneTimePlans) ? library.usedOneTimePlans : [];
+        if (!used.includes(key)) {
+          library.usedOneTimePlans = [...used, key];
+        }
+      }
     }
     library.cancelledAt = null;
     library.cancelReason = null;
@@ -309,6 +317,75 @@ module.exports = {
     });
 
     return { library, subscription: { plan: def.key, price: def.price, startDate: now, expiryDate: nextExpiry } };
+  },
+
+  /**
+   * Super Admin: assign a plan immediately without payment.
+   */
+  assignLibraryPlanByAdmin: async ({ libraryId, planId, planKey, markOneTimeUsed = false }) => {
+    const Plan = require("../models/Plan");
+    let planDoc = null;
+    if (planId && mongoose.Types.ObjectId.isValid(String(planId))) {
+      planDoc = await Plan.findById(planId);
+    } else if (planKey) {
+      planDoc = await Plan.findOne({ key: String(planKey).trim().toLowerCase() });
+    }
+    if (!planDoc || !planDoc.isActive) {
+      const err = new Error("Plan not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const library = await Library.findById(libraryId);
+    if (!library) {
+      const err = new Error("Library not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const now = new Date();
+    const nextExpiry = addDays(now, Number(planDoc.duration || 0));
+
+    library.plan = "pro";
+    library.currentPlanKey = planDoc.key;
+    library.subscriptionStatus = "active";
+    library.cancelledAt = null;
+    library.cancelReason = null;
+    library.cancelNote = null;
+    library.planStartDate = now;
+    library.planExpiryDate = nextExpiry;
+    if (planDoc.key === "trial") library.trialUsed = true;
+    if (markOneTimeUsed && (planDoc.isOneTimeOffer || planDoc.isTrial)) {
+      const key = String(planDoc.key || "").trim().toLowerCase();
+      const used = Array.isArray(library.usedOneTimePlans) ? library.usedOneTimePlans : [];
+      if (key && !used.includes(key)) {
+        library.usedOneTimePlans = [...used, key];
+      }
+    }
+    await library.save();
+
+    await Subscription.create({
+      libraryId: library._id,
+      plan: planDoc.key,
+      price: Number(planDoc.finalPrice ?? planDoc.price ?? 0),
+      durationDays: Number(planDoc.duration || 0),
+      startDate: now,
+      expiryDate: nextExpiry,
+      status: "active",
+      paymentStatus: "paid",
+      billingMeta: { source: "admin_assign" },
+    });
+
+    return {
+      library,
+      plan: {
+        key: planDoc.key,
+        name: planDoc.name,
+        price: Number(planDoc.finalPrice ?? planDoc.price ?? 0),
+        startDate: now,
+        expiryDate: nextExpiry,
+      },
+    };
   },
 };
 

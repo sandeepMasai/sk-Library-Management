@@ -5,10 +5,12 @@ const Attendance = require("../models/Attendance");
 const AttendanceQr = require("../models/AttendanceQr");
 const Student = require("../models/Student");
 const Library = require("../models/Library");
+const BlockedAttendanceAttempt = require("../models/BlockedAttendanceAttempt");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { requireNotExpiredSubscription } = require("../middleware/subscription.middleware");
 const { writeLog } = require("../utils/logging");
+const { isActiveMemberForAttendance } = require("../utils/membership");
 const logger = require("../utils/logger");
 const { verifyAccessToken } = require("../utils/token");
 
@@ -441,6 +443,43 @@ router.post("/mark", async (req, res) => {
       return res.status(403).json({ message: "Student is blocked" });
     }
 
+    const lib = await Library.findById(libraryId).select("attendanceActiveMembersOnly").lean();
+    const enforceActiveMembers = lib?.attendanceActiveMembersOnly !== false;
+    if (enforceActiveMembers) {
+      const membership = isActiveMemberForAttendance(student, now);
+      if (!membership.ok) {
+        try {
+          await BlockedAttendanceAttempt.create({
+            libraryId,
+            studentId: normalizedStudentId,
+            studentName: String(student.name || "Student").trim(),
+            membershipExpiryDate: student.expiryDate || null,
+            reason: membership.reason === "unpaid" ? "unpaid" : membership.reason === "blocked" ? "blocked" : "expired",
+            attemptedAt: now,
+          });
+        } catch (logErr) {
+          logger.warn("Blocked attendance log failed", { message: logErr?.message });
+        }
+        writeLog({
+          action: "attendance_blocked",
+          userId: normalizedStudentId,
+          role: "student",
+          libraryId,
+          metadata: {
+            reason: membership.reason,
+            expiryDate: student.expiryDate?.toISOString?.() || null,
+          },
+        });
+        return res.status(403).json({
+          ok: false,
+          code: "MEMBERSHIP_EXPIRED",
+          membershipExpired: true,
+          message:
+            "Your library membership has expired. Please renew your plan to continue marking attendance.",
+        });
+      }
+    }
+
     const created = await Attendance.create({
       libraryId,
       studentId: normalizedStudentId,
@@ -528,5 +567,49 @@ router.post("/mark", async (req, res) => {
     return res.status(500).json({ message: "Failed to mark attendance", error: error.message });
   }
 });
+
+/**
+ * GET /api/attendance/blocked-attempts
+ * Library admin: log of blocked scan attempts (expired / unpaid membership).
+ */
+router.get(
+  "/blocked-attempts",
+  requireAuth,
+  requireRole("library", "admin"),
+  requireNotExpiredSubscription,
+  async (req, res) => {
+    try {
+      const libraryId = requireLibraryIdForAdmin(req, res);
+      if (!libraryId) return;
+      const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+      const from = req.query.from ? new Date(String(req.query.from)) : null;
+      const to = req.query.to ? new Date(String(req.query.to)) : null;
+      const filter = { libraryId };
+      if (from && !Number.isNaN(from.getTime())) {
+        filter.attemptedAt = { ...(filter.attemptedAt || {}), $gte: from };
+      }
+      if (to && !Number.isNaN(to.getTime())) {
+        filter.attemptedAt = { ...(filter.attemptedAt || {}), $lte: to };
+      }
+      const rows = await BlockedAttendanceAttempt.find(filter)
+        .sort({ attemptedAt: -1 })
+        .limit(limit)
+        .lean();
+      return res.json({
+        ok: true,
+        attempts: rows.map((r) => ({
+          id: r._id.toString(),
+          studentId: r.studentId?.toString?.() || null,
+          studentName: r.studentName,
+          membershipExpiryDate: r.membershipExpiryDate?.toISOString?.() || null,
+          reason: r.reason,
+          attemptedAt: r.attemptedAt?.toISOString?.() || null,
+        })),
+      });
+    } catch (error) {
+      return res.status(500).json({ message: "Failed to load blocked attempts", error: error.message });
+    }
+  }
+);
 
 module.exports = router;

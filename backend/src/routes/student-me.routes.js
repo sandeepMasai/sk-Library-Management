@@ -16,6 +16,7 @@ const {
   sendStudentVerificationEmail,
   verifyStudentEmail,
 } = require("../controllers/emailOtp.controller");
+const { toLibraryContactDto } = require("../utils/libraryContact");
 
 const router = express.Router();
 
@@ -273,6 +274,72 @@ router.post("/me/verify-email", requireAuth, requireRole("student"), async (req,
     return res.status(500).json({ message: "Failed to load student", error: error.message });
   }
 }, verifyStudentEmail);
+
+/**
+ * GET /api/student/me/library-contact
+ * Student → libraryId (from DB) → library contact details only.
+ */
+router.get("/me/library-contact", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const userId = String(req.user?.userId || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid auth payload" });
+    }
+
+    const student = await Student.findOne({ _id: userId, isDeleted: false }).select("libraryId").lean();
+    if (!student?.libraryId) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const lib = await Library.findById(student.libraryId).lean();
+    if (!lib) {
+      return res.status(404).json({ message: "Library not found" });
+    }
+
+    return res.json({ ok: true, ...toLibraryContactDto(lib) });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load library contact", error: error.message });
+  }
+});
+
+/**
+ * POST /api/student/me/push-token
+ * Register Expo push token for library messages.
+ */
+router.post("/me/push-token", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const userId = String(req.user?.userId || "").trim();
+    const libraryId = String(req.user?.libraryId || "").trim();
+    const expoPushToken = String(req.body?.expoPushToken || "").trim();
+    const platform = String(req.body?.platform || "").trim() || null;
+
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
+      return res.status(400).json({ message: "Invalid auth payload" });
+    }
+    if (!expoPushToken || !expoPushToken.startsWith("ExponentPushToken")) {
+      return res.status(400).json({ message: "Valid expoPushToken is required" });
+    }
+
+    const StudentPushToken = require("../models/StudentPushToken");
+    await StudentPushToken.findOneAndUpdate(
+      { studentId: userId, expoPushToken },
+      {
+        $set: {
+          libraryId,
+          studentId: userId,
+          expoPushToken,
+          platform,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to save push token", error: error.message });
+  }
+});
 
 module.exports = router;
 

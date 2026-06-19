@@ -69,11 +69,18 @@ function adminUser() {
   };
 }
 
-function studentResponse(student) {
+function studentResponse(student, library = null) {
   return {
     id: student._id.toString(),
     role: "student",
     libraryId: student.libraryId?.toString?.() || null,
+    library: library
+      ? {
+          id: library._id?.toString?.() || null,
+          libraryName: library.name || "",
+          logoUrl: library.logoUrl || null,
+        }
+      : null,
     name: student.name,
     mobile: student.mobile,
     username: student.username,
@@ -339,7 +346,8 @@ async function login({ body, metadata }) {
     throw createHttpError(401, "Invalid credentials");
   }
 
-  const user = studentResponse(student);
+  const library = await Library.findById(student.libraryId).select("name logoUrl").lean();
+  const user = studentResponse(student, library);
   const libraryId = student.libraryId.toString();
   const identity = await safeRecordIdentity(() => recordStudentIdentity(student));
   const tokens = await issueAuthTokens(user, libraryId, metadata, {
@@ -375,7 +383,8 @@ async function issueLibrarySession(library, metadata) {
 }
 
 async function issueStudentSession(student, metadata) {
-  const user = studentResponse(student);
+  const library = await Library.findById(student.libraryId).select("name logoUrl").lean();
+  const user = studentResponse(student, library);
   const libraryId = student.libraryId.toString();
   const identity = await safeRecordIdentity(() => recordStudentIdentity(student));
   const tokens = await issueAuthTokens(user, libraryId, metadata, {

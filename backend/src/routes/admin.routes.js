@@ -15,8 +15,10 @@ const {
   DEFAULT_PLANS,
   invalidatePlanConfigCache,
 } = require("../utils/paymentPlans");
-const { resolveLibrarySubscriptionPeriod } = require("../utils/subscription");
+const { resolveLibrarySubscriptionPeriod, assignLibraryPlanByAdmin, addDays } = require("../utils/subscription");
 const { paiseToRupees, sumLibraryPaymentRevenueRupees, sumPaidPaymentRevenueRupees } = require("../utils/money");
+const { invalidateLibrarySubscriptionCache } = require("../utils/subscriptionCache");
+const { logPlanAudit } = require("../services/planManagement.service");
 const { requireAdminAuth } = require("../middleware/admin.middleware");
 
 const router = express.Router();
@@ -465,6 +467,111 @@ router.get("/library/:id/subscription", requireAdminAuth, async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load subscription detail", error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/library/:id/assign-plan
+ *
+ * Super Admin manually activates a plan for a library (no payment).
+ * Body: { planId?: string, planKey?: string, markOneTimeUsed?: boolean }
+ */
+router.post("/library/:id/assign-plan", requireAdminAuth, async (req, res) => {
+  try {
+    const libraryId = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(libraryId)) {
+      return res.status(400).json({ message: "Invalid library id" });
+    }
+
+    const planId = req.body?.planId ? String(req.body.planId).trim() : null;
+    const planKey = req.body?.planKey ? String(req.body.planKey).trim().toLowerCase() : null;
+    const markOneTimeUsed = Boolean(req.body?.markOneTimeUsed);
+
+    if (!planId && !planKey) {
+      return res.status(400).json({ message: "planId or planKey is required" });
+    }
+
+    const result = await assignLibraryPlanByAdmin({
+      libraryId,
+      planId,
+      planKey,
+      markOneTimeUsed,
+    });
+
+    invalidateLibrarySubscriptionCache(libraryId);
+    await logPlanAudit(req, "plan_assigned", {
+      libraryId,
+      libraryName: result.library.name,
+      planKey: result.plan.key,
+      planName: result.plan.name,
+      previousPlanKey: req.body?.previousPlanKey || null,
+    });
+
+    return res.json({
+      ok: true,
+      libraryId,
+      plan: result.plan,
+      subscriptionStatus: result.library.subscriptionStatus,
+      planExpiryDate: result.library.planExpiryDate?.toISOString?.() || null,
+      currentPlanKey: result.library.currentPlanKey,
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({
+      message: error.message || "Failed to assign plan",
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/library/:id/extend-plan
+ * Body: { extraDays: number }
+ */
+router.post("/library/:id/extend-plan", requireAdminAuth, async (req, res) => {
+  try {
+    const libraryId = String(req.params.id || "").trim();
+    const extraDays = Number(req.body?.extraDays);
+    if (!mongoose.Types.ObjectId.isValid(libraryId)) {
+      return res.status(400).json({ message: "Invalid library id" });
+    }
+    if (!Number.isFinite(extraDays) || extraDays < 1 || extraDays > 3650) {
+      return res.status(400).json({ message: "extraDays must be between 1 and 3650" });
+    }
+
+    const lib = await Library.findById(libraryId);
+    if (!lib) return res.status(404).json({ message: "Library not found" });
+
+    const base = lib.planExpiryDate && new Date(lib.planExpiryDate).getTime() > Date.now()
+      ? new Date(lib.planExpiryDate)
+      : new Date();
+    lib.planExpiryDate = addDays(base, extraDays);
+    if (lib.plan !== "pro") {
+      lib.plan = "pro";
+      lib.subscriptionStatus = "active";
+    }
+    await lib.save();
+
+    await Subscription.findOneAndUpdate(
+      { libraryId: lib._id, status: "active" },
+      { $set: { expiryDate: lib.planExpiryDate } },
+      { sort: { createdAt: -1 } }
+    );
+
+    invalidateLibrarySubscriptionCache(libraryId);
+    await logPlanAudit(req, "plan_extended", {
+      libraryId,
+      libraryName: lib.name,
+      extraDays,
+      planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
+    });
+
+    return res.json({
+      ok: true,
+      planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to extend plan", error: error.message });
   }
 });
 

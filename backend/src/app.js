@@ -40,6 +40,7 @@ app.use("/api/students", require("./routes/student.routes"));
 app.use("/api/attendance", require("./routes/attendance.routes"));
 app.use("/api/qr", require("./routes/qr.routes"));
 app.use("/api/notifications", require("./routes/notification.routes"));
+app.use("/api/communications", require("./routes/communication.routes"));
 app.use("/api/seats", require("./routes/seat.routes"));
 app.use("/api/dashboard", require("./routes/dashboard.routes"));
 app.use("/api/student", require("./routes/student-me.routes"));

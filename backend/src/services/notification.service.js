@@ -64,6 +64,8 @@ function formatNotificationForClient(doc, viewerUserId) {
     libraryId: doc.libraryId?.toString?.() || null,
     title: doc.title,
     message: doc.message,
+    imageUrl: doc.imageUrl || null,
+    messageType: doc.messageType || "text",
     date:
       doc.date instanceof Date
         ? doc.date.toISOString()

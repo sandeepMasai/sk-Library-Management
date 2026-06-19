@@ -36,9 +36,29 @@ const notificationSchema = new mongoose.Schema(
 
     message: {
       type: String,
-      required: true,
+      default: "",
       trim: true,
       maxlength: 5000,
+    },
+
+    imageUrl: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 2048,
+    },
+
+    messageType: {
+      type: String,
+      enum: ["text", "image", "text_image"],
+      default: "text",
+    },
+
+    campaignId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CommunicationCampaign",
+      default: null,
+      index: true,
     },
 
     date: {
@@ -193,6 +213,12 @@ notificationSchema.pre("validate", function (next) {
 
   if (this.targetType !== "student") {
     this.targetId = null;
+  }
+
+  const hasImage = Boolean(this.imageUrl && String(this.imageUrl).trim());
+  const hasMessage = Boolean(this.message && String(this.message).trim());
+  if (!hasMessage && !hasImage) {
+    return next(new Error("message or imageUrl is required"));
   }
 
   // Protect against unbounded document growth.

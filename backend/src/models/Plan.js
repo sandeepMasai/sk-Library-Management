@@ -13,6 +13,18 @@ const mongoose = require("mongoose");
 
 const PLAN_KEY_PATTERN = /^[a-z0-9_-]{1,40}$/;
 
+/** Slug for storage: lowercase letters, numbers, hyphens, underscores only. */
+function normalizePlanKey(raw) {
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 40);
+}
+
 /** Discount % stored with max 4 decimal places (avoids float noise). */
 const DISCOUNT_DECIMALS = 4;
 
@@ -135,6 +147,40 @@ const PlanSchema = new mongoose.Schema(
      * Used for the ₹99 trial plan.
      */
     showOnlyForNew: { type: Boolean, default: false },
+    /**
+     * List / MRP price for strike-through display (INR). Selling price uses `price` + `discount`.
+     */
+    originalPrice: {
+      type: Number,
+      default: null,
+      min: 0,
+      validate: {
+        validator: (v) => v == null || Number.isFinite(v),
+        message: "originalPrice must be a finite number",
+      },
+    },
+    /** Visible to all libraries when true (default). */
+    isPublic: { type: Boolean, default: true, index: true },
+    /** Library may purchase only once; tracked on Library.usedOneTimePlans. */
+    isOneTimeOffer: { type: Boolean, default: false, index: true },
+    /** When isPublic is false, only these libraries can see/purchase the plan. */
+    allowedLibraryIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Library",
+      },
+    ],
+    description: { type: String, default: "", trim: true, maxlength: 500 },
+    campaignName: { type: String, default: null, trim: true, maxlength: 120 },
+    promoStartDate: { type: Date, default: null },
+    promoEndDate: { type: Date, default: null },
+    badgeRecommended: { type: Boolean, default: false },
+    badgeBestValue: { type: Boolean, default: false },
+    badgeLimitedTime: { type: Boolean, default: false },
+    badgeExclusive: { type: Boolean, default: false },
+    viewCount: { type: Number, default: 0, min: 0 },
+    purchaseCount: { type: Number, default: 0, min: 0 },
+    revenueTotal: { type: Number, default: 0, min: 0 },
     isActive: { type: Boolean, default: true, index: true },
     tag: { type: String, default: null, trim: true, maxlength: 40 },
 
@@ -212,5 +258,7 @@ PlanSchema.index({ isActive: 1, key: 1 });
 
 PlanSchema.statics.PLAN_KEY_PATTERN = PLAN_KEY_PATTERN;
 PlanSchema.statics.DISCOUNT_DECIMALS = DISCOUNT_DECIMALS;
+PlanSchema.statics.normalizeKey = normalizePlanKey;
+PlanSchema.statics.isValidKey = (key) => PLAN_KEY_PATTERN.test(String(key || ""));
 
 module.exports = mongoose.model("Plan", PlanSchema);

@@ -8,6 +8,8 @@ const Subscription = require("../models/Subscription");
 const Plan = require("../models/Plan");
 const { activatePaidSubscription } = require("../utils/subscription");
 const { invalidateLibrarySubscriptionCache } = require("../utils/subscriptionCache");
+const { assertLibraryCanPurchasePlan } = require("../services/planEligibility.service");
+const { recordPlanPurchase, logPlanAudit } = require("../services/planManagement.service");
 const { paiseToRupees } = require("../utils/money");
 const logger = require("../utils/logger");
 const {
@@ -34,7 +36,7 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
   try {
     const libraryId = req.user?.libraryId;
     const planId = String(req.body?.planId || "").trim();
-    const lib = await Library.findById(libraryId).select("plan subscriptionStatus planExpiryDate trialUsed").lean();
+    const lib = await Library.findById(libraryId).select("plan subscriptionStatus planExpiryDate trialUsed usedOneTimePlans").lean();
     if (!lib) return res.status(404).json({ message: "Library not found" });
     const expiryMs = lib.planExpiryDate ? new Date(lib.planExpiryDate).getTime() : null;
     const activeUntilExpiry =
@@ -50,10 +52,14 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
         planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
       });
     }
-    const plan = await Plan.findById(planId).select("key finalPrice isActive isTrial showOnlyForNew").lean();
+    const plan = await Plan.findById(planId)
+      .select("key finalPrice isActive isTrial isOneTimeOffer isPublic allowedLibraryIds")
+      .lean();
     if (!plan || !plan.isActive) return res.status(400).json({ message: "Invalid plan" });
-    if (plan.isTrial && Boolean(lib.trialUsed)) {
-      return res.status(400).json({ message: "Trial can be used only once", code: "TRIAL_USED" });
+    try {
+      assertLibraryCanPurchasePlan(plan, lib);
+    } catch (e) {
+      return res.status(e.statusCode || 400).json({ message: e.message, code: e.code || "PLAN_NOT_ELIGIBLE" });
     }
 
     const { keyId, mode, client } = getRazorpayClient();
@@ -150,17 +156,23 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     const signature = String(req.body?.signature || "").trim();
 
     const plan = await Plan.findById(planId)
-      .select("key name price discount finalPrice finalPricePaise duration isActive isTrial")
+      .select("key name price discount finalPrice finalPricePaise duration isActive isTrial isOneTimeOffer isPublic allowedLibraryIds")
       .lean();
     if (!plan || !plan.isActive) return res.status(400).json({ message: "Invalid plan" });
     if (!orderId || !paymentId) return res.status(400).json({ message: "Missing payment fields" });
 
-    // Enforce one-time trial
-    if (plan.isTrial) {
-      const lib = await Library.findById(libraryId).select("trialUsed").lean();
-      if (Boolean(lib?.trialUsed)) {
-        return res.status(400).json({ message: "Trial can be used only once", code: "TRIAL_USED" });
-      }
+    const libForEligibility = await Library.findById(libraryId)
+      .select("trialUsed usedOneTimePlans")
+      .lean();
+    try {
+      assertLibraryCanPurchasePlan(plan, libForEligibility || {});
+    } catch (e) {
+      return res.status(e.statusCode || 400).json({ message: e.message, code: e.code || "PLAN_NOT_ELIGIBLE" });
+    }
+
+    // Enforce one-time trial (legacy guard)
+    if (plan.isTrial && Boolean(libForEligibility?.trialUsed)) {
+      return res.status(400).json({ message: "Trial can be used only once", code: "TRIAL_USED" });
     }
 
     // Verification strategy:
@@ -297,6 +309,16 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     const { library } = await activatePaidSubscription({
       libraryId,
       plan: { key: plan.key, price: Number(plan.finalPrice), durationDays: Number(plan.duration || 0) },
+      planMeta: { isTrial: plan.isTrial, isOneTimeOffer: plan.isOneTimeOffer },
+    });
+    void recordPlanPurchase(planId, Number(plan.finalPrice));
+    void logPlanAudit(req, "plan_purchased", {
+      libraryId: String(libraryId),
+      libraryName: library.name,
+      planId: String(planId),
+      planKey: plan.key,
+      planName: plan.name,
+      amount: Number(plan.finalPrice),
     });
     invalidateLibrarySubscriptionCache(libraryId);
 

@@ -180,12 +180,30 @@ const librarySchema = new mongoose.Schema(
     /**
      * Paid SKU (trial/monthly/...) once activated; `none` before purchase.
      */
-    currentPlanKey: { type: String, enum: CURRENT_PLAN_KEYS, default: "none" },
+    currentPlanKey: {
+      type: String,
+      default: "none",
+      trim: true,
+      lowercase: true,
+      maxlength: 40,
+    },
     /**
      * One-time free trial guard:
      * - true: trial already used at least once; never allow free trial again
      */
     trialUsed: { type: Boolean, default: false },
+    /**
+     * Plan keys already purchased under one-time offers (e.g. trial, ₹99 promo).
+     * Persists across downgrades — plan stays hidden forever once used.
+     */
+    usedOneTimePlans: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (arr) => Array.isArray(arr) && arr.length <= 64,
+        message: "usedOneTimePlans exceeds max entries",
+      },
+    },
     // status:
     // - inactive: no plan assigned yet (must purchase a plan to activate)
     // - active: normal subscription/trial
@@ -199,6 +217,8 @@ const librarySchema = new mongoose.Schema(
     retentionChoiceAt: { type: Date, default: null },
     planStartDate: { type: Date, default: null },
     planExpiryDate: { type: Date, default: null },
+    /** When true (default), only paid active members can mark attendance via QR scan. */
+    attendanceActiveMembersOnly: { type: Boolean, default: true },
     libraryCode: {
       type: String,
       required: true,

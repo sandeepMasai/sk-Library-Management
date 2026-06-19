@@ -37,6 +37,7 @@ function toLibraryProfile(lib, extras = {}) {
     cancelNote: lib.cancelNote || null,
     planExpiryDate: lib.planExpiryDate?.toISOString?.() || null,
     totalSeats: typeof extras.totalSeats === "number" ? extras.totalSeats : undefined,
+    attendanceActiveMembersOnly: lib.attendanceActiveMembersOnly !== false,
   };
 }
 

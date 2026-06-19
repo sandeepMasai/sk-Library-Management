@@ -17,6 +17,7 @@ const {
   listPayments,
   getPaymentById,
 } = require("../services/superadminPayments.service");
+const { getPlanManagementOverview, listPlanAuditLogs } = require("../services/planManagement.service");
 
 const router = express.Router();
 
@@ -67,6 +68,31 @@ router.get("/subscription-overview", requireAdminAuth, async (req, res) => {
     return res.json({ ok: true, overview });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load subscription overview", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/plan-management-overview
+ * Dashboard cards: libraries, subscribers, revenue, expiring plans.
+ */
+router.get("/plan-management-overview", requireAdminAuth, async (req, res) => {
+  try {
+    const overview = await getPlanManagementOverview();
+    return res.json({ ok: true, overview });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load plan overview", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/plan-audit-logs?limit=20
+ */
+router.get("/plan-audit-logs", requireAdminAuth, async (req, res) => {
+  try {
+    const logs = await listPlanAuditLogs({ limit: req.query.limit });
+    return res.json({ ok: true, logs });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load plan audit logs", error: error.message });
   }
 });
 
