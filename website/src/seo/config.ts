@@ -120,6 +120,7 @@ export const SITEMAP_PATHS = PUBLIC_SEO_ROUTES.map((r) => r.path);
 export const NOINDEX_PATH_PREFIXES = [
   '/admin',
   '/superadmin',
+  '/pk_admin',
   '/dashboard',
   '/login',
   '/register',

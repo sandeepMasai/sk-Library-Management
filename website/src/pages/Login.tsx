@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
 import { loginLibrary, loginStudent } from '../lib/auth';
+import { SUPER_ADMIN_LOGIN_PATH } from '../lib/routes';
 
 type Tab = 'library' | 'student';
 
@@ -41,7 +42,7 @@ export function Login() {
 
   return (
     <AuthShell
-      onLogoEasterEgg={() => navigate('/superadmin/login')}
+      onLogoEasterEgg={() => navigate(SUPER_ADMIN_LOGIN_PATH)}
       title="Welcome back"
       subtitle={tab === 'library' ? 'Sign in as library owner' : 'Sign in as student with mobile & PIN'}
       footer={

@@ -27,6 +27,7 @@ import { SuperAdminDashboard } from './superadmin/pages/SuperAdminDashboard';
 import { SuperAdminLibraries } from './superadmin/pages/SuperAdminLibraries';
 import { SuperAdminSubscriptions } from './superadmin/pages/SuperAdminSubscriptions';
 import { SuperAdminStudents } from './superadmin/pages/SuperAdminStudents';
+import { SUPER_ADMIN_LOGIN_PATH } from './lib/routes';
 
 export const router = createBrowserRouter([
   {
@@ -73,7 +74,8 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/admin/*', element: <Navigate to="/admin" replace /> },
-  { path: '/superadmin/login', element: <SuperAdminLogin /> },
+  { path: SUPER_ADMIN_LOGIN_PATH, element: <SuperAdminLogin /> },
+  { path: '/superadmin/login', element: <Navigate to="/" replace /> },
   {
     path: '/superadmin',
     element: (

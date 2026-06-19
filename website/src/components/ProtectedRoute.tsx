@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { AuthRole } from '../lib/auth';
+import { SUPER_ADMIN_LOGIN_PATH } from '../lib/routes';
 import { useAuth } from '../context/AuthContext';
 
 type ProtectedRouteProps = {
@@ -19,7 +20,7 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
     );
   }
 
-  const loginPath = location.pathname.startsWith('/superadmin') ? '/superadmin/login' : '/login';
+  const loginPath = location.pathname.startsWith('/superadmin') ? SUPER_ADMIN_LOGIN_PATH : '/login';
 
   if (!isAuthenticated) {
     return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;

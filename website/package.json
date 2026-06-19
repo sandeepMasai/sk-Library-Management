@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "copy-apk": "node scripts/copy-apk.mjs",
     "prebuild": "node scripts/generate-sitemap.mjs && node scripts/copy-apk.mjs",
     "build": "vite build",
