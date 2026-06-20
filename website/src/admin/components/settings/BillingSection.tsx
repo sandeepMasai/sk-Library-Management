@@ -276,7 +276,7 @@ export function BillingSection() {
                   onClick={() => setStatusFilter(key)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition ${
                     statusFilter === key
-                      ? 'bg-primary text-white'
+                      ? 'admin-pill-active'
                       : 'border border-white/15 bg-white/5 text-white/70 hover:bg-white/10'
                   }`}
                 >

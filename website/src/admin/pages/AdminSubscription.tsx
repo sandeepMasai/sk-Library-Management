@@ -7,6 +7,7 @@ import { ensureSession } from '../../lib/http';
 import { openRazorpayCheckout } from '../../lib/razorpayWeb';
 import { AdminPageHeader } from '../components/AdminPageHeader';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow, type SubscriptionMe } from '../api/libraryApi';
+import { planDurationLabel } from '../utils/billingHelpers';
 
 const FEATURES = [
   'Student management',
@@ -16,17 +17,24 @@ const FEATURES = [
   'WhatsApp & notifications',
 ];
 
-function durationLabel(days: number, isTrial?: boolean) {
-  if (isTrial) return 'Trial plan';
-  if (days >= 365) return 'Per year';
-  if (days >= 30) return 'Per month';
-  return `${days} days`;
+function planPeriodLabel(plan: PlanRow) {
+  return planDurationLabel(plan.key, plan);
 }
 
-function planCta(plan: PlanRow, paying: boolean) {
+function planBadge(plan: PlanRow) {
+  if (plan.badges?.recommended || plan.tag?.toLowerCase().includes('popular')) return 'Most popular';
+  if (plan.badges?.bestValue || plan.tag?.toLowerCase().includes('best')) return 'Best value';
+  if (plan.badges?.exclusive || plan.planType === 'library_specific') return 'Exclusive offer';
+  if (plan.isTrial || plan.key.toLowerCase().includes('trial')) return 'Trial';
+  if (plan.key.toLowerCase().includes('year') || plan.duration >= 365) return 'Yearly';
+  if (plan.key.toLowerCase().includes('6') || plan.duration >= 180) return '6 Months';
+  if (plan.key.toLowerCase().includes('month') || plan.duration >= 30) return 'Monthly';
+  return null;
+}
+
+function planCta(paying: boolean) {
   if (paying) return 'Processing…';
-  if (plan.isTrial) return 'Activate';
-  return 'Upgrade';
+  return 'Select plan';
 }
 
 export function AdminSubscription() {
@@ -96,38 +104,27 @@ export function AdminSubscription() {
 
   return (
     <div className="admin-dashboard-pad page-pad">
-      <section className="relative overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-primary/10 via-white to-accent/10 p-6 shadow-lg shadow-primary/5 sm:p-10">
-        <div className="relative z-10 max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary">SmartLibDesk</p>
-          <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Upgrade your library
-          </h1>
-          <p className="mt-3 text-base text-muted sm:text-lg">
-            Manage students, attendance, payments and communication — all in one premium workspace.
-          </p>
-        </div>
-        <div
-          className="pointer-events-none absolute -right-8 -top-8 h-48 w-48 rounded-full bg-primary/10 blur-3xl"
-          aria-hidden
-        />
-      </section>
+      <AdminPageHeader
+        title="Upgrade your library"
+        subtitle="Choose a plan and pay securely with Razorpay. Manage students, attendance, seats, and communications in one workspace."
+      />
 
       {sub ? (
-        <GlassCard admin padding="md" className="mt-6">
+        <GlassCard admin padding="md" className="admin-card-solid mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Current plan</p>
-              <p className="mt-1 text-lg font-semibold capitalize text-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/80">Current plan</p>
+              <p className="mt-1 text-lg font-semibold capitalize text-white">
                 {sub.plan || sub.currentPlanKey || 'none'} · {sub.subscriptionStatus || 'inactive'}
               </p>
               {sub.planExpiryDate ? (
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-sm text-white/65">
                   Expires {new Date(sub.planExpiryDate).toLocaleDateString('en-IN')}
                 </p>
               ) : null}
             </div>
             {success ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-medium text-emerald-200">
                 🎉 Subscription activated
               </div>
             ) : null}
@@ -136,11 +133,11 @@ export function AdminSubscription() {
       ) : null}
 
       {error ? (
-        <GlassCard admin padding="md" className="mt-4 border-red-300/40">
-          <div className="text-sm text-red-800">
+        <GlassCard admin padding="md" className="admin-card-solid mb-6 border-red-400/30">
+          <div className="text-sm text-red-200">
             <p>{error}</p>
             {/sign in|session expired/i.test(error) ? (
-              <Link to="/login" className="mt-2 inline-block font-semibold text-primary underline">
+              <Link to="/login" className="mt-2 inline-block font-semibold text-teal-300 underline">
                 Go to login
               </Link>
             ) : null}
@@ -148,119 +145,102 @@ export function AdminSubscription() {
         </GlassCard>
       ) : null}
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {sortedPlans.map((plan) => {
           const planId = plan._id || plan.id || '';
           const isCurrent = activePlanKey && plan.key.toLowerCase() === activePlanKey;
-          const isPopular = plan.badges?.recommended || plan.tag?.toLowerCase().includes('popular');
-          const isBestValue = plan.badges?.bestValue || plan.tag?.toLowerCase().includes('best');
-          const isExclusive = plan.badges?.exclusive || plan.planType === 'library_specific';
+          const badge = planBadge(plan);
 
           return (
-            <GlassCard admin
+            <GlassCard
+              admin
               key={planId}
               hover
               padding="md"
-              className={`relative flex flex-col ${
-                isPopular ? 'ring-2 ring-primary/30' : isExclusive ? 'ring-2 ring-amber-300/50' : ''
-              }`}
+              className="subscription-plan-card admin-card-solid relative flex flex-col"
             >
-              {isPopular ? (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Most popular
-                </span>
-              ) : null}
-              {isBestValue && !isPopular ? (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Best value
-                </span>
-              ) : null}
-              {isExclusive ? (
-                <span className="absolute -top-3 right-4 rounded-full bg-amber-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  🎁 Exclusive offer
+              {badge ? (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-md shadow-blue-500/30">
+                  {badge}
                 </span>
               ) : null}
 
-              <h2 className="font-display text-xl font-bold text-slate-900">{plan.name}</h2>
+              <h2 className="font-display text-xl font-bold text-white">{plan.name}</h2>
               <div className="mt-3 flex items-end gap-2">
                 {plan.strikePrice && plan.strikePrice > plan.finalPrice ? (
-                  <span className="text-lg text-muted line-through">₹{plan.strikePrice}</span>
+                  <span className="text-lg text-white/45 line-through">₹{plan.strikePrice}</span>
                 ) : null}
-                <span className="text-3xl font-bold text-primary">₹{plan.finalPrice}</span>
+                <span className="text-3xl font-bold text-teal-300">₹{plan.finalPrice}</span>
               </div>
-              <p className="mt-1 text-xs text-muted">{durationLabel(plan.duration, plan.isTrial)}</p>
-              {plan.description ? <p className="mt-2 text-sm text-muted">{plan.description}</p> : null}
+              <p className="mt-1 text-xs text-white/55">{planPeriodLabel(plan)}</p>
+              {plan.description ? <p className="mt-2 text-sm text-white/65">{plan.description}</p> : null}
 
-              <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-700">
+              <ul className="mt-4 flex-1 space-y-2 text-sm text-white/80">
                 {FEATURES.map((f) => (
                   <li key={f} className="flex items-center gap-2">
-                    <span className="text-emerald-600">✓</span> {f}
+                    <span className="text-emerald-400">✓</span> {f}
                   </li>
                 ))}
               </ul>
 
               <Button
-                className="mt-6 w-full"
-                variant={isPopular ? 'default' : 'outline'}
+                className={`mt-6 w-full ${isCurrent ? 'admin-btn-current' : ''}`}
+                variant="primary"
                 disabled={paying !== null || isCurrent}
                 onClick={() => setCheckoutPlan(plan)}
               >
-                {isCurrent ? 'Current plan' : planCta(plan, paying === planId)}
+                {isCurrent ? 'Current plan' : planCta(paying === planId)}
               </Button>
             </GlassCard>
           );
         })}
       </div>
 
-      <p className="mt-8 flex items-center justify-center gap-2 text-center text-xs text-muted">
+      <p className="mt-8 flex items-center justify-center gap-2 text-center text-xs text-white/55">
         <span>🔒</span> Secure Razorpay payment · PCI DSS compliant checkout
       </p>
 
       {checkoutPlan ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center">
-          <GlassCard admin padding="md" className="w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center">
+          <GlassCard admin padding="md" className="payment-summary-card admin-card-solid w-full max-w-md">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase text-muted">Payment summary</p>
-                <h3 className="font-display text-xl font-bold text-slate-900">{checkoutPlan.name}</h3>
+                <p className="text-xs font-semibold uppercase text-emerald-200/80">Payment summary</p>
+                <h3 className="font-display text-xl font-bold text-white">{checkoutPlan.name}</h3>
               </div>
-              <button type="button" className="text-muted" onClick={() => setCheckoutPlan(null)}>
+              <button type="button" className="text-white/60 hover:text-white" onClick={() => setCheckoutPlan(null)}>
                 ✕
               </button>
             </div>
 
             <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted">Plan</dt>
-                <dd className="font-medium text-slate-900">{checkoutPlan.name}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-white/60">Plan</dt>
+                <dd className="font-medium text-white">{checkoutPlan.name}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Duration</dt>
-                <dd className="font-medium text-slate-900">{checkoutPlan.duration} days</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-white/60">Duration</dt>
+                <dd className="font-medium text-white">{planPeriodLabel(checkoutPlan)}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Price</dt>
-                <dd className="font-medium text-slate-900">₹{checkoutPlan.finalPrice}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-white/60">Price</dt>
+                <dd className="font-medium text-white">₹{checkoutPlan.finalPrice}</dd>
               </div>
-              <div className="flex justify-between border-t border-slate-100 pt-3 text-base">
-                <dt className="font-semibold text-slate-900">Total</dt>
-                <dd className="font-bold text-primary">₹{finalAmount}</dd>
+              <div className="flex justify-between gap-4 border-t border-white/10 pt-3 text-base">
+                <dt className="font-semibold text-white">Total</dt>
+                <dd className="payment-summary-total font-bold">₹{finalAmount}</dd>
               </div>
             </dl>
 
-            <p className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-center text-xs text-muted">
+            <p className="payment-summary-note mt-4 rounded-xl border px-3 py-2 text-center text-xs">
               🔒 Secure Razorpay payment
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                className="flex-1"
-                disabled={paying !== null}
-                onClick={() => pay(checkoutPlan)}
-              >
+              <Button className="flex-1" disabled={paying !== null} onClick={() => pay(checkoutPlan)}>
                 {paying ? 'Opening checkout…' : 'Pay with Razorpay'}
               </Button>
-              <Button variant="ghost" onClick={() => setCheckoutPlan(null)}>
+              <Button variant="ghost-dark" onClick={() => setCheckoutPlan(null)}>
                 Cancel
               </Button>
             </div>
@@ -269,19 +249,19 @@ export function AdminSubscription() {
       ) : null}
 
       {success && sub?.planExpiryDate ? (
-        <GlassCard admin padding="md" className="mt-6 border-emerald-300/40">
-          <h3 className="font-semibold text-emerald-900">Plan details</h3>
+        <GlassCard admin padding="md" className="admin-card-solid mt-6 border-emerald-400/25">
+          <h3 className="font-semibold text-emerald-200">Plan details</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-muted">Expiry date</dt>
-              <dd className="font-medium text-slate-900">
+              <dt className="text-white/60">Expiry date</dt>
+              <dd className="font-medium text-white">
                 {new Date(sub.planExpiryDate).toLocaleDateString('en-IN')}
               </dd>
             </div>
             {sub.planStartDate ? (
               <div>
-                <dt className="text-muted">Started</dt>
-                <dd className="font-medium text-slate-900">
+                <dt className="text-white/60">Started</dt>
+                <dd className="font-medium text-white">
                   {new Date(sub.planStartDate).toLocaleDateString('en-IN')}
                 </dd>
               </div>

@@ -16,7 +16,7 @@ export function AdminFilterPills({ options, value, onChange }: AdminFilterPillsP
           onClick={() => onChange(opt.value)}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
             value === opt.value
-              ? 'bg-white text-emerald-800 shadow-sm'
+              ? 'admin-pill-active'
               : 'border border-white/20 bg-white/10 text-white/80 hover:bg-white/15'
           }`}
         >

@@ -597,6 +597,78 @@ body {
   box-shadow: 0 4px 24px oklch(20% 0.05 166 / 0.18);
 }
 
+/* Solid admin cards — billing, subscription, payment summaries */
+.admin-card-solid,
+.admin-dashboard-bg .admin-card-solid,
+.admin-dashboard-bg .subscription-plan-card,
+.admin-dashboard-bg .payment-summary-card,
+.admin-dashboard-bg .subscription-hero-card {
+  border: 1px solid oklch(100% 0 0 / 0.14) !important;
+  background: var(--color-admin-bg-elevated) !important;
+  color: white;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 8px 28px oklch(8% 0.02 250 / 0.4);
+}
+
+.admin-card-solid :is(h1, h2, h3, h4, h5, h6),
+.admin-dashboard-bg .subscription-plan-card :is(h1, h2, h3, h4, h5, h6),
+.admin-dashboard-bg .payment-summary-card :is(h1, h2, h3, h4, h5, h6) {
+  color: white !important;
+}
+
+.admin-card-solid :is(p, span, label, dt, dd, li),
+.admin-dashboard-bg .subscription-plan-card :is(p, span, label, dt, dd, li),
+.admin-dashboard-bg .payment-summary-card :is(p, span, label, dt, dd, li) {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.admin-dashboard-bg .subscription-plan-card .text-primary {
+  color: #5eead4 !important;
+}
+
+.admin-dashboard-bg .payment-summary-card .payment-summary-total {
+  color: #5eead4 !important;
+}
+
+.admin-dashboard-bg .payment-summary-card .payment-summary-note {
+  border-color: oklch(100% 0 0 / 0.12) !important;
+  background: oklch(100% 0 0 / 0.06) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Admin active controls — pills, nav, current-plan buttons */
+.admin-pill-active {
+  background: #2563eb !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px rgb(37 99 235 / 0.35);
+}
+
+.admin-nav-active {
+  background: rgb(37 99 235 / 0.22) !important;
+  color: white !important;
+  box-shadow: 0 1px 3px rgb(37 99 235 / 0.2);
+}
+
+.admin-dashboard-bg .settings-nav-item.admin-nav-active {
+  background: rgb(37 99 235 / 0.22) !important;
+  color: white !important;
+}
+
+.admin-btn-current {
+  cursor: default !important;
+  border: none !important;
+  background: #2563eb !important;
+  color: white !important;
+  opacity: 1 !important;
+  box-shadow: 0 8px 20px rgb(37 99 235 / 0.35);
+}
+
+.admin-btn-current:disabled {
+  opacity: 1 !important;
+}
+
 /* Kill solid white / light override utilities inside admin */
 .admin-dashboard-bg [class*='!bg-'],
 .admin-dashboard-bg .glass-panel[class*='bg-'] {
@@ -668,8 +740,9 @@ body {
 }
 
 .admin-dashboard-bg .settings-nav-item[aria-current='true'],
-.admin-dashboard-bg .settings-nav-item.bg-white {
-  background: oklch(100% 0 0 / 0.15) !important;
+.admin-dashboard-bg .settings-nav-item.bg-white,
+.admin-dashboard-bg .settings-nav-item.admin-nav-active {
+  background: rgb(37 99 235 / 0.22) !important;
   color: white !important;
 }
 

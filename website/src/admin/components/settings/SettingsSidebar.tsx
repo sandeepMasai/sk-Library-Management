@@ -19,7 +19,7 @@ export function SettingsSidebar({ items, active, onSelect, className = '' }: Set
             onClick={() => onSelect(item.id)}
             className={`settings-nav-item flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition ${
               isActive
-                ? 'bg-white/15 text-white shadow-sm ring-1 ring-white/20'
+                ? 'admin-nav-active ring-1 ring-blue-400/45'
                 : 'text-white/70 hover:bg-white/10 hover:text-white hover:shadow-sm'
             }`}
           >
