@@ -42,6 +42,7 @@ export function Login() {
 
   return (
     <AuthShell
+      mode="login"
       onLogoEasterEgg={() => navigate(SUPER_ADMIN_LOGIN_PATH)}
       title="Welcome back"
       subtitle={tab === 'library' ? 'Sign in as library owner' : 'Sign in as student with mobile & PIN'}

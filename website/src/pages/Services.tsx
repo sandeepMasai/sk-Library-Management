@@ -14,23 +14,23 @@ export function Services() {
         subtitle="Everything a modern study library needs — from first student to monthly billing."
         badge="⚡ Services"
       />
-      <section className="gradient-mesh-light border-b border-slate-200/60 py-16">
-        <LibraryWorkflow className="py-0" />
+      <section className="gradient-mesh border-b border-white/10 py-16">
+        <LibraryWorkflow className="py-0" dark />
       </section>
-      <section className="bg-white py-16">
+      <section className="gradient-mesh border-b border-white/10 py-16">
         <PageContainer>
           <div className="grid gap-8 md:grid-cols-2">
             {SERVICES.map((s, i) => (
-              <GlassCard key={s.title} hover padding="lg" className="flex gap-5">
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
+              <GlassCard key={s.title} dark hover padding="lg" className="flex gap-5">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-2xl">
                   {s.icon}
                 </span>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                  <p className="text-xs font-bold uppercase tracking-wider text-teal-300">
                     {String(i + 1).padStart(2, '0')}
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-slate-900">{s.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">{s.description}</p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">{s.title}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-white/70">{s.description}</p>
                 </div>
               </GlassCard>
             ))}

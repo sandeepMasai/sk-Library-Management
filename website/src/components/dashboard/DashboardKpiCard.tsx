@@ -5,7 +5,7 @@ type DashboardKpiCardProps = {
   icon?: string;
   trend?: string;
   dark?: boolean;
-  accent?: 'blue' | 'green' | 'amber' | 'purple' | 'cyan';
+  accent?: 'blue' | 'green' | 'amber' | 'purple' | 'cyan' | 'primary' | 'teal';
   index?: number;
 };
 
@@ -15,6 +15,8 @@ const accentMap = {
   amber: { light: 'bg-amber-50 text-amber-600', dark: 'bg-amber-500/15 text-amber-300' },
   purple: { light: 'bg-violet-50 text-violet-600', dark: 'bg-violet-500/15 text-violet-300' },
   cyan: { light: 'bg-cyan-50 text-cyan-600', dark: 'bg-cyan-500/15 text-cyan-300' },
+  primary: { light: 'bg-primary/10 text-primary', dark: 'bg-primary/20 text-teal-200' },
+  teal: { light: 'bg-accent/15 text-accent', dark: 'bg-accent/20 text-teal-200' },
 };
 
 export function DashboardKpiCard({
@@ -40,17 +42,17 @@ export function DashboardKpiCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className={`text-xs font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-muted'}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wide ${dark ? 'text-white/65' : 'text-muted'}`}>
             {label}
           </p>
           <p className={`mt-2 text-2xl font-bold tracking-tight sm:text-3xl ${dark ? 'text-white' : 'text-slate-900'}`}>
             {value}
           </p>
           {hint ? (
-            <p className={`mt-1 text-xs ${dark ? 'text-slate-500' : 'text-muted'}`}>{hint}</p>
+            <p className={`mt-1 text-xs ${dark ? 'text-white/55' : 'text-muted'}`}>{hint}</p>
           ) : null}
           {trend ? (
-            <p className="mt-2 text-xs font-medium text-emerald-500">{trend}</p>
+            <p className={`mt-2 text-xs font-medium ${dark ? 'text-emerald-400' : 'text-primary'}`}>{trend}</p>
           ) : null}
         </div>
         {icon ? (

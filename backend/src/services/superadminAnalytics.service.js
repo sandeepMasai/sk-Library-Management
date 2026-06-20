@@ -2,6 +2,7 @@ const Library = require("../models/Library");
 const Log = require("../models/Log");
 const Payment = require("../models/Payment");
 const RenewalRequest = require("../models/RenewalRequest");
+const Subscription = require("../models/Subscription");
 const {
   countLibrarySubscriptionOverview,
   listCancelledLibraries,
@@ -25,6 +26,24 @@ const PLAN_LABELS = {
   yearly: "Yearly",
   pro: "Pro",
 };
+
+const PLAN_COLORS = ["#2d8f7f", "#1e5c52", "#f59e0b", "#94a3b8", "#8b5cf6", "#ec4899", "#06b6d4"];
+
+function buildSevenDaySeries(aggRows, startDate) {
+  const map = new Map(aggRows.map((r) => [String(r._id), Number(r.count || 0)]));
+  const series = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    series.push({ date: key, value: map.get(key) || 0 });
+  }
+  return series;
+}
+
+function sumSeriesValues(series) {
+  return (series || []).reduce((sum, row) => sum + Number(row.value || 0), 0);
+}
 
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -217,12 +236,134 @@ async function getCancelledLibraries() {
   return { count: libraries.length, libraries };
 }
 
+async function getPlatformTrends() {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const sevenDaysAgo = new Date(todayStart);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const expiryEnd = new Date(todayStart);
+  expiryEnd.setDate(expiryEnd.getDate() + 7);
+  const mom = monthOverMonthPeriods(now);
+
+  const [
+    libraryAgg,
+    subAgg,
+    expiryAgg,
+    currentPeriodLibs,
+    previousPeriodLibs,
+    currentPeriodSubs,
+    previousPeriodSubs,
+  ] = await Promise.all([
+    Library.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    Subscription.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo }, status: "active" } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    Library.aggregate([
+      {
+        $match: {
+          isActive: true,
+          planExpiryDate: { $gte: todayStart, $lt: expiryEnd },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$planExpiryDate" } },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    Library.countDocuments({ createdAt: { $gte: mom.currentStart, $lte: mom.currentEnd } }),
+    Library.countDocuments({ createdAt: { $gte: mom.previousStart, $lte: mom.previousEnd } }),
+    Subscription.countDocuments({
+      createdAt: { $gte: mom.currentStart, $lte: mom.currentEnd },
+      status: "active",
+    }),
+    Subscription.countDocuments({
+      createdAt: { $gte: mom.previousStart, $lte: mom.previousEnd },
+      status: "active",
+    }),
+  ]);
+
+  const librarySparkline = buildSevenDaySeries(libraryAgg, sevenDaysAgo);
+  const subscriptionSparkline = buildSevenDaySeries(subAgg, sevenDaysAgo);
+  const expirySparkline = buildSevenDaySeries(expiryAgg, sevenDaysAgo);
+
+  return {
+    newLibraries: {
+      total7d: sumSeriesValues(librarySparkline),
+      sparkline: librarySparkline,
+      growthPercent: computeGrowthPercent(currentPeriodLibs, previousPeriodLibs),
+    },
+    subscriptionGrowth: {
+      total7d: sumSeriesValues(subscriptionSparkline),
+      sparkline: subscriptionSparkline,
+      growthPercent: computeGrowthPercent(currentPeriodSubs, previousPeriodSubs),
+    },
+    expiryTrend: {
+      total7d: sumSeriesValues(expirySparkline),
+      sparkline: expirySparkline,
+    },
+  };
+}
+
+async function getPlanDistribution() {
+  const rows = await Library.aggregate([
+    {
+      $group: {
+        _id: {
+          $toLower: {
+            $ifNull: [
+              {
+                $cond: [{ $in: ["$currentPlanKey", [null, ""]] }, null, "$currentPlanKey"],
+              },
+              { $ifNull: ["$plan", "none"] },
+            ],
+          },
+        },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { count: -1 } },
+  ]);
+
+  const total = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const segments = rows.map((row, index) => {
+    const key = String(row._id || "none").toLowerCase();
+    const count = Number(row.count || 0);
+    return {
+      key,
+      label: PLAN_LABELS[key] || key.replace(/[-_]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()),
+      count,
+      percent: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+      color: PLAN_COLORS[index % PLAN_COLORS.length],
+    };
+  });
+
+  return { total, segments };
+}
+
 module.exports = {
   getRecentLibraries,
   getRecentActivity,
   getRevenueOverview,
   getSubscriptionOverview,
   getCancelledLibraries,
+  getPlatformTrends,
+  getPlanDistribution,
   ACTIVITY_LIMIT,
   LIBRARY_LIMIT,
 };

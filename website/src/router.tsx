@@ -25,8 +25,11 @@ import { SuperAdminLogin } from './pages/SuperAdminLogin';
 import { SuperAdminLayout } from './superadmin/SuperAdminLayout';
 import { SuperAdminDashboard } from './superadmin/pages/SuperAdminDashboard';
 import { SuperAdminLibraries } from './superadmin/pages/SuperAdminLibraries';
+import { SuperAdminLibraryDetail } from './superadmin/pages/SuperAdminLibraryDetail';
+import { SuperAdminPlans } from './superadmin/pages/SuperAdminPlans';
 import { SuperAdminSubscriptions } from './superadmin/pages/SuperAdminSubscriptions';
 import { SuperAdminStudents } from './superadmin/pages/SuperAdminStudents';
+import { SuperAdminNotifications } from './superadmin/pages/SuperAdminNotifications';
 import { SUPER_ADMIN_LOGIN_PATH } from './lib/routes';
 
 export const router = createBrowserRouter([
@@ -87,8 +90,11 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/superadmin/dashboard" replace /> },
       { path: 'dashboard', element: <SuperAdminDashboard /> },
       { path: 'libraries', element: <SuperAdminLibraries /> },
+      { path: 'libraries/:id', element: <SuperAdminLibraryDetail /> },
+      { path: 'plans', element: <SuperAdminPlans /> },
       { path: 'subscriptions', element: <SuperAdminSubscriptions /> },
       { path: 'students', element: <SuperAdminStudents /> },
+      { path: 'notifications', element: <SuperAdminNotifications /> },
     ],
   },
 ]);

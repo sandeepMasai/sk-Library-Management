@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const Library = require("../models/Library");
+const Subscription = require("../models/Subscription");
 
 function libraryUsedOneTimeKeys(library) {
   const keys = new Set(
@@ -47,13 +49,57 @@ function promoDaysRemaining(plan, now = new Date()) {
 }
 
 /**
+ * True when the library has ever subscribed (trial or any paid plan).
+ * Used to hide ₹99 trial for non-brand-new libraries forever.
+ */
+function libraryHasSubscriptionHistory(library, options = {}) {
+  if (!library) return false;
+
+  const subscriptionCount = options.subscriptionCount;
+  if (typeof subscriptionCount === "number" && subscriptionCount > 0) return true;
+
+  if (library.trialUsed) return true;
+
+  const currentKey = String(library.currentPlanKey || "").trim().toLowerCase();
+  if (currentKey && currentKey !== "none") return true;
+
+  const plan = String(library.plan || "").trim().toLowerCase();
+  if (plan && plan !== "none" && plan !== "free") return true;
+
+  if (library.planStartDate) return true;
+
+  return false;
+}
+
+function canShowTrialPlan(library, options = {}) {
+  return !libraryHasSubscriptionHistory(library, options);
+}
+
+async function loadLibraryEligibilityContext(libraryId) {
+  if (!libraryId) return { library: {}, subscriptionCount: 0 };
+
+  const [library, subscriptionCount] = await Promise.all([
+    Library.findById(libraryId)
+      .select("trialUsed usedOneTimePlans currentPlanKey plan planStartDate planExpiryDate subscriptionStatus")
+      .lean(),
+    Subscription.countDocuments({ libraryId }),
+  ]);
+
+  return { library: library || {}, subscriptionCount };
+}
+
+/**
  * Whether a library may see and purchase this plan.
  */
-function isPlanVisibleToLibrary(plan, library) {
+function isPlanVisibleToLibrary(plan, library, options = {}) {
   if (!plan || !plan.isActive) return false;
 
   const planKey = String(plan.key || "").trim().toLowerCase();
   if (!planKey) return false;
+
+  if (plan.isTrial || plan.showOnlyForNew) {
+    if (!canShowTrialPlan(library, options)) return false;
+  }
 
   const usedKeys = libraryUsedOneTimeKeys(library);
   if (plan.isOneTimeOffer || plan.isTrial) {
@@ -76,8 +122,8 @@ function isPlanVisibleToLibrary(plan, library) {
   return true;
 }
 
-function assertLibraryCanPurchasePlan(plan, library) {
-  if (!isPlanVisibleToLibrary(plan, library)) {
+function assertLibraryCanPurchasePlan(plan, library, options = {}) {
+  if (!isPlanVisibleToLibrary(plan, library, options)) {
     const err = new Error("This plan is not available for your library");
     err.statusCode = 400;
     err.code = "PLAN_NOT_ELIGIBLE";
@@ -135,6 +181,9 @@ module.exports = {
   derivePlanType,
   isPromotionActive,
   promoDaysRemaining,
+  libraryHasSubscriptionHistory,
+  canShowTrialPlan,
+  loadLibraryEligibilityContext,
   isPlanVisibleToLibrary,
   assertLibraryCanPurchasePlan,
   formatPlanForClient,

@@ -11,7 +11,7 @@
     },
     {
       "source": "/apk",
-      "destination": "/downloads/SmartLibDesk-v1.0.2.apk",
+      "destination": "https://play.google.com/store/apps/details?id=com.libdesk.app&pcampaignid=web_share",
       "permanent": false
     }
   ],

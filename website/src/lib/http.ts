@@ -163,6 +163,7 @@ export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRet
     ...fetchInit,
     headers,
     credentials: 'include',
+    cache: 'no-store',
   });
   const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T> &
     T & { message?: string; code?: string };

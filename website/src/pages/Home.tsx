@@ -102,18 +102,18 @@ export function Home() {
 
       <MarqueeTicker />
 
-      <Section emoji="⚡ Services" title="Everything your library needs" subtitle="From daily check-in to subscription billing — no spreadsheets required." variant="default">
+      <Section emoji="⚡ Services" title="Everything your library needs" subtitle="From daily check-in to subscription billing — no spreadsheets required." variant="dark">
         <div className="mt-0 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((s, i) => (
             <AnimateIn key={s.title} delay={i * 60}>
-            <GlassCard hover padding="lg" className="relative h-full">
-              <span className="text-xs font-bold uppercase tracking-wider text-primary">
+            <GlassCard dark hover padding="lg" className="relative h-full">
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-300">
                 {String(i + 1).padStart(2, '0')} — {s.title.split(' ')[0]}
               </span>
               <span className="mt-4 block text-3xl">{s.icon}</span>
-              <h3 className="mt-3 text-lg font-semibold text-slate-900">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{s.description}</p>
-              <Link to="/services" className="mt-4 inline-block text-sm font-semibold text-primary hover:underline">
+              <h3 className="mt-3 text-lg font-semibold text-white">{s.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-white/70">{s.description}</p>
+              <Link to="/services" className="mt-4 inline-block text-sm font-semibold text-teal-300 hover:text-teal-200 hover:underline">
                 Learn more →
               </Link>
             </GlassCard>
@@ -121,40 +121,40 @@ export function Home() {
           ))}
         </div>
         <div className="mt-10 text-center">
-          <Link to="/services" className="text-sm font-semibold text-primary hover:underline">
+          <Link to="/services" className="text-sm font-semibold text-teal-300 hover:text-teal-200 hover:underline">
             Explore all services →
           </Link>
         </div>
       </Section>
 
-      <section className="gradient-mesh-light border-y border-slate-200/60 py-14 sm:py-20">
-        <LibraryWorkflow />
+      <section className="gradient-mesh border-y border-white/10 py-14 sm:py-20">
+        <LibraryWorkflow dark />
       </section>
 
-      <Section emoji="⚡ How it works" title="From registration to daily ops" subtitle="Four steps to run your library on SmartLibDesk." variant="muted">
+      <Section emoji="⚡ How it works" title="From registration to daily ops" subtitle="Four steps to run your library on SmartLibDesk." variant="dark">
         <div className="mt-0 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {HOW_IT_WORKS.map((step, i) => (
             <AnimateIn key={step.step} delay={i * 80}>
-            <GlassCard hover padding="md" className="relative h-full">
-              <span className="font-display text-4xl font-black text-primary/15">{step.step}</span>
-              <h3 className="mt-2 font-semibold text-slate-900">{step.title}</h3>
-              <p className="mt-2 text-sm text-muted">{step.desc}</p>
+            <GlassCard dark hover padding="md" className="relative h-full">
+              <span className="font-display text-4xl font-black text-white/10">{step.step}</span>
+              <h3 className="mt-2 font-semibold text-white">{step.title}</h3>
+              <p className="mt-2 text-sm text-white/70">{step.desc}</p>
             </GlassCard>
             </AnimateIn>
           ))}
         </div>
       </Section>
 
-      <Section emoji="⭐ Reviews" title="What owners say" variant="default">
+      <Section emoji="⭐ Reviews" title="What owners say" variant="dark">
         <div className="mt-0 grid gap-6 md:grid-cols-2">
           {TESTIMONIALS.map((t, i) => (
             <AnimateIn key={t.author} delay={i * 100}>
-            <GlassCard hover padding="lg" className="h-full">
+            <GlassCard dark hover padding="lg" className="h-full">
               <p className="text-amber-400">★★★★★</p>
-              <p className="mt-4 text-lg leading-relaxed text-slate-700">&ldquo;{t.quote}&rdquo;</p>
-              <footer className="mt-6 border-t border-slate-100 pt-4">
-                <p className="font-semibold text-slate-900">{t.author}</p>
-                <p className="text-sm text-muted">{t.role}</p>
+              <p className="mt-4 text-lg leading-relaxed text-white/85">&ldquo;{t.quote}&rdquo;</p>
+              <footer className="mt-6 border-t border-white/10 pt-4">
+                <p className="font-semibold text-white">{t.author}</p>
+                <p className="text-sm text-white/60">{t.role}</p>
               </footer>
             </GlassCard>
             </AnimateIn>
@@ -188,13 +188,13 @@ export function Home() {
         </div>
       </section>
 
-      <Section emoji="❓ FAQ" title="Frequently asked questions" variant="muted">
+      <Section emoji="❓ FAQ" title="Frequently asked questions" variant="dark">
         <dl className="mt-0 space-y-4">
           {FAQ.map((item, i) => (
             <AnimateIn key={item.q} delay={i * 60}>
-            <GlassCard padding="md">
-              <dt className="font-semibold text-slate-900">{item.q}</dt>
-              <dd className="mt-2 text-sm text-muted">{item.a}</dd>
+            <GlassCard dark padding="md">
+              <dt className="font-semibold text-white">{item.q}</dt>
+              <dd className="mt-2 text-sm text-white/70">{item.a}</dd>
             </GlassCard>
             </AnimateIn>
           ))}

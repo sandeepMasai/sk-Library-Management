@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { TableScroll } from '../../components/ui/TableScroll';
 import { apiRaw } from '../../lib/http';
+import { SuperAdminPageTitle } from '../components/SuperAdminPageTitle';
+import { SuperAdminPagination } from '../components/SuperAdminPagination';
+import { SuperAdminTableScroll } from '../components/SuperAdminTableScroll';
+import { SaasCard } from '../components/SaasCard';
 
 type AdminStudent = {
   id: string;
@@ -9,6 +12,8 @@ type AdminStudent = {
   feeStatus?: string;
   library?: { name?: string; id?: string } | null;
 };
+
+const PAGE_SIZE = 10;
 
 export function SuperAdminStudents() {
   const [students, setStudents] = useState<AdminStudent[]>([]);
@@ -20,7 +25,7 @@ export function SuperAdminStudents() {
   useEffect(() => {
     setLoading(true);
     apiRaw<{ ok?: boolean; students?: AdminStudent[]; total?: number }>(
-      `/api/admin/students?page=${page}&limit=20`
+      `/api/admin/students?page=${page}&limit=${PAGE_SIZE}`
     )
       .then((res) => {
         setStudents(res.students ?? []);
@@ -30,68 +35,49 @@ export function SuperAdminStudents() {
       .finally(() => setLoading(false));
   }, [page]);
 
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="page-pad">
-      <h1 className="font-display text-2xl font-bold text-slate-900">Students</h1>
-      <p className="mt-1 text-sm text-muted">{total} students across all libraries</p>
+      <SuperAdminPageTitle title="Students" subtitle={`${total} students across all libraries`} />
 
       {error ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+        <SaasCard error className="mt-6">
+          <p className="text-sm text-red-200">{error}</p>
+        </SaasCard>
       ) : null}
 
       {loading ? (
-        <p className="mt-8 text-muted">Loading…</p>
+        <p className="mt-8 text-white/65">Loading…</p>
       ) : (
         <div className="mt-6">
-          <TableScroll>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Mobile</th>
-                <th className="px-4 py-3">Library</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={s.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3 font-medium text-slate-900">{s.name || '—'}</td>
-                  <td className="px-4 py-3">{s.mobile || '—'}</td>
-                  <td className="px-4 py-3">{s.library?.name || '—'}</td>
-                  <td className="px-4 py-3 capitalize">{s.feeStatus || '—'}</td>
+          <SuperAdminTableScroll>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Mobile</th>
+                  <th>Library</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </TableScroll>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id}>
+                    <td className="font-medium">{s.name || '—'}</td>
+                    <td>{s.mobile || '—'}</td>
+                    <td>{s.library?.name || '—'}</td>
+                    <td className="capitalize">{s.feeStatus || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </SuperAdminTableScroll>
         </div>
       )}
 
       {totalPages > 1 ? (
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-muted">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
+        <SuperAdminPagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
       ) : null}
     </div>
   );

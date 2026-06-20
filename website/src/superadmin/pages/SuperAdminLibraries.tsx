@@ -1,127 +1,264 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Input } from '../../components/ui/Input';
-import { TableScroll } from '../../components/ui/TableScroll';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { fetchSuperAdminLibraries, type SuperAdminLibrary } from '../api/superadminApi';
+import { SuperAdminPageTitle } from '../components/SuperAdminPageTitle';
+import { SuperAdminPagination } from '../components/SuperAdminPagination';
+import { SuperAdminTableScroll } from '../components/SuperAdminTableScroll';
+import { SaasCard } from '../components/SaasCard';
+import { SuperAdminFilterSelect } from '../components/SuperAdminFilterSelect';
+
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 350;
+
+type PlanFilter = 'all' | 'pro' | 'free' | 'trial';
+type StatusFilter = 'all' | 'active' | 'inactive';
+type SortFilter = 'name_asc' | 'name_desc' | 'created_desc';
+
+function sortLibraries(items: SuperAdminLibrary[], sort: SortFilter): SuperAdminLibrary[] {
+  if (sort === 'created_desc') return items;
+  const dir = sort === 'name_desc' ? -1 : 1;
+  return [...items].sort(
+    (a, b) => dir * (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base', numeric: true })
+  );
+}
+
+function SortHeader({
+  label,
+  active,
+  direction,
+  onToggle,
+}: {
+  label: string;
+  active: boolean;
+  direction: 'asc' | 'desc';
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 font-semibold transition ${
+        active ? 'text-emerald-200' : 'text-white/70 hover:text-white'
+      }`}
+    >
+      {label}
+      <span className="text-xs">{active ? (direction === 'asc' ? 'A→Z' : 'Z→A') : '↕'}</span>
+    </button>
+  );
+}
 
 export function SuperAdminLibraries() {
   const [libraries, setLibraries] = useState<SuperAdminLibrary[]>([]);
   const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), SEARCH_DEBOUNCE_MS);
+  const [planFilter, setPlanFilter] = useState<PlanFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sort, setSort] = useState<SortFilter>('name_asc');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const requestId = useRef(0);
+  const isFirstSearchEffect = useRef(true);
 
   useEffect(() => {
+    if (isFirstSearchEffect.current) {
+      isFirstSearchEffect.current = false;
+      return;
+    }
+    setPage(1);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (searchInput.trim() !== debouncedSearch) {
+      setSearching(true);
+    }
+  }, [searchInput, debouncedSearch]);
+
+  useEffect(() => {
+    const id = ++requestId.current;
     setLoading(true);
-    fetchSuperAdminLibraries({ page, limit: 20, search: query })
+    setError('');
+
+    fetchSuperAdminLibraries({
+      page,
+      limit: PAGE_SIZE,
+      search: debouncedSearch,
+      planKey: planFilter,
+      status: statusFilter,
+      sort,
+    })
       .then((res) => {
-        setLibraries(res.libraries);
+        if (id !== requestId.current) return;
+        const rows = debouncedSearch ? res.libraries : sortLibraries(res.libraries, sort);
+        setLibraries(rows);
         setTotal(res.total);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load libraries'))
-      .finally(() => setLoading(false));
-  }, [page, query]);
+      .catch((e) => {
+        if (id !== requestId.current) return;
+        setError(e instanceof Error ? e.message : 'Failed to load libraries');
+        setLibraries([]);
+        setTotal(0);
+      })
+      .finally(() => {
+        if (id !== requestId.current) return;
+        setLoading(false);
+        setSearching(false);
+      });
+  }, [page, debouncedSearch, planFilter, statusFilter, sort]);
 
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const applyFilters = (next: {
+    sort?: SortFilter;
+    plan?: PlanFilter;
+    status?: StatusFilter;
+  }) => {
+    setPage(1);
+    if (next.sort) setSort(next.sort);
+    if (next.plan) setPlanFilter(next.plan);
+    if (next.status) setStatusFilter(next.status);
+  };
+
+  const toggleNameSort = () => {
+    applyFilters({ sort: sort === 'name_asc' ? 'name_desc' : 'name_asc' });
+  };
+
+  const showEmpty = !loading && !searching && libraries.length === 0;
+  const subtitle = debouncedSearch
+    ? `${total} result${total === 1 ? '' : 's'} for “${debouncedSearch}”`
+    : `${total} libraries on the platform`;
 
   return (
     <div className="page-pad">
-      <h1 className="font-display text-2xl font-bold text-slate-900">Libraries</h1>
-      <p className="mt-1 text-sm text-muted">{total} libraries on the platform</p>
+      <SuperAdminPageTitle title="Libraries" subtitle={subtitle} />
 
-      <form
-        className="mt-6 flex flex-wrap gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setPage(1);
-          setQuery(search);
-        }}
-      >
+      <div className="mt-6 flex flex-wrap gap-3">
         <div className="min-w-[200px] flex-1">
           <Input
             label="Search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Name, owner, or library code"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Library name or owner (e.g. sandeep)"
+            dark
           />
+          {searching ? <p className="mt-1 text-xs text-white/50">Searching…</p> : null}
         </div>
-        <button
-          type="submit"
-          className="self-end rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary/90"
-        >
-          Search
-        </button>
-      </form>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <SuperAdminFilterSelect
+          label="Sort by Name"
+          value={sort}
+          onChange={(value) => applyFilters({ sort: value as SortFilter })}
+          options={[
+            { value: 'name_asc', label: 'Name A → Z' },
+            { value: 'name_desc', label: 'Name Z → A' },
+            { value: 'created_desc', label: 'Recently Added' },
+          ]}
+        />
+        <SuperAdminFilterSelect
+          label="Plan"
+          value={planFilter}
+          onChange={(value) => applyFilters({ plan: value as PlanFilter })}
+          options={[
+            { value: 'all', label: 'All Plans' },
+            { value: 'pro', label: 'Pro' },
+            { value: 'free', label: 'Free' },
+            { value: 'trial', label: 'Trial' },
+          ]}
+        />
+        <SuperAdminFilterSelect
+          label="Status"
+          value={statusFilter}
+          onChange={(value) => applyFilters({ status: value as StatusFilter })}
+          options={[
+            { value: 'all', label: 'All Status' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Not Active' },
+          ]}
+        />
+      </div>
 
       {error ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+        <SaasCard error className="mt-6">
+          <p className="text-sm text-red-200">{error}</p>
+        </SaasCard>
       ) : null}
 
-      {loading ? (
-        <p className="mt-8 text-muted">Loading…</p>
+      {loading && libraries.length === 0 ? (
+        <p className="mt-8 text-white/65">Loading…</p>
+      ) : showEmpty ? (
+        <SaasCard className="mt-6">
+          <p className="text-sm text-white/65">
+            {debouncedSearch
+              ? `No libraries found for “${debouncedSearch}”. Try a shorter name or owner keyword.`
+              : 'No libraries match your filters.'}
+          </p>
+        </SaasCard>
       ) : (
         <div className="mt-6">
-          <TableScroll>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th className="px-4 py-3">Library</th>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Plan</th>
-                <th className="px-4 py-3">Students</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {libraries.map((lib) => (
-                <tr key={lib.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{lib.name}</p>
-                    <p className="text-xs text-muted">{lib.ownerName}</p>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">{lib.libraryCode}</td>
-                  <td className="px-4 py-3 capitalize">{lib.currentPlanKey || lib.plan || '—'}</td>
-                  <td className="px-4 py-3">{lib.studentCount ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        lib.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {lib.isActive ? 'Active' : 'Blocked'}
-                    </span>
-                  </td>
+          <SuperAdminTableScroll>
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <SortHeader
+                      label="Library"
+                      active={sort === 'name_asc' || sort === 'name_desc'}
+                      direction={sort === 'name_desc' ? 'desc' : 'asc'}
+                      onToggle={toggleNameSort}
+                    />
+                  </th>
+                  <th>Code</th>
+                  <th>Plan</th>
+                  <th>Students</th>
+                  <th>Status</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </TableScroll>
+              </thead>
+              <tbody>
+                {libraries.map((lib) => (
+                  <tr key={lib.id}>
+                    <td>
+                      <Link to={`/superadmin/libraries/${lib.id}`} className="font-medium text-white hover:text-emerald-200">
+                        {lib.name}
+                      </Link>
+                      <p className="text-xs text-white/55">{lib.ownerName}</p>
+                    </td>
+                    <td className="font-mono text-xs">{lib.libraryCode}</td>
+                    <td className="capitalize">{lib.planName || lib.currentPlanKey || lib.plan || '—'}</td>
+                    <td>{lib.studentCount ?? '—'}</td>
+                    <td>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          lib.isActive ? 'bg-emerald-500/20 text-emerald-200' : 'bg-red-500/20 text-red-200'
+                        }`}
+                      >
+                        {lib.isActive ? 'Active' : 'Not Active'}
+                      </span>
+                    </td>
+                    <td>
+                      <Link
+                        to={`/superadmin/libraries/${lib.id}`}
+                        className="text-xs font-semibold text-emerald-200 hover:underline"
+                      >
+                        Manage →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </SuperAdminTableScroll>
         </div>
       )}
 
       {totalPages > 1 ? (
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-muted">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
+        <SuperAdminPagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
       ) : null}
     </div>
   );

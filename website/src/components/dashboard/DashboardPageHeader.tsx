@@ -15,7 +15,7 @@ export function DashboardPageHeader({ title, subtitle, dark = false, action }: D
           {title}
         </h1>
         {subtitle ? (
-          <p className={`mt-1 text-sm ${dark ? 'text-slate-400' : 'text-muted'}`}>{subtitle}</p>
+          <p className={`mt-1 text-sm ${dark ? 'text-white/65' : 'text-muted'}`}>{subtitle}</p>
         ) : null}
       </div>
       {action ? (
@@ -24,7 +24,7 @@ export function DashboardPageHeader({ title, subtitle, dark = false, action }: D
             to={action.to}
             className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
               dark
-                ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30 hover:bg-cyan-500/25'
+                ? 'bg-white/15 text-white ring-1 ring-white/20 hover:bg-white/20'
                 : 'bg-primary text-white shadow-md shadow-primary/20 hover:brightness-110'
             }`}
           >
@@ -36,7 +36,7 @@ export function DashboardPageHeader({ title, subtitle, dark = false, action }: D
             onClick={action.onClick}
             className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
               dark
-                ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30 hover:bg-cyan-500/25'
+                ? 'bg-white/15 text-white ring-1 ring-white/20 hover:bg-white/20'
                 : 'bg-primary text-white shadow-md shadow-primary/20 hover:brightness-110'
             }`}
           >

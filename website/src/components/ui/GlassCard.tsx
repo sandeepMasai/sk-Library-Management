@@ -5,6 +5,7 @@ type GlassCardProps = {
   className?: string;
   hover?: boolean;
   dark?: boolean;
+  admin?: boolean;
   padding?: 'none' | 'sm' | 'md' | 'lg';
 };
 
@@ -20,10 +21,15 @@ export function GlassCard({
   className = '',
   hover = false,
   dark = false,
+  admin = false,
   padding = 'md',
 }: GlassCardProps) {
-  const base = dark ? 'glass-panel-dark rounded-2xl' : 'glass-panel rounded-2xl';
-  const hoverClass = hover ? (dark ? 'hover-lift-dark' : 'hover-lift') : '';
+  const base = admin
+    ? 'admin-card rounded-2xl'
+    : dark
+      ? 'glass-panel-dark rounded-2xl'
+      : 'glass-panel rounded-2xl';
+  const hoverClass = hover ? (dark || admin ? 'hover-lift-dark' : 'hover-lift') : '';
 
   return (
     <div className={`${base} ${paddingMap[padding]} ${hoverClass} ${className}`}>{children}</div>

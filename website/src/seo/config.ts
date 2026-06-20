@@ -102,7 +102,7 @@ export const EXTRA_SEO_ROUTES: PageSeo[] = [
   ),
   page(
     'Download app',
-    'Download the SmartLibDesk Android app for library management, attendance, seats, and Razorpay payments.',
+    'Get the SmartLibDesk Android app on Google Play — library management, attendance, seats, and Razorpay payments.',
     '/download',
   ),
 ];

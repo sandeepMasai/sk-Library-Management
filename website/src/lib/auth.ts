@@ -1,4 +1,5 @@
 import { apiFetch, apiRaw, setAuthToken, setRefreshToken } from './http';
+import { formatDisplayName } from '../utils/formatName';
 
 export type AuthRole = 'admin' | 'library' | 'student';
 
@@ -16,6 +17,7 @@ export type AuthUser = {
   plan?: string;
   currentPlanKey?: string;
   subscriptionStatus?: string;
+  logoUrl?: string | null;
   library?: { libraryName?: string; logoUrl?: string | null };
 };
 
@@ -26,6 +28,14 @@ export type AuthSession = {
   libraryCode?: string;
 };
 
+function formatAuthUser(user: AuthUser): AuthUser {
+  return {
+    ...user,
+    name: formatDisplayName(user.name),
+    ownerName: user.ownerName ? formatDisplayName(user.ownerName) : user.ownerName,
+  };
+}
+
 function unwrapSession(raw: unknown): AuthSession | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -35,7 +45,7 @@ function unwrapSession(raw: unknown): AuthSession | null {
   const refreshToken = data.refreshToken as string | undefined;
   if (!user || typeof user !== 'object' || !authToken) return null;
   return {
-    user: user as AuthUser,
+    user: formatAuthUser(user as AuthUser),
     authToken,
     refreshToken,
     libraryCode: (data.libraryCode as string) ?? (user as AuthUser).libraryCode,
@@ -156,15 +166,16 @@ export function logout() {
 }
 
 export function persistSession(session: AuthSession) {
-  applySessionTokens(session);
-  localStorage.setItem('sld_user', JSON.stringify(session.user));
-  if (session.libraryCode) localStorage.setItem('sld_library_code', session.libraryCode);
+  const normalized = { ...session, user: formatAuthUser(session.user) };
+  applySessionTokens(normalized);
+  localStorage.setItem('sld_user', JSON.stringify(normalized.user));
+  if (normalized.libraryCode) localStorage.setItem('sld_library_code', normalized.libraryCode);
 }
 
 export function loadStoredUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem('sld_user');
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    return raw ? formatAuthUser(JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
   }

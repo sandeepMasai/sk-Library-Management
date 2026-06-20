@@ -8,7 +8,7 @@ const Subscription = require("../models/Subscription");
 const Plan = require("../models/Plan");
 const { activatePaidSubscription } = require("../utils/subscription");
 const { invalidateLibrarySubscriptionCache } = require("../utils/subscriptionCache");
-const { assertLibraryCanPurchasePlan } = require("../services/planEligibility.service");
+const { assertLibraryCanPurchasePlan, loadLibraryEligibilityContext } = require("../services/planEligibility.service");
 const { recordPlanPurchase, logPlanAudit } = require("../services/planManagement.service");
 const { paiseToRupees } = require("../utils/money");
 const logger = require("../utils/logger");
@@ -36,8 +36,8 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
   try {
     const libraryId = req.user?.libraryId;
     const planId = String(req.body?.planId || "").trim();
-    const lib = await Library.findById(libraryId).select("plan subscriptionStatus planExpiryDate trialUsed usedOneTimePlans").lean();
-    if (!lib) return res.status(404).json({ message: "Library not found" });
+    const { library: lib, subscriptionCount } = await loadLibraryEligibilityContext(libraryId);
+    if (!lib || !lib._id) return res.status(404).json({ message: "Library not found" });
     const expiryMs = lib.planExpiryDate ? new Date(lib.planExpiryDate).getTime() : null;
     const activeUntilExpiry =
       lib.plan === "pro" &&
@@ -57,7 +57,7 @@ router.post("/create-order", requireAuth, requireRole("library"), async (req, re
       .lean();
     if (!plan || !plan.isActive) return res.status(400).json({ message: "Invalid plan" });
     try {
-      assertLibraryCanPurchasePlan(plan, lib);
+      assertLibraryCanPurchasePlan(plan, lib, { subscriptionCount });
     } catch (e) {
       return res.status(e.statusCode || 400).json({ message: e.message, code: e.code || "PLAN_NOT_ELIGIBLE" });
     }
@@ -161,11 +161,9 @@ router.post("/verify", requireAuth, requireRole("library"), async (req, res) => 
     if (!plan || !plan.isActive) return res.status(400).json({ message: "Invalid plan" });
     if (!orderId || !paymentId) return res.status(400).json({ message: "Missing payment fields" });
 
-    const libForEligibility = await Library.findById(libraryId)
-      .select("trialUsed usedOneTimePlans")
-      .lean();
+    const { library: libForEligibility, subscriptionCount } = await loadLibraryEligibilityContext(libraryId);
     try {
-      assertLibraryCanPurchasePlan(plan, libForEligibility || {});
+      assertLibraryCanPurchasePlan(plan, libForEligibility, { subscriptionCount });
     } catch (e) {
       return res.status(e.statusCode || 400).json({ message: e.message, code: e.code || "PLAN_NOT_ELIGIBLE" });
     }

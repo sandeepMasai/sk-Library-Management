@@ -83,6 +83,7 @@ function shouldBypassSubscriptionCheck(req) {
   }
   // Account branding before first payment
   if (path.startsWith("/api/library/profile")) return true;
+  if (path.startsWith("/api/library/logo")) return true;
   if (path.startsWith("/api/user/upload-profile")) return true;
   return false;
 }

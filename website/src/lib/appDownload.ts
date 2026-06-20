@@ -1,8 +1,11 @@
 import { SITE_URL } from '../seo/config';
 
-export const APK_FILENAME = 'SmartLibDesk-v1.0.2.apk';
-export const APK_PATH = `/downloads/${APK_FILENAME}`;
-export const APK_VERSION = '1.0.2';
+export const PLAY_STORE_PACKAGE_ID = 'com.libdesk.app';
+export const PLAY_STORE_URL =
+  import.meta.env.VITE_PLAY_STORE_URL?.trim() ||
+  'https://play.google.com/store/apps/details?id=com.libdesk.app&pcampaignid=web_share';
+
+export const APP_VERSION = '1.0.2';
 
 function siteOrigin(): string {
   if (typeof window !== 'undefined') return window.location.origin;
@@ -11,27 +14,16 @@ function siteOrigin(): string {
   return SITE_URL;
 }
 
-/** Optional full URL (CDN, Railway, etc.) — set VITE_APK_DOWNLOAD_URL on Vercel. */
-export function getApkUrl(): string {
-  const external = import.meta.env.VITE_APK_DOWNLOAD_URL?.trim();
-  if (external) return external;
-  return `${siteOrigin()}${APK_PATH}`;
+/** Opens Google Play Store (Play app on Android, browser elsewhere). */
+export function getPlayStoreUrl(): string {
+  return PLAY_STORE_URL;
 }
 
-/** QR opens this page — then user taps Download APK. */
+/** Marketing download page with Play Store CTA and QR. */
 export function getDownloadPageUrl(): string {
   return `${siteOrigin()}/download`;
 }
 
-/** Vite dev server often rejects HEAD; use a tiny GET instead. */
-export async function checkApkAvailable(apkUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(apkUrl, {
-      method: 'GET',
-      headers: { Range: 'bytes=0-0' },
-    });
-    return res.ok || res.status === 206;
-  } catch {
-    return import.meta.env.DEV;
-  }
+export function openPlayStore(): void {
+  window.location.assign(getPlayStoreUrl());
 }

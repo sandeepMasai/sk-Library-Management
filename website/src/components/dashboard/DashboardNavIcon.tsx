@@ -7,6 +7,8 @@ const icons: Record<string, string> = {
   settings: '⚙',
   libraries: '🏛',
   subscriptions: '📊',
+  plans: '📋',
+  notifications: '🔔',
 };
 
 export function DashboardNavIcon({ name }: { name: keyof typeof icons | string }) {

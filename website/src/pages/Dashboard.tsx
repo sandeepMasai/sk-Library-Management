@@ -5,6 +5,7 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { PageContainer } from '../components/ui/PageContainer';
 import { useAuth } from '../context/AuthContext';
 import { SITE } from '../content/site';
+import { getPlayStoreUrl } from '../lib/appDownload';
 
 export function Dashboard() {
   const { user, logout } = useAuth();
@@ -32,9 +33,9 @@ export function Dashboard() {
             <p className="text-sm text-muted">
               Use the {SITE.name} mobile app for attendance QR scan, notifications, and your membership details.
             </p>
-            <Link to="/download" className="mt-4 block">
-              <Button fullWidth>Download app</Button>
-            </Link>
+            <a href={getPlayStoreUrl()} className="mt-4 block" rel="noopener noreferrer">
+              <Button fullWidth>Get on Google Play</Button>
+            </a>
             <p className="mt-3 text-xs text-muted">
               Open the app → <strong>Scan</strong> tab → scan your library&apos;s attendance QR at check-in time.
             </p>

@@ -6,6 +6,8 @@ const {
   getRevenueOverview,
   getSubscriptionOverview,
   getCancelledLibraries,
+  getPlatformTrends,
+  getPlanDistribution,
 } = require("../services/superadminAnalytics.service");
 const {
   listLibrariesWithStudentAnalytics,
@@ -93,6 +95,32 @@ router.get("/plan-audit-logs", requireAdminAuth, async (req, res) => {
     return res.json({ ok: true, logs });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load plan audit logs", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/platform-trends
+ * 7-day sparklines for libraries, subscriptions, expiries + MoM growth.
+ */
+router.get("/platform-trends", requireAdminAuth, async (req, res) => {
+  try {
+    const trends = await getPlatformTrends();
+    return res.json({ ok: true, trends });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load platform trends", error: error.message });
+  }
+});
+
+/**
+ * GET /api/superadmin/plan-distribution
+ * Active library counts grouped by plan key.
+ */
+router.get("/plan-distribution", requireAdminAuth, async (req, res) => {
+  try {
+    const distribution = await getPlanDistribution();
+    return res.json({ ok: true, distribution });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load plan distribution", error: error.message });
   }
 });
 

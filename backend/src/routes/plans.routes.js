@@ -7,6 +7,7 @@ const { requireRole } = require("../middleware/role.middleware");
 const {
   isPlanVisibleToLibrary,
   formatPlanForClient,
+  loadLibraryEligibilityContext,
 } = require("../services/planEligibility.service");
 const {
   logPlanAudit,
@@ -188,13 +189,9 @@ router.get("/", requireAuth, async (req, res) => {
     const raw = await Plan.find(filter).sort({ duration: 1, finalPrice: 1 }).select(PLAN_SELECT).lean();
 
     if (role === "library") {
-      let library = null;
-      if (req.user?.libraryId) {
-        library = await Library.findById(req.user.libraryId)
-          .select("trialUsed usedOneTimePlans")
-          .lean();
-      }
-      const visible = (raw || []).filter((p) => isPlanVisibleToLibrary(p, library || {}));
+      const { library, subscriptionCount } = await loadLibraryEligibilityContext(req.user?.libraryId);
+      const eligibilityOpts = { subscriptionCount };
+      const visible = (raw || []).filter((p) => isPlanVisibleToLibrary(p, library, eligibilityOpts));
       const planIds = visible.map((p) => p._id).filter(Boolean);
       void recordPlanViews(planIds);
       const plans = visible.map((p) => formatPlanForClient({ ...p, finalPrice: calcFinal(p?.price, p?.discount) }));

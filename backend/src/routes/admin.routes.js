@@ -27,14 +27,205 @@ function escapeRegex(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Search libraries by name, owner, email, or code.
+ * Multi-word queries match every word (e.g. "sandeep lib" → sandeep + lib in name).
+ * Compact codes like DZ9XN require at least one digit so names like "sandeep" are not treated as codes.
+ */
+function buildLibrarySearchFilter(searchRaw) {
+  const search = String(searchRaw || "").trim();
+  if (!search) return {};
+
+  const compact = search.toUpperCase().replace(/\s+/g, "");
+  const isCodeSearch =
+    !/\s/.test(search) &&
+    /^[A-Z0-9]{5,12}$/.test(compact) &&
+    /\d/.test(compact);
+
+  if (isCodeSearch) {
+    return { libraryCode: compact };
+  }
+
+  const tokens = search.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return {};
+
+  const tokenClause = (token) => {
+    const fields = [
+      { name: { $regex: escapeRegex(token), $options: "i" } },
+      { ownerName: { $regex: escapeRegex(token), $options: "i" } },
+      { libraryCode: { $regex: escapeRegex(token), $options: "i" } },
+    ];
+    if (token.includes("@")) {
+      fields.push({ email: { $regex: escapeRegex(token), $options: "i" } });
+    }
+    return { $or: fields };
+  };
+
+  if (tokens.length === 1) return tokenClause(tokens[0]);
+  return { $and: tokens.map(tokenClause) };
+}
+
+function buildSearchRankExpression(searchRaw) {
+  const search = String(searchRaw || "").trim();
+  if (!search) return null;
+
+  const primaryToken = search.split(/\s+/).filter(Boolean)[0] || search;
+  const escaped = escapeRegex(primaryToken);
+  const lower = primaryToken.toLowerCase();
+  const prefixRegex = "^" + escaped;
+
+  return {
+    $let: {
+      vars: {
+        nameLower: {
+          $toLower: { $trim: { input: { $ifNull: ["$name", ""] } } },
+        },
+      },
+      in: {
+        $switch: {
+          branches: [
+            { case: { $eq: ["$$nameLower", lower] }, then: 0 },
+            { case: { $regexMatch: { input: "$name", regex: prefixRegex, options: "i" } }, then: 1 },
+            { case: { $regexMatch: { input: "$name", regex: escaped, options: "i" } }, then: 2 },
+            { case: { $regexMatch: { input: "$ownerName", regex: escaped, options: "i" } }, then: 3 },
+            { case: { $regexMatch: { input: "$libraryCode", regex: escaped, options: "i" } }, then: 4 },
+          ],
+          default: 5,
+        },
+      },
+    },
+  };
+}
+
 function buildLibraryPlanFilter(planKeyRaw) {
   const key = String(planKeyRaw || "all").trim().toLowerCase();
   if (!key || key === "all") return {};
-  if (key === "pro") return { plan: "pro" };
-  if (key === "trial") return { currentPlanKey: "trial" };
-  if (key === "none") return { currentPlanKey: "none", plan: "none" };
-  if (key === "free") return { plan: "none" };
+  if (key === "pro") {
+    return {
+      $or: [
+        { plan: "pro" },
+        { currentPlanKey: { $in: ["monthly", "6month", "yearly", "pro"] } },
+      ],
+    };
+  }
+  if (key === "trial") {
+    return { $or: [{ currentPlanKey: "trial" }, { plan: "trial" }] };
+  }
+  if (key === "none") {
+    return { currentPlanKey: "none", plan: "none" };
+  }
+  if (key === "free") {
+    return {
+      $and: [
+        { plan: { $ne: "pro" } },
+        { currentPlanKey: { $nin: ["monthly", "6month", "yearly", "pro", "trial"] } },
+      ],
+    };
+  }
   return {};
+}
+
+function buildLibraryStatusFilter(statusRaw) {
+  const status = String(statusRaw || "all").trim().toLowerCase();
+  if (status === "active") return { isActive: true };
+  if (status === "inactive" || status === "blocked" || status === "not_active" || status === "not-active") {
+    return { isActive: false };
+  }
+  return {};
+}
+
+function parseLibrarySort(sortRaw) {
+  const sort = String(sortRaw || "name_asc").trim().toLowerCase();
+  if (sort === "name_desc" || sort === "name-z-a" || sort === "z-a") {
+    return { mode: "name_desc" };
+  }
+  if (sort === "created_desc" || sort === "recent") {
+    return { mode: "created_desc" };
+  }
+  return { mode: "name_asc" };
+}
+
+const LIBRARY_LIST_COLLATION = { locale: "en", strength: 2 };
+
+const ADMIN_LIBRARY_SENDER = "Platform Admin";
+
+/** Admin broadcast rows only — not library→student announcements or system renewal inbox alerts. */
+function buildAdminLibraryNotificationFilter() {
+  return {
+    targetType: "library",
+    $or: [
+      { senderLabel: ADMIN_LIBRARY_SENDER },
+      { senderLabel: { $in: [null, ""] }, category: "general" },
+    ],
+  };
+}
+
+function buildAdminLibraryNotificationDoc({ libraryId, title, message, date }) {
+  return {
+    libraryId,
+    title,
+    message,
+    date,
+    targetType: "library",
+    category: "general",
+    senderLabel: ADMIN_LIBRARY_SENDER,
+  };
+}
+
+function buildLibraryListPipeline(filter, sortRaw, skip, limit, includeStudentCount, searchRaw = "") {
+  const { mode } = parseLibrarySort(sortRaw);
+  const pipeline = [{ $match: filter }];
+  const searchRankExpr = buildSearchRankExpression(searchRaw);
+  const hasSearchRank = Boolean(searchRankExpr);
+
+  if (mode === "created_desc" && !hasSearchRank) {
+    pipeline.push({ $sort: { createdAt: -1, _id: -1 } });
+  } else {
+    const sortNameField = {
+      sortName: { $toLower: { $trim: { input: { $ifNull: ["$name", ""] } } } },
+    };
+    if (hasSearchRank) {
+      pipeline.push({ $addFields: { ...sortNameField, searchRank: searchRankExpr } });
+      pipeline.push({
+        $sort: {
+          searchRank: 1,
+          sortName: mode === "name_desc" ? -1 : 1,
+          _id: 1,
+        },
+      });
+    } else {
+      pipeline.push({ $addFields: sortNameField });
+      pipeline.push({ $sort: { sortName: mode === "name_desc" ? -1 : 1, _id: 1 } });
+    }
+  }
+
+  pipeline.push({ $skip: skip }, { $limit: limit });
+
+  if (includeStudentCount) {
+    pipeline.push(
+      {
+        $lookup: {
+          from: "students",
+          let: { libId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [{ $eq: ["$libraryId", "$$libId"] }, { $eq: ["$isDeleted", false] }],
+                },
+              },
+            },
+            { $count: "count" },
+          ],
+          as: "studentCounts",
+        },
+      },
+      { $addFields: { studentCount: { $ifNull: [{ $first: "$studentCounts.count" }, 0] } } }
+    );
+  }
+
+  pipeline.push({ $project: { studentCounts: 0, sortName: 0, searchRank: 0 } });
+  return pipeline;
 }
 
 function matchesSubscriptionPlanFilter(lib, rowPlan, planKeyRaw) {
@@ -191,18 +382,14 @@ router.put("/payment-plans/:key", requireAdminAuth, async (req, res) => {
 router.get("/libraries", requireAdminAuth, async (req, res) => {
   try {
     const searchRaw = String(req.query.search || "").trim();
-    const search = searchRaw.trim();
-    const searchUpper = search.toUpperCase();
-    const isCodeSearch = Boolean(search) && /^[A-Z0-9]{5,12}$/.test(searchUpper);
-    const searchFilter = !search
-      ? {}
-      : isCodeSearch
-        ? { libraryCode: searchUpper }
-        : { $or: [{ name: { $regex: escapeRegex(search), $options: "i" } }, { ownerName: { $regex: escapeRegex(search), $options: "i" } }] };
+    const searchFilter = buildLibrarySearchFilter(searchRaw);
     const planFilter = buildLibraryPlanFilter(req.query.planKey || req.query.planType);
+    const statusFilter = buildLibraryStatusFilter(req.query.status || req.query.isActive);
+    const sortRaw = req.query.sort || req.query.sortBy;
     const filterParts = [];
     if (Object.keys(searchFilter).length) filterParts.push(searchFilter);
     if (Object.keys(planFilter).length) filterParts.push(planFilter);
+    if (Object.keys(statusFilter).length) filterParts.push(statusFilter);
     const filter =
       filterParts.length === 0 ? {} : filterParts.length === 1 ? filterParts[0] : { $and: filterParts };
 
@@ -211,48 +398,25 @@ router.get("/libraries", requireAdminAuth, async (req, res) => {
       String(req.query.includeCounts || "").trim().toLowerCase() === "true";
     const { page, limit, skip } = parsePagination(req);
     const totalPromise = Library.countDocuments(filter);
-
-    if (!includeCounts) {
-      const [total, list] = await Promise.all([
-        totalPromise,
-        Library.find(filter)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-      ]);
-      return res.json({ ok: true, libraries: list.map(toLibraryRow), page, limit, total });
-    }
+    const pipeline = buildLibraryListPipeline(filter, sortRaw, skip, limit, includeCounts, searchRaw);
 
     const [total, rows] = await Promise.all([
       totalPromise,
-      Library.aggregate([
-        { $match: filter },
-        { $sort: { createdAt: -1 } },
-        { $skip: skip },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: "students",
-            let: { libId: "$_id" },
-            pipeline: [
-              { $match: { $expr: { $and: [{ $eq: ["$libraryId", "$$libId"] }, { $eq: ["$isDeleted", false] }] } } },
-              { $count: "count" },
-            ],
-            as: "studentCounts",
-          },
-        },
-        { $addFields: { studentCount: { $ifNull: [{ $first: "$studentCounts.count" }, 0] } } },
-        { $project: { studentCounts: 0 } },
-      ]),
+      Library.aggregate(pipeline).collation(LIBRARY_LIST_COLLATION),
     ]);
 
+    res.set("Cache-Control", "no-store");
     return res.json({
       ok: true,
-      libraries: rows.map((lib) => ({ ...toLibraryRow(lib), studentCount: Number(lib.studentCount || 0) })),
+      libraries: rows.map((lib) =>
+        includeCounts
+          ? { ...toLibraryRow(lib), studentCount: Number(lib.studentCount || 0) }
+          : toLibraryRow(lib)
+      ),
       page,
       limit,
       total,
+      sort: parseLibrarySort(sortRaw).mode,
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch libraries", error: error.message });
@@ -909,15 +1073,14 @@ router.post("/notify", requireAdminAuth, async (req, res) => {
       const libs = await Library.find({}).select("_id").lean();
       if (!libs.length) return res.status(201).json({ ok: true, created: 0 });
 
-      const docs = libs.map((l) => ({
-        libraryId: l._id,
-        title,
-        message,
-        date,
-        targetType: "library",
-        targetId: "all",
-        category: "general",
-      }));
+      const docs = libs.map((l) =>
+        buildAdminLibraryNotificationDoc({
+          libraryId: l._id,
+          title,
+          message,
+          date,
+        })
+      );
       await Notification.insertMany(docs, { ordered: false });
       return res.status(201).json({ ok: true, created: docs.length });
     }
@@ -929,15 +1092,14 @@ router.post("/notify", requireAdminAuth, async (req, res) => {
     const lib = await Library.findById(target).select("_id").lean();
     if (!lib) return res.status(404).json({ message: "Library not found" });
 
-    const created = await Notification.create({
-      libraryId: lib._id,
-      title,
-      message,
-      date,
-      targetType: "library",
-      targetId: "all",
-      category: "general",
-    });
+    const created = await Notification.create(
+      buildAdminLibraryNotificationDoc({
+        libraryId: lib._id,
+        title,
+        message,
+        date,
+      })
+    );
 
     return res.status(201).json({ ok: true, created: 1, id: created._id.toString() });
   } catch (error) {
@@ -963,6 +1125,7 @@ router.get("/notifications", requireAdminAuth, async (req, res) => {
     // Notifications model stores `date` as the event timestamp.
     // For broadcast sends we insert many docs with identical title/message/date; group them.
     const rows = await Notification.aggregate([
+      { $match: buildAdminLibraryNotificationFilter() },
       { $sort: { date: -1 } },
       {
         $group: {
@@ -1016,11 +1179,21 @@ router.put("/notifications/:id", requireAdminAuth, async (req, res) => {
     const message = String(req.body?.message || "").trim();
     if (!title || !message) return res.status(400).json({ message: "title and message are required" });
 
-    const doc = await Notification.findById(id).select("_id title message date").lean();
+    const doc = await Notification.findOne({
+      _id: id,
+      ...buildAdminLibraryNotificationFilter(),
+    })
+      .select("_id title message date")
+      .lean();
     if (!doc) return res.status(404).json({ message: "Notification not found" });
 
     // Broadcast sends create many rows with identical title/message/date. Update them all.
-    const filter = { title: doc.title, message: doc.message, date: doc.date };
+    const filter = {
+      title: doc.title,
+      message: doc.message,
+      date: doc.date,
+      ...buildAdminLibraryNotificationFilter(),
+    };
     const result = await Notification.updateMany(filter, { $set: { title, message } });
     const updated = Number(result?.modifiedCount ?? result?.nModified ?? 0);
     return res.json({ ok: true, updated });
@@ -1041,10 +1214,20 @@ router.delete("/notifications/:id", requireAdminAuth, async (req, res) => {
     const id = String(req.params.id || "").trim();
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid id" });
 
-    const doc = await Notification.findById(id).select("_id title message date").lean();
+    const doc = await Notification.findOne({
+      _id: id,
+      ...buildAdminLibraryNotificationFilter(),
+    })
+      .select("_id title message date")
+      .lean();
     if (!doc) return res.status(404).json({ message: "Notification not found" });
 
-    const filter = { title: doc.title, message: doc.message, date: doc.date };
+    const filter = {
+      title: doc.title,
+      message: doc.message,
+      date: doc.date,
+      ...buildAdminLibraryNotificationFilter(),
+    };
     const result = await Notification.deleteMany(filter);
     const deleted = Number(result?.deletedCount ?? 0);
     return res.json({ ok: true, deleted });

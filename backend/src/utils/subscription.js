@@ -288,8 +288,9 @@ module.exports = {
     library.plan = "pro";
     library.currentPlanKey = def.key;
     library.subscriptionStatus = "active";
+    // Any subscription (trial or paid) permanently hides the ₹99 trial for new-library-only offers.
+    library.trialUsed = true;
     if (def.key === "trial" || planMeta?.isOneTimeOffer || planMeta?.isTrial) {
-      library.trialUsed = def.key === "trial" ? true : library.trialUsed;
       const key = String(def.key || "").trim().toLowerCase();
       if (key) {
         const used = Array.isArray(library.usedOneTimePlans) ? library.usedOneTimePlans : [];
@@ -354,7 +355,10 @@ module.exports = {
     library.cancelNote = null;
     library.planStartDate = now;
     library.planExpiryDate = nextExpiry;
-    if (planDoc.key === "trial") library.trialUsed = true;
+    library.trialUsed = true;
+    if (planDoc.key === "trial") {
+      /* trial key also tracked via trialUsed */
+    }
     if (markOneTimeUsed && (planDoc.isOneTimeOffer || planDoc.isTrial)) {
       const key = String(planDoc.key || "").trim().toLowerCase();
       const used = Array.isArray(library.usedOneTimePlans) ? library.usedOneTimePlans : [];

@@ -63,7 +63,7 @@ export const DAILY_WORKFLOW = [
     key: 'download-app',
     icon: '📲',
     title: 'Download app',
-    desc: 'Install SmartLibDesk on Android for owners and students — attendance, fees, seats, and notifications.',
+    desc: 'Install SmartLibDesk from Google Play on Android — attendance, fees, seats, and notifications.',
     adminPath: '/download',
     guestPath: '/download',
     guestLabel: 'Get the app',
