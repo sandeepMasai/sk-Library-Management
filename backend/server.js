@@ -66,10 +66,44 @@ async function main() {
     .then((dbConnected) => {
       startBackgroundJobs(dbConnected);
       logger.info("Background bootstrap finished", { dbConnected });
+      warnRazorpayKeysAsync();
     })
     .catch((err) => {
       logger.error("Background bootstrap error", { message: err?.message });
     });
+}
+
+function warnRazorpayKeysAsync() {
+  const keyId = String(process.env.RAZORPAY_KEY_ID || "").trim();
+  const keySecret = String(process.env.RAZORPAY_KEY_SECRET || "").trim();
+  if (!keyId || !keySecret) {
+    logger.warn("Razorpay keys missing — website payment checkout will fail until configured");
+    return;
+  }
+  try {
+    const Razorpay = require("razorpay");
+    const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
+    client.orders
+      .create({
+        amount: 100,
+        currency: "INR",
+        receipt: `boot_${Date.now()}`.slice(0, 40),
+      })
+      .then(() => {
+        logger.info("Razorpay keys OK — payment checkout ready", {
+          keyId: `${keyId.slice(0, 12)}…${keyId.slice(-4)}`,
+        });
+      })
+      .catch((err) => {
+        logger.error("Razorpay keys INVALID — payment page will not open", {
+          message: err?.error?.description || err?.message,
+          keyId: `${keyId.slice(0, 12)}…${keyId.slice(-4)}`,
+          fix: "Razorpay Dashboard → Test mode → API Keys → regenerate secret → update backend/.env → restart",
+        });
+      });
+  } catch (err) {
+    logger.warn("Razorpay startup check skipped", { message: err?.message });
+  }
 }
 
 if (require.main === module) {

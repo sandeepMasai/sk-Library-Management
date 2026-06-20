@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { useAuth } from '../../context/AuthContext';
 import { ensureSession } from '../../lib/http';
-import { openRazorpayCheckout } from '../../lib/razorpayWeb';
+import { openRazorpayCheckout, preloadRazorpayCheckout } from '../../lib/razorpayWeb';
 import { AdminPageHeader } from '../components/AdminPageHeader';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow, type SubscriptionMe } from '../api/libraryApi';
 import { planDurationLabel } from '../utils/billingHelpers';
@@ -44,7 +44,12 @@ export function AdminSubscription() {
   const [error, setError] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<PlanRow | null>(null);
+  const [payError, setPayError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    preloadRazorpayCheckout();
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -87,17 +92,26 @@ export function AdminSubscription() {
     }
     setPaying(planId);
     setError('');
+    setPayError('');
     try {
       await openRazorpayCheckout(planId, { name: user?.name, email: user?.email });
       const fresh = await fetchSubscriptionMe();
       setSub(fresh);
       setCheckoutPlan(null);
+      setPayError('');
       setSuccess(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Payment failed');
+      const msg = e instanceof Error ? e.message : 'Payment failed';
+      setPayError(msg);
+      setError(msg);
     } finally {
       setPaying(null);
     }
+  }
+
+  function closeCheckout() {
+    setCheckoutPlan(null);
+    setPayError('');
   }
 
   const finalAmount = checkoutPlan ? checkoutPlan.finalPrice : 0;
@@ -187,7 +201,10 @@ export function AdminSubscription() {
                 className={`mt-6 w-full ${isCurrent ? 'admin-btn-current' : ''}`}
                 variant="primary"
                 disabled={paying !== null || isCurrent}
-                onClick={() => setCheckoutPlan(plan)}
+                onClick={() => {
+                  setPayError('');
+                  setCheckoutPlan(plan);
+                }}
               >
                 {isCurrent ? 'Current plan' : planCta(paying === planId)}
               </Button>
@@ -208,10 +225,23 @@ export function AdminSubscription() {
                 <p className="text-xs font-semibold uppercase text-emerald-200/80">Payment summary</p>
                 <h3 className="font-display text-xl font-bold text-white">{checkoutPlan.name}</h3>
               </div>
-              <button type="button" className="text-white/60 hover:text-white" onClick={() => setCheckoutPlan(null)}>
+              <button type="button" className="text-white/60 hover:text-white" onClick={closeCheckout}>
                 ✕
               </button>
             </div>
+
+            {payError ? (
+              <div className="mt-4 rounded-xl border border-red-400/35 bg-red-500/10 px-3 py-3 text-sm text-red-100">
+                <p className="font-semibold">Payment could not start</p>
+                <p className="mt-1 text-red-200/90">{payError}</p>
+                {/authentication failed|razorpay.*key|RAZORPAY/i.test(payError) ? (
+                  <p className="mt-2 text-xs text-red-200/75">
+                    Fix: Razorpay Dashboard → Test mode → API Keys → regenerate Key Secret → update{' '}
+                    <code className="rounded bg-black/20 px-1">backend/.env</code> and restart backend.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
@@ -240,7 +270,7 @@ export function AdminSubscription() {
               <Button className="flex-1" disabled={paying !== null} onClick={() => pay(checkoutPlan)}>
                 {paying ? 'Opening checkout…' : 'Pay with Razorpay'}
               </Button>
-              <Button variant="ghost-dark" onClick={() => setCheckoutPlan(null)}>
+              <Button variant="ghost-dark" onClick={closeCheckout}>
                 Cancel
               </Button>
             </div>

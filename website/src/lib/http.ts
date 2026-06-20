@@ -138,8 +138,14 @@ function parseApiErrorMessage(
 
   if (status === 401) return msg || 'Session expired. Please sign in again.';
   if (status === 402) return msg || 'Subscription expired. Choose a plan to continue.';
-  if (body?.code === 'BAD_REQUEST_ERROR' || body?.code === 'RAZORPAY_AUTH_FAILED') {
-    return 'Razorpay is not configured on the server. Add valid test API keys on Railway and redeploy.';
+  if (body?.code === 'RAZORPAY_AUTH_FAILED' || (status === 503 && /authentication failed/i.test(msg))) {
+    return (
+      msg ||
+      'Razorpay authentication failed. In backend/.env set matching RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET from Razorpay Dashboard (Test mode → Settings → API Keys), update VITE_RAZORPAY_KEY_ID to the same Key ID in website/.env, then restart both servers.'
+    );
+  }
+  if (body?.code === 'BAD_REQUEST_ERROR' && /authentication failed/i.test(msg)) {
+    return 'Razorpay authentication failed. Regenerate your test API key pair in Razorpay Dashboard and update backend/.env.';
   }
   return msg || `Request failed (${status})`;
 }
@@ -159,12 +165,21 @@ export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRet
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...fetchInit,
-    headers,
-    credentials: 'include',
-    cache: 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...fetchInit,
+      headers,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error(
+      import.meta.env.DEV
+        ? 'Backend is not reachable. Start it with: cd backend && npm run dev (port 1998), then try again.'
+        : 'Payment server is unreachable. Please try again in a moment.'
+    );
+  }
   const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T> &
     T & { message?: string; code?: string };
 

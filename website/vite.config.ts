@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
       ? 'http://127.0.0.1:1998'
       : 'https://sk-library-management-production.up.railway.app');
 
+  const proxySecure = apiTarget.startsWith('https://');
+
   return {
     plugins: [react(), tailwindcss()],
     build: {
@@ -29,7 +31,7 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiTarget,
           changeOrigin: true,
-          secure: true,
+          secure: proxySecure,
         },
       },
     },

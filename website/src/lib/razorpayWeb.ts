@@ -1,5 +1,5 @@
 import { apiRaw } from './http';
-import { assertBackendKeyMatchesEnv, assertKeyModeAlignment, razorpayKeyMode } from './razorpayConfig';
+import { assertBackendKeyMatchesEnv, assertKeyModeAlignment } from './razorpayConfig';
 
 export type RazorpayPaymentResult = {
   razorpay_payment_id: string;
@@ -62,13 +62,26 @@ function formatRazorpayError(msg: string, code?: string): string {
 function loadScript(): Promise<void> {
   if (window.Razorpay) return Promise.resolve();
   return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-razorpay-checkout]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay checkout.js')), { once: true });
+      if (window.Razorpay) resolve();
+      return;
+    }
     const s = document.createElement('script');
     s.src = 'https://checkout.razorpay.com/v1/checkout.js';
     s.async = true;
+    s.dataset.razorpayCheckout = 'true';
     s.onload = () => resolve();
     s.onerror = () => reject(new Error('Failed to load Razorpay checkout.js'));
     document.body.appendChild(s);
   });
+}
+
+/** Warm up checkout.js when user opens subscription page. */
+export function preloadRazorpayCheckout(): void {
+  loadScript().catch(() => {});
 }
 
 function parsePaymentFailed(payload: RazorpayFailedPayload): string {
@@ -84,16 +97,6 @@ function parsePaymentFailed(payload: RazorpayFailedPayload): string {
   return formatRazorpayError(msg, e?.code);
 }
 
-function isMobileViewport(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(max-width: 768px)').matches;
-}
-
-/**
- * Test/sandbox checkout layout.
- * Desktop web: Razorpay shows UPI QR only (no VPA field for test@razorpay) — land on Cards.
- * Mobile: card + UPI (intent/QR) both available.
- */
 function buildCheckoutOptions(order: {
   keyId: string;
   amount: number;
@@ -101,7 +104,7 @@ function buildCheckoutOptions(order: {
   orderId: string;
   prefill?: { name?: string; email?: string; contact?: string };
 }): Record<string, unknown> {
-  const base: Record<string, unknown> = {
+  return {
     key: order.keyId,
     amount: order.amount,
     currency: order.currency,
@@ -114,46 +117,8 @@ function buildCheckoutOptions(order: {
       contact: order.prefill?.contact,
     },
     theme: { color: '#1E5C52' },
+    // Use Razorpay default checkout — UPI (GPay, PhonePe), cards, netbanking, wallets, etc.
   };
-
-  if (razorpayKeyMode(order.keyId) !== 'test') return base;
-
-  const mobile = isMobileViewport();
-
-  if (mobile) {
-    base.config = {
-      display: {
-        blocks: {
-          card: {
-            name: 'Test card (recommended)',
-            instruments: [{ method: 'card' }],
-          },
-          upi: {
-            name: 'UPI (QR / apps)',
-            instruments: [{ method: 'upi' }],
-          },
-        },
-        sequence: ['block.card', 'block.upi'],
-        preferences: { show_default_blocks: false },
-      },
-    };
-  } else {
-    // Desktop: UPI tab is QR-only — hide it so users use Razorpay test card for "Do a test transaction".
-    base.config = {
-      display: {
-        blocks: {
-          card: {
-            name: 'Pay with test card',
-            instruments: [{ method: 'card' }],
-          },
-        },
-        sequence: ['block.card'],
-        preferences: { show_default_blocks: false },
-      },
-    };
-  }
-
-  return base;
 }
 
 export async function openRazorpayCheckout(
