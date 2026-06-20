@@ -27,6 +27,14 @@ export function assertBackendKeyMatchesEnv(backendKeyId: string): void {
   }
 
   if (backendKeyId !== EXPECTED_RAZORPAY_KEY_ID) {
+    if (!RAZORPAY_TEST_ONLY && razorpayKeyMode(backendKeyId) === 'live') {
+      if (import.meta.env.DEV) {
+        console.warn(
+          `[razorpay] VITE_RAZORPAY_KEY_ID (${EXPECTED_RAZORPAY_KEY_ID}) differs from backend (${backendKeyId}). Using backend key for checkout.`
+        );
+      }
+      return;
+    }
     throw new Error(
       `Razorpay key mismatch: backend returned "${backendKeyId}" but VITE_RAZORPAY_KEY_ID is "${EXPECTED_RAZORPAY_KEY_ID}". ` +
         'Use the same key id on Railway (RAZORPAY_KEY_ID) and Vercel/website (VITE_RAZORPAY_KEY_ID), then redeploy both.'
@@ -39,7 +47,9 @@ export function assertWebsiteTestModeOnly(backendKeyId: string): void {
   if (!RAZORPAY_TEST_ONLY) return;
   if (razorpayKeyMode(backendKeyId) === 'live') {
     throw new Error(
-      'This website uses Razorpay TEST mode only. On Railway set RAZORPAY_KEY_ID=rzp_test_* (not rzp_live_*), then redeploy the backend.'
+      'Razorpay mode conflict: your Railway/production backend uses a LIVE key (rzp_live_*), but this website has VITE_RAZORPAY_TEST_ONLY=true (test only). ' +
+        'For real payments: set VITE_RAZORPAY_TEST_ONLY=false and VITE_RAZORPAY_KEY_ID to the same live Key ID as Railway, then restart the website. ' +
+        'For sandbox testing: set Railway RAZORPAY_KEY_ID=rzp_test_* (and matching secret), redeploy Railway, and keep VITE_RAZORPAY_KEY_ID as the same test Key ID.'
     );
   }
 }

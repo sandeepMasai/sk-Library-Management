@@ -59,24 +59,51 @@ function formatRazorpayError(msg: string, code?: string): string {
   return msg;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 function loadScript(): Promise<void> {
   if (window.Razorpay) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-razorpay-checkout]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay checkout.js')), { once: true });
-      if (window.Razorpay) resolve();
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    s.async = true;
-    s.dataset.razorpayCheckout = 'true';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Razorpay checkout.js'));
-    document.body.appendChild(s);
-  });
+  return withTimeout(
+    new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector('script[data-razorpay-checkout]');
+      if (existing) {
+        if (window.Razorpay) {
+          resolve();
+          return;
+        }
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener(
+          'error',
+          () => reject(new Error('Failed to load Razorpay checkout.js')),
+          { once: true }
+        );
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.async = true;
+      s.dataset.razorpayCheckout = 'true';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load Razorpay checkout.js'));
+      document.body.appendChild(s);
+    }),
+    15000,
+    'Razorpay checkout is taking too long to load. Disable ad blockers and try again.'
+  );
 }
 
 /** Warm up checkout.js when user opens subscription page. */
@@ -121,14 +148,28 @@ function buildCheckoutOptions(order: {
   };
 }
 
+export type RazorpayCheckoutHooks = {
+  /** Fired after Railway/create-order succeeds, before Razorpay script opens. */
+  onOrderReady?: () => void;
+  /** Fired immediately after Razorpay modal opens — hide your own overlays here. */
+  onCheckoutOpen?: () => void;
+  /** Fired after user pays in Razorpay, before server verify. */
+  onVerifyStart?: () => void;
+};
+
 export async function openRazorpayCheckout(
   planId: string,
-  prefill?: { name?: string; email?: string; contact?: string }
+  prefill?: { name?: string; email?: string; contact?: string },
+  hooks?: RazorpayCheckoutHooks
 ): Promise<RazorpayPaymentResult> {
-  const raw = await apiRaw<CreateOrderResponse>('/api/payment/create-order', {
-    method: 'POST',
-    body: JSON.stringify({ planId }),
-  });
+  const raw = await withTimeout(
+    apiRaw<CreateOrderResponse>('/api/payment/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    }),
+    25000,
+    'Creating payment order timed out. Railway may be slow — wait a moment and try again.'
+  );
 
   logDebug('create-order response', {
     orderId: raw.orderId,
@@ -146,6 +187,8 @@ export async function openRazorpayCheckout(
 
   assertBackendKeyMatchesEnv(raw.keyId);
   assertKeyModeAlignment(raw.keyId);
+
+  hooks?.onOrderReady?.();
 
   const order = {
     orderId: raw.orderId,
@@ -201,18 +244,25 @@ export async function openRazorpayCheckout(
     });
 
     rzp.open();
+    hooks?.onCheckoutOpen?.();
   });
 
+  hooks?.onVerifyStart?.();
+
   try {
-    const verifyBody = await apiRaw<{ ok?: boolean; code?: string; message?: string }>('/api/payment/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        planId: order.planId,
-        orderId: payment.razorpay_order_id,
-        paymentId: payment.razorpay_payment_id,
-        signature: payment.razorpay_signature,
+    const verifyBody = await withTimeout(
+      apiRaw<{ ok?: boolean; code?: string; message?: string }>('/api/payment/verify', {
+        method: 'POST',
+        body: JSON.stringify({
+          planId: order.planId,
+          orderId: payment.razorpay_order_id,
+          paymentId: payment.razorpay_payment_id,
+          signature: payment.razorpay_signature,
+        }),
       }),
-    });
+      30000,
+      'Payment verification timed out. If money was debited, wait 2 minutes and refresh this page.'
+    );
     if (verifyBody?.code === 'PAYMENT_PENDING') {
       throw new Error(verifyBody.message || 'Payment is still processing');
     }

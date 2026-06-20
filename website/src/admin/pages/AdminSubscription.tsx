@@ -8,6 +8,7 @@ import { openRazorpayCheckout, preloadRazorpayCheckout } from '../../lib/razorpa
 import { AdminPageHeader } from '../components/AdminPageHeader';
 import { fetchPlans, fetchSubscriptionMe, type PlanRow, type SubscriptionMe } from '../api/libraryApi';
 import { planDurationLabel } from '../utils/billingHelpers';
+import { readPlansCache, writePlansCache, clearPlansCache } from '../utils/plansCache';
 
 const FEATURES = [
   'Student management',
@@ -37,14 +38,32 @@ function planCta(paying: boolean) {
   return 'Select plan';
 }
 
+function PlanCardSkeleton() {
+  return (
+    <GlassCard admin padding="md" className="subscription-plan-card admin-card-solid flex flex-col">
+      <div className="admin-skeleton h-6 w-2/3 rounded-lg" />
+      <div className="admin-skeleton mt-4 h-10 w-1/2 rounded-lg" />
+      <div className="admin-skeleton mt-2 h-4 w-1/3 rounded" />
+      <div className="mt-4 space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="admin-skeleton h-4 w-full rounded" />
+        ))}
+      </div>
+      <div className="admin-skeleton mt-6 h-11 w-full rounded-xl" />
+    </GlassCard>
+  );
+}
+
 export function AdminSubscription() {
   const { user } = useAuth();
-  const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [plans, setPlans] = useState<PlanRow[]>(() => readPlansCache() ?? []);
   const [sub, setSub] = useState<SubscriptionMe | null>(null);
+  const [plansLoading, setPlansLoading] = useState(() => !readPlansCache()?.length);
   const [error, setError] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<PlanRow | null>(null);
   const [payError, setPayError] = useState('');
+  const [payPhase, setPayPhase] = useState<'idle' | 'creating' | 'verifying'>('idle');
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
@@ -53,24 +72,43 @@ export function AdminSubscription() {
 
   useEffect(() => {
     let alive = true;
+    const cached = readPlansCache();
+    if (cached?.length) {
+      setPlans(cached);
+      setPlansLoading(false);
+    }
+
     (async () => {
       const ok = await ensureSession();
       if (!alive) return;
       if (!ok) {
+        setPlansLoading(false);
         setError('Session expired. Please sign in again.');
         return;
       }
+
+      fetchSubscriptionMe()
+        .then((s) => {
+          if (alive) setSub(s);
+        })
+        .catch(() => {});
+
       try {
-        const [p, s] = await Promise.all([fetchPlans(), fetchSubscriptionMe()]);
+        const p = await fetchPlans();
         if (!alive) return;
         setPlans(p);
-        setSub(s);
+        writePlansCache(p);
       } catch (e) {
         if (!alive) return;
-        const msg = e instanceof Error ? e.message : 'Failed to load';
-        if (!/session expired|sign in/i.test(msg)) setError(msg);
+        if (!cached?.length) {
+          const msg = e instanceof Error ? e.message : 'Failed to load plans';
+          if (!/session expired|sign in/i.test(msg)) setError(msg);
+        }
+      } finally {
+        if (alive) setPlansLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -91,25 +129,51 @@ export function AdminSubscription() {
       return;
     }
     setPaying(planId);
+    setPayPhase('creating');
     setError('');
     setPayError('');
     try {
-      await openRazorpayCheckout(planId, { name: user?.name, email: user?.email });
+      await openRazorpayCheckout(
+        planId,
+        { name: user?.name, email: user?.email },
+        {
+          onCheckoutOpen: () => {
+            setCheckoutPlan(null);
+            setPayPhase('idle');
+            setPaying(null);
+          },
+          onVerifyStart: () => {
+            setPayPhase('verifying');
+          },
+        }
+      );
       const fresh = await fetchSubscriptionMe();
       setSub(fresh);
+      clearPlansCache();
+      const refreshedPlans = await fetchPlans();
+      setPlans(refreshedPlans);
+      writePlansCache(refreshedPlans);
       setCheckoutPlan(null);
       setPayError('');
       setSuccess(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Payment failed';
-      setPayError(msg);
-      setError(msg);
+      if (/cancelled/i.test(msg)) {
+        setPayError('');
+        setError('');
+      } else {
+        setPayError(msg);
+        setError(msg);
+        setCheckoutPlan(plan);
+      }
     } finally {
       setPaying(null);
+      setPayPhase('idle');
     }
   }
 
   function closeCheckout() {
+    if (payPhase !== 'idle') return;
     setCheckoutPlan(null);
     setPayError('');
   }
@@ -160,6 +224,9 @@ export function AdminSubscription() {
       ) : null}
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {plansLoading && !sortedPlans.length
+          ? Array.from({ length: 3 }).map((_, i) => <PlanCardSkeleton key={`sk-${i}`} />)
+          : null}
         {sortedPlans.map((plan) => {
           const planId = plan._id || plan.id || '';
           const isCurrent = activePlanKey && plan.key.toLowerCase() === activePlanKey;
@@ -217,6 +284,15 @@ export function AdminSubscription() {
         <span>🔒</span> Secure Razorpay payment · PCI DSS compliant checkout
       </p>
 
+      {payPhase === 'verifying' ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+          <GlassCard admin padding="md" className="admin-card-solid mx-4 max-w-sm text-center">
+            <p className="text-sm font-semibold text-white">Verifying payment…</p>
+            <p className="mt-2 text-xs text-white/65">Please wait. Do not close this tab.</p>
+          </GlassCard>
+        </div>
+      ) : null}
+
       {checkoutPlan ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center">
           <GlassCard admin padding="md" className="payment-summary-card admin-card-solid w-full max-w-md">
@@ -225,7 +301,12 @@ export function AdminSubscription() {
                 <p className="text-xs font-semibold uppercase text-emerald-200/80">Payment summary</p>
                 <h3 className="font-display text-xl font-bold text-white">{checkoutPlan.name}</h3>
               </div>
-              <button type="button" className="text-white/60 hover:text-white" onClick={closeCheckout}>
+              <button
+                type="button"
+                className="text-white/60 hover:text-white disabled:opacity-40"
+                disabled={payPhase === 'creating'}
+                onClick={closeCheckout}
+              >
                 ✕
               </button>
             </div>
@@ -236,8 +317,16 @@ export function AdminSubscription() {
                 <p className="mt-1 text-red-200/90">{payError}</p>
                 {/authentication failed|razorpay.*key|RAZORPAY/i.test(payError) ? (
                   <p className="mt-2 text-xs text-red-200/75">
-                    Fix: Razorpay Dashboard → Test mode → API Keys → regenerate Key Secret → update{' '}
-                    <code className="rounded bg-black/20 px-1">backend/.env</code> and restart backend.
+                    Fix: Razorpay Dashboard → regenerate Key ID + Secret together → update Railway env vars (
+                    <code className="rounded bg-black/20 px-1">RAZORPAY_KEY_ID</code>,{' '}
+                    <code className="rounded bg-black/20 px-1">RAZORPAY_KEY_SECRET</code>) and matching{' '}
+                    <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_KEY_ID</code> in website/.env.
+                  </p>
+                ) : /mode conflict|TEST_ONLY|rzp_live_/i.test(payError) ? (
+                  <p className="mt-2 text-xs text-red-200/75">
+                    You are calling Railway (production) which uses live keys, but website/.env has test-only mode. Either
+                    set <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_TEST_ONLY=false</code> + live Key ID, or
+                    switch Railway to <code className="rounded bg-black/20 px-1">rzp_test_*</code> keys for sandbox.
                   </p>
                 ) : null}
               </div>
@@ -267,10 +356,10 @@ export function AdminSubscription() {
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button className="flex-1" disabled={paying !== null} onClick={() => pay(checkoutPlan)}>
-                {paying ? 'Opening checkout…' : 'Pay with Razorpay'}
+              <Button className="flex-1" disabled={payPhase !== 'idle'} onClick={() => pay(checkoutPlan)}>
+                {payPhase === 'creating' ? 'Creating order…' : 'Pay with Razorpay'}
               </Button>
-              <Button variant="ghost-dark" onClick={closeCheckout}>
+              <Button variant="ghost-dark" disabled={payPhase === 'creating'} onClick={closeCheckout}>
                 Cancel
               </Button>
             </div>
