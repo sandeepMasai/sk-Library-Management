@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Space = require("../models/Space");
 const Seat = require("../models/Seat");
+const { bulkCreateSeatsForSpace } = require("./seat.service");
 const { createHttpError } = require("../utils/httpError");
 
 function toSpaceResponse(space) {
@@ -26,10 +27,27 @@ async function listSpaces({ user }) {
 async function createSpace({ user, body }) {
   const name = String(body?.name || "").trim();
   const order = Number(body?.order || 0);
+  const totalSeats = body?.totalSeats != null ? Number(body.totalSeats) : null;
   if (!name) throw createHttpError(400, "name is required");
 
-  const created = await Space.create({ libraryId: user.libraryId, name, order: Number.isFinite(order) ? order : 0 });
-  return toSpaceResponse(created);
+  const created = await Space.create({
+    libraryId: user.libraryId,
+    name,
+    order: Number.isFinite(order) ? order : 0,
+    maxSeats: Number.isInteger(totalSeats) && totalSeats > 0 ? totalSeats : null,
+  });
+
+  let seatsCreated = 0;
+  if (Number.isInteger(totalSeats) && totalSeats >= 1 && totalSeats <= 5000) {
+    const { created: n } = await bulkCreateSeatsForSpace(
+      user.libraryId,
+      created._id.toString(),
+      totalSeats
+    );
+    seatsCreated = n;
+  }
+
+  return { ...toSpaceResponse(created), seatsCreated };
 }
 
 async function updateSpace({ user, params, body }) {

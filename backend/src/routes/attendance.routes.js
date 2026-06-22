@@ -425,7 +425,10 @@ router.post("/mark", async (req, res) => {
 
     // Multi-tenant security enforced: prevent cross-library QR usage
     if (String(active.libraryId || "").trim() !== String(libraryId).trim()) {
-      return res.status(400).json({ message: "Invalid QR token" });
+      return res.status(400).json({
+        message:
+          "This QR belongs to a different library. Log in with your library code, or scan the QR shown in your library admin app/website.",
+      });
     }
 
     if (!isWithinAttendanceWindow()) {

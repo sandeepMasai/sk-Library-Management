@@ -44,6 +44,17 @@ async function createSeat({ user, body }) {
   return toSeatResponse(created);
 }
 
+async function bulkCreateSeatsForSpace(libraryId, spaceId, count) {
+  const maxDoc = await Seat.findOne({ libraryId }).sort({ number: -1 }).select("number").lean();
+  const start = maxDoc?.number ? maxDoc.number + 1 : 1;
+  const docs = [];
+  for (let n = start; n < start + count; n++) {
+    docs.push({ libraryId, number: n, spaceId, status: "available", studentId: null });
+  }
+  if (docs.length) await Seat.insertMany(docs, { ordered: false });
+  return { created: docs.length, startNumber: start };
+}
+
 async function bulkCreateSeats({ user, body }) {
   const libraryId = user.libraryId;
   const totalSeats = Number(body?.totalSeats);
@@ -52,6 +63,12 @@ async function bulkCreateSeats({ user, body }) {
     throw createHttpError(400, "totalSeats must be an integer between 1 and 5000");
   }
   if (spaceId && !mongoose.Types.ObjectId.isValid(spaceId)) throw createHttpError(400, "Invalid spaceId");
+
+  if (spaceId) {
+    await bulkCreateSeatsForSpace(libraryId, spaceId, totalSeats);
+    const list = await Seat.find({ libraryId }).sort({ number: 1 }).lean();
+    return list.map(toSeatResponse);
+  }
 
   const existing = await Seat.find({ libraryId, number: { $gte: 1, $lte: totalSeats } }, { number: 1 }).lean();
   const existsSet = new Set(existing.map((s) => s.number));
@@ -157,6 +174,7 @@ module.exports = {
   listSeats,
   createSeat,
   bulkCreateSeats,
+  bulkCreateSeatsForSpace,
   setTotalSeats,
   updateSeatSpace,
   assignSeat,

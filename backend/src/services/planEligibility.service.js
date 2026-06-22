@@ -75,13 +75,22 @@ function canShowTrialPlan(library, options = {}) {
   return !libraryHasSubscriptionHistory(library, options);
 }
 
-async function loadLibraryEligibilityContext(libraryId) {
+async function loadLibraryEligibilityContext(libraryId, options = {}) {
   if (!libraryId) return { library: {}, subscriptionCount: 0 };
 
+  const skipSubscriptionCount = Boolean(options.skipSubscriptionCount);
+
+  const libraryPromise = Library.findById(libraryId)
+    .select("trialUsed usedOneTimePlans currentPlanKey plan planStartDate planExpiryDate subscriptionStatus")
+    .lean();
+
+  if (skipSubscriptionCount) {
+    const library = await libraryPromise;
+    return { library: library || {}, subscriptionCount: 0 };
+  }
+
   const [library, subscriptionCount] = await Promise.all([
-    Library.findById(libraryId)
-      .select("trialUsed usedOneTimePlans currentPlanKey plan planStartDate planExpiryDate subscriptionStatus")
-      .lean(),
+    libraryPromise,
     Subscription.countDocuments({ libraryId }),
   ]);
 

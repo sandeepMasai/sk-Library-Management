@@ -189,7 +189,10 @@ router.get("/", requireAuth, async (req, res) => {
     const raw = await Plan.find(filter).sort({ duration: 1, finalPrice: 1 }).select(PLAN_SELECT).lean();
 
     if (role === "library") {
-      const { library, subscriptionCount } = await loadLibraryEligibilityContext(req.user?.libraryId);
+      const hasTrialLike = (raw || []).some((p) => p.isTrial || p.showOnlyForNew);
+      const { library, subscriptionCount } = await loadLibraryEligibilityContext(req.user?.libraryId, {
+        skipSubscriptionCount: !hasTrialLike,
+      });
       const eligibilityOpts = { subscriptionCount };
       const visible = (raw || []).filter((p) => isPlanVisibleToLibrary(p, library, eligibilityOpts));
       const planIds = visible.map((p) => p._id).filter(Boolean);

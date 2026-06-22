@@ -76,6 +76,15 @@ function parseSpaceName(raw, { required = true, fieldName = "name" } = {}) {
   return name;
 }
 
+function parseTotalSeats(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 5000) {
+    throw createHttpError(400, "totalSeats must be an integer between 1 and 5000");
+  }
+  return n;
+}
+
 function sanitizeCreateSpaceBody(body = {}) {
   const name = parseSpaceName(body.name, { required: true });
   const out = { name };
@@ -84,6 +93,9 @@ function sanitizeCreateSpaceBody(body = {}) {
       fieldName: "order",
       allowUndefined: false,
     });
+  }
+  if (body.totalSeats !== undefined) {
+    out.totalSeats = parseTotalSeats(body.totalSeats);
   }
   return out;
 }

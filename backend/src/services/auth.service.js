@@ -70,16 +70,25 @@ function adminUser() {
 }
 
 function studentResponse(student, library = null) {
+  const feeStatusLegacy = (() => {
+    const s = String(student.feeStatus || "").trim().toLowerCase();
+    if (s === "paid") return "Paid";
+    if (s === "partial") return "Half Paid";
+    if (s === "pending") return "Pending";
+    return "Pending";
+  })();
   return {
     id: student._id.toString(),
     role: "student",
     libraryId: student.libraryId?.toString?.() || null,
+    libraryCode: library?.libraryCode || null,
     library: library
       ? {
-          id: library._id?.toString?.() || null,
-          libraryName: library.name || "",
-          logoUrl: library.logoUrl || null,
-        }
+        id: library._id?.toString?.() || null,
+        libraryName: library.name || "",
+        logoUrl: library.logoUrl || null,
+        libraryCode: library.libraryCode || null,
+      }
       : null,
     name: student.name,
     mobile: student.mobile,
@@ -88,12 +97,63 @@ function studentResponse(student, library = null) {
     joinDate: student.joinDate.toISOString(),
     expiryDate: student.expiryDate.toISOString(),
     feeAmount: student.feeAmount,
-    feeStatus: student.feeStatus,
+    feeStatus: feeStatusLegacy,
     isBlocked: student.isBlocked,
     photoUrl: student.photoUrl || null,
     email: student.email || null,
     isEmailVerified: Boolean(student.isEmailVerified),
   };
+}
+
+/**
+ * Resolve student login by mobile/username, optional library code, and PIN.
+ * When the same mobile exists in multiple libraries, libraryCode is required.
+ */
+async function resolveStudentForLogin(identifier, pin, libraryCode) {
+  const id = String(identifier || "").trim().toLowerCase();
+  const mobileDigits = id.replace(/\D/g, "").slice(-10);
+  const isMobile = /^\d{10}$/.test(mobileDigits);
+
+  const scope = {};
+  const code = String(libraryCode || "").trim().toUpperCase();
+  if (code) {
+    const lib = await Library.findOne({ libraryCode: code }).select("_id isActive");
+    if (!lib) {
+      throw createHttpError(401, "Invalid library code");
+    }
+    if (!lib.isActive) {
+      throw createHttpError(403, "Library is inactive");
+    }
+    scope.libraryId = lib._id;
+  }
+
+  const match = isMobile ? { mobile: mobileDigits } : { username: id };
+  const candidates = await Student.find({
+    isDeleted: false,
+    ...scope,
+    ...match,
+  }).select("+pinHash");
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  const pinMatches = [];
+  for (const student of candidates) {
+    if (await student.verifyPin(pin)) {
+      pinMatches.push(student);
+    }
+  }
+  if (!pinMatches.length) {
+    return null;
+  }
+  if (pinMatches.length > 1 && !code) {
+    throw createHttpError(
+      400,
+      "This mobile is registered at multiple libraries. Enter your library code on the login screen."
+    );
+  }
+  return pinMatches[0];
 }
 
 function libraryResponse(library, latestSub = null) {
@@ -327,10 +387,7 @@ async function login({ body, metadata }) {
     return { user, ...tokens };
   }
 
-  const student = await Student.findOne({
-    isDeleted: false,
-    mobile: identifier,
-  }).select("+pinHash");
+  const student = await resolveStudentForLogin(identifier, pin, body?.libraryCode);
 
   if (!student) {
     recordFail(attempt.key);
@@ -340,13 +397,8 @@ async function login({ body, metadata }) {
     recordFail(attempt.key);
     throw createHttpError(403, "Account is blocked");
   }
-  const pinOk = await student.verifyPin(pin);
-  if (!pinOk) {
-    recordFail(attempt.key);
-    throw createHttpError(401, "Invalid credentials");
-  }
 
-  const library = await Library.findById(student.libraryId).select("name logoUrl").lean();
+  const library = await Library.findById(student.libraryId).select("name logoUrl libraryCode").lean();
   const user = studentResponse(student, library);
   const libraryId = student.libraryId.toString();
   const identity = await safeRecordIdentity(() => recordStudentIdentity(student));
@@ -356,7 +408,7 @@ async function login({ body, metadata }) {
   writeLog({ action: "login", userId: user.id, role: "student", libraryId: student.libraryId });
   await logAction({ action: "login", userId: user.id, role: "student", libraryId: student.libraryId, ip: metadata?.ip, userAgent: metadata?.userAgent });
   recordSuccess(attempt.key);
-  return { user, ...tokens };
+  return { user, ...tokens, libraryCode: library?.libraryCode || null };
 }
 
 /**
@@ -383,7 +435,7 @@ async function issueLibrarySession(library, metadata) {
 }
 
 async function issueStudentSession(student, metadata) {
-  const library = await Library.findById(student.libraryId).select("name logoUrl").lean();
+  const library = await Library.findById(student.libraryId).select("name logoUrl libraryCode").lean();
   const user = studentResponse(student, library);
   const libraryId = student.libraryId.toString();
   const identity = await safeRecordIdentity(() => recordStudentIdentity(student));
@@ -399,7 +451,7 @@ async function issueStudentSession(student, metadata) {
     ip: metadata?.ip,
     userAgent: metadata?.userAgent,
   });
-  return { user, ...tokens };
+  return { user, ...tokens, libraryCode: library?.libraryCode || null };
 }
 
 async function registerLibrary({ body, metadata }) {
