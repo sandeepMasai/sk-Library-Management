@@ -20,7 +20,7 @@ export function StudentAddModal({ open, onClose, onCreated }: StudentAddModalPro
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [feeAmount, setFeeAmount] = useState('500');
-  const [feeStatus, setFeeStatus] = useState<(typeof FEE_STATUSES)[number]>('Pending');
+  const [feeStatus, setFeeStatus] = useState<(typeof FEE_STATUSES)[number]>('Paid');
   const [feeMethod, setFeeMethod] = useState<'cash' | 'upi'>('cash');
   const [membershipDays, setMembershipDays] = useState<(typeof MEMBERSHIP_DAYS)[number]>(30);
   const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10));

@@ -160,6 +160,7 @@ export function logout() {
   try {
     localStorage.removeItem('sld_user');
     localStorage.removeItem('sld_library_code');
+    localStorage.removeItem('sld_attendance_qr_monthly');
   } catch {
     /* ignore */
   }

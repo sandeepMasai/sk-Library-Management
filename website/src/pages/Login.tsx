@@ -61,9 +61,8 @@ export function Login() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold capitalize transition ${
-              tab === t ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold capitalize transition ${tab === t ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
           >
             {t}
           </button>

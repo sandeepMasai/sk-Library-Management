@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { QrImage, qrImageUrl } from '../../../components/QrImage';
 import { Button } from '../../../components/ui/Button';
-import { currentMonthKey } from '../../utils/attendanceQrCache';
+import { attendanceQrRef, currentMonthKey } from '../../utils/attendanceQrCache';
 
 type AttendanceQrScannerProps = {
   open: boolean;
@@ -11,6 +11,7 @@ type AttendanceQrScannerProps = {
   error: string;
   libraryName?: string;
   onClose: () => void;
+  onRefresh?: () => void;
 };
 
 function safeFileName(libraryName?: string) {
@@ -139,6 +140,7 @@ export function AttendanceQrScanner({
   error,
   libraryName,
   onClose,
+  onRefresh,
 }: AttendanceQrScannerProps) {
   if (!open) return null;
 
@@ -183,6 +185,13 @@ export function AttendanceQrScanner({
             </p>
           ) : null}
 
+          {token ? (
+            <p className="mt-2 font-mono text-[11px] text-muted">
+              Code ref: <span className="font-semibold text-slate-700">{attendanceQrRef(token)}</span>
+              <span className="text-muted"> — match this on the mobile app</span>
+            </p>
+          ) : null}
+
           {isExpiredError ? (
             <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-left">
               <p className="font-semibold text-rose-900">❌ Membership expired</p>
@@ -204,7 +213,9 @@ export function AttendanceQrScanner({
           ) : token ? (
             <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <p className="font-semibold text-emerald-800">✅ QR ready</p>
-              <p className="text-sm text-emerald-700">This code stays the same for the whole month</p>
+              <p className="text-sm text-emerald-700">
+                Synced with mobile app — same code on website and library app
+              </p>
             </div>
           ) : null}
 
@@ -215,8 +226,8 @@ export function AttendanceQrScanner({
             <Button disabled={!token || loading} variant="outline" onClick={() => printAttendanceQr(token, libraryName)}>
               🖨 Print QR
             </Button>
-            <Button variant="outline" disabled title="QR is fixed for this month" className="cursor-not-allowed opacity-50">
-              Refresh QR
+            <Button variant="outline" disabled={loading} onClick={() => onRefresh?.()}>
+              {loading ? 'Syncing…' : 'Sync QR'}
             </Button>
             <Button variant="ghost" onClick={onClose}>
               Close
@@ -224,7 +235,7 @@ export function AttendanceQrScanner({
           </div>
 
           <p className="mt-4 text-[11px] text-muted">
-            Refresh and rotate are disabled — one attendance QR is issued per calendar month.
+            QR loads live from the server (same as mobile). Tap Sync QR after changing code on the app.
           </p>
         </div>
       </div>

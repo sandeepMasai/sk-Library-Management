@@ -188,7 +188,7 @@ function modeValue<T extends string | number>(values: T[]): T | null {
 export function studentAddDefaultsFromList(students: StudentRow[]): StudentAddDefaults {
   const recent = students.slice(0, 30);
   if (!recent.length) {
-    return { feeAmount: 500, feeStatus: 'Pending', membershipDays: 30, feeMethod: 'cash' };
+    return { feeAmount: 500, feeStatus: 'Paid', membershipDays: 30, feeMethod: 'cash' };
   }
 
   const feeAmount = modeValue(recent.map((s) => Math.round(Number(s.feeAmount) || 0))) ?? 500;

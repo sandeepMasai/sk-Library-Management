@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { useAuth } from '../../context/AuthContext';
 import { AdminFilterPills } from '../components/AdminFilterPills';
 import { AdminPageHeader } from '../components/AdminPageHeader';
 import { AttendanceAnalytics } from '../components/attendance/AttendanceAnalytics';
@@ -38,8 +39,6 @@ import {
   type TrendPoint,
 } from '../utils/attendanceHelpers';
 import {
-  currentMonthKey,
-  getCachedAttendanceQr,
   setCachedAttendanceQr,
 } from '../utils/attendanceQrCache';
 
@@ -47,6 +46,8 @@ type PeriodTab = 'today' | 'weekly' | 'monthly' | 'custom';
 
 export function AdminAttendance() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const libraryId = user?.id ?? '';
   const today = new Date().toISOString().slice(0, 10);
 
   const [dash, setDash] = useState<Awaited<ReturnType<typeof fetchDashboard>> | null>(null);
@@ -158,24 +159,21 @@ export function AdminAttendance() {
     setToken(qrToken);
     setExpiresAt(qrExpiresAt);
     if (qrToken && qrExpiresAt) {
-      setCachedAttendanceQr(qrToken, qrExpiresAt);
+      setCachedAttendanceQr(qrToken, qrExpiresAt, libraryId || undefined);
     }
     if (message) setQrError(message);
-  }, []);
+    else setQrError('');
+  }, [libraryId]);
 
-  /** One QR per month — use cache first; never rotate/regenerate from UI. */
+  /** Always fetch live token from API (same source as mobile app). */
   const loadQr = useCallback(async () => {
-    const cached = getCachedAttendanceQr();
-    if (cached && cached.monthKey === currentMonthKey()) {
-      applyQr(cached.token, cached.expiresAt);
-      return;
-    }
-
     setQrLoading(true);
     setQrError('');
     try {
       const res = await generateQrToken(false);
       if (!res.token) {
+        setToken('');
+        setExpiresAt('');
         setQrError('No active QR for this month. Contact support if this persists.');
         return;
       }
@@ -251,10 +249,18 @@ export function AdminAttendance() {
   }, [loadAll]);
 
   useEffect(() => {
-    if (showScanner && !token && !qrLoading) {
-      loadQr();
+    if (showScanner) {
+      void loadQr();
     }
-  }, [showScanner, token, qrLoading, loadQr]);
+  }, [showScanner, loadQr]);
+
+  useEffect(() => {
+    if (!showScanner) return;
+    const id = window.setInterval(() => {
+      void loadQr();
+    }, 30000);
+    return () => window.clearInterval(id);
+  }, [showScanner, loadQr]);
 
   useEffect(() => {
     if (periodTab === 'custom') {
@@ -446,6 +452,7 @@ export function AdminAttendance() {
         error={qrError}
         libraryName={libraryName}
         onClose={() => setShowScanner(false)}
+        onRefresh={() => void loadQr()}
       />
 
       <AttendanceReportModal
