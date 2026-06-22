@@ -299,8 +299,13 @@ export async function fetchSpaces(): Promise<SpaceRow[]> {
   return Array.isArray(data) ? data.map((s) => ({ ...s, id: s.id || (s as { _id?: string })._id || '' })) : [];
 }
 
-export async function createSpace(name: string, order = 0) {
-  return apiFetch<SpaceRow>('/api/spaces', { method: 'POST', body: JSON.stringify({ name, order }) });
+export async function createSpace(name: string, order = 0, totalSeats?: number) {
+  const body: { name: string; order: number; totalSeats?: number } = { name, order };
+  if (totalSeats != null && totalSeats > 0) body.totalSeats = totalSeats;
+  return apiFetch<SpaceRow & { seatsCreated?: number }>('/api/spaces', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateSpace(id: string, patch: { name?: string; order?: number }) {

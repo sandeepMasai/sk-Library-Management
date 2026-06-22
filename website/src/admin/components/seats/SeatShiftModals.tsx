@@ -169,11 +169,14 @@ type QuickAddModalsProps = {
   addSpaceOpen: boolean;
   totalSeats: string;
   spaceName: string;
+  spaceSeatCount: string;
+  selectedSpaceLabel?: string;
   busy?: boolean;
   onCloseSeats: () => void;
   onCloseSpace: () => void;
   onTotalChange: (v: string) => void;
   onSpaceNameChange: (v: string) => void;
+  onSpaceSeatCountChange: (v: string) => void;
   onBulkCreate: () => void;
   onCreateSpace: () => void;
 };
@@ -183,11 +186,14 @@ export function SeatQuickAddModals({
   addSpaceOpen,
   totalSeats,
   spaceName,
+  spaceSeatCount,
+  selectedSpaceLabel,
   busy,
   onCloseSeats,
   onCloseSpace,
   onTotalChange,
   onSpaceNameChange,
+  onSpaceSeatCountChange,
   onBulkCreate,
   onCreateSpace,
 }: QuickAddModalsProps) {
@@ -197,8 +203,19 @@ export function SeatQuickAddModals({
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
           <GlassCard admin padding="md" className="w-full max-w-sm">
             <h3 className="mb-4 font-display text-lg font-bold">Add seats</h3>
-            <Input label="Total seats (1..N)" type="number" min={1} max={5000} value={totalSeats} onChange={(e) => onTotalChange(e.target.value)} />
-            <p className="mt-2 text-xs text-muted">Creates numbered seats 1 to N in the selected space.</p>
+            <Input
+              label={selectedSpaceLabel ? `Seats to add in ${selectedSpaceLabel}` : 'Total seats (1..N)'}
+              type="number"
+              min={1}
+              max={5000}
+              value={totalSeats}
+              onChange={(e) => onTotalChange(e.target.value)}
+            />
+            <p className="mt-2 text-xs text-muted">
+              {selectedSpaceLabel
+                ? `Creates new numbered seats assigned to ${selectedSpaceLabel}.`
+                : 'Creates numbered seats 1 to N for the whole library (fills missing numbers only).'}
+            </p>
             <div className="mt-4 flex gap-2">
               <Button variant="outline" className="flex-1" onClick={onCloseSeats}>
                 Cancel
@@ -215,7 +232,18 @@ export function SeatQuickAddModals({
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
           <GlassCard admin padding="md" className="w-full max-w-sm">
             <h3 className="mb-4 font-display text-lg font-bold">Add space</h3>
-            <Input label="Hall / room name" value={spaceName} onChange={(e) => onSpaceNameChange(e.target.value)} placeholder="Main Hall" />
+            <Input label="Hall / room name" value={spaceName} onChange={(e) => onSpaceNameChange(e.target.value)} placeholder="Hall A" />
+            <div className="mt-3">
+              <Input
+                label="Seats in this hall"
+                type="number"
+                min={1}
+                max={5000}
+                value={spaceSeatCount}
+                onChange={(e) => onSpaceSeatCountChange(e.target.value)}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted">Creates the hall and numbered seats inside it (e.g. 40 seats for Hall A).</p>
             <div className="mt-4 flex gap-2">
               <Button variant="outline" className="flex-1" onClick={onCloseSpace}>
                 Cancel

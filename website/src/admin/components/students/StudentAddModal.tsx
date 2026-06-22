@@ -44,7 +44,7 @@ export function StudentAddModal({ open, onClose, onCreated }: StudentAddModalPro
         setMembershipDays(defaults.membershipDays);
         setFeeMethod(defaults.feeMethod);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         if (alive) setLoadingDefaults(false);
       });

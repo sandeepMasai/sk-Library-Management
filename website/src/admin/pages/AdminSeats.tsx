@@ -58,6 +58,7 @@ export function AdminSeats() {
   const [addSpaceOpen, setAddSpaceOpen] = useState(false);
   const [totalSeatsInput, setTotalSeatsInput] = useState('100');
   const [spaceNameInput, setSpaceNameInput] = useState('');
+  const [spaceSeatCountInput, setSpaceSeatCountInput] = useState('40');
 
   const [manageShiftsOpen, setManageShiftsOpen] = useState(false);
   const [shiftFormOpen, setShiftFormOpen] = useState(false);
@@ -223,12 +224,20 @@ export function AdminSeats() {
   async function handleCreateSpace() {
     const name = spaceNameInput.trim();
     if (!name) return;
+    const seatCount = Number(spaceSeatCountInput);
+    if (!Number.isInteger(seatCount) || seatCount < 1) {
+      setError('Enter a valid seat count for this hall (1–5000)');
+      return;
+    }
     setBusy(true);
+    setError('');
     try {
-      await createSpace(name);
+      const created = await createSpace(name, 0, seatCount);
+      const spaceId = created.id || (created as { _id?: string })._id || '';
       setAddSpaceOpen(false);
       setSpaceNameInput('');
       setQuickAddOpen(false);
+      if (spaceId) setSelectedSpaceId(spaceId);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create space');
@@ -289,6 +298,11 @@ export function AdminSeats() {
       setBusy(false);
     }
   }
+
+  const selectedSpaceName = useMemo(
+    () => (selectedSpaceId ? spaces.find((s) => s.id === selectedSpaceId)?.name : undefined),
+    [selectedSpaceId, spaces]
+  );
 
   return (
     <div className="admin-dashboard-pad page-pad seat-page pb-24 lg:pb-8">
@@ -368,7 +382,7 @@ export function AdminSeats() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wide text-muted">Shifts</p>
-            <button type="button" className="text-xs font-bold text-primary" onClick={() => setManageShiftsOpen(true)}>
+            <button type="button" className="text-md font-bold text-red-600" onClick={() => setManageShiftsOpen(true)}>
               Manage
             </button>
           </div>
@@ -383,9 +397,8 @@ export function AdminSeats() {
                   key={shift.id}
                   type="button"
                   onClick={() => setSelectedShiftId(shift.id)}
-                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                    selectedShiftId === shift.id ? 'bg-primary text-white' : 'border border-white/20 bg-white/10 text-white'
-                  }`}
+                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${selectedShiftId === shift.id ? 'bg-primary text-white' : 'border border-white/20 bg-white/10 text-white'
+                    }`}
                 >
                   {shift.name}
                   <span className="ml-1 opacity-70">
@@ -403,9 +416,8 @@ export function AdminSeats() {
             <button
               type="button"
               onClick={() => setSelectedSpaceId(null)}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                !selectedSpaceId ? 'bg-white/20 text-white' : 'border border-white/20 bg-white/10 text-white/80'
-              }`}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${!selectedSpaceId ? 'bg-white/20 text-white' : 'border border-white/20 bg-white/10 text-white/80'
+                }`}
             >
               All Spaces
             </button>
@@ -414,9 +426,8 @@ export function AdminSeats() {
                 key={space.id}
                 type="button"
                 onClick={() => setSelectedSpaceId(space.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                  selectedSpaceId === space.id ? 'bg-white/20 text-white' : 'border border-white/20 bg-white/10 text-white/80'
-                }`}
+                className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${selectedSpaceId === space.id ? 'bg-white/20 text-white' : 'border border-white/20 bg-white/10 text-white/80'
+                  }`}
               >
                 {space.name}
               </button>
@@ -433,9 +444,8 @@ export function AdminSeats() {
               key={k}
               type="button"
               onClick={() => setStatusFilter(k)}
-              className={`rounded-xl py-2 text-xs font-black capitalize ${
-                statusFilter === k ? 'bg-primary/30 text-white' : 'border border-white/20 bg-white/10 text-white/80'
-              }`}
+              className={`rounded-xl py-2 text-xs font-black capitalize ${statusFilter === k ? 'bg-primary/30 text-white' : 'border border-white/20 bg-white/10 text-white/80'
+                }`}
             >
               {k}
             </button>
@@ -458,8 +468,15 @@ export function AdminSeats() {
           <AdminEmptyState
             icon="💺"
             title="No seats yet"
-            description="Add a space, create shifts, then bulk-create seats like the mobile app."
-            action={<Button onClick={() => setAddSeatsOpen(true)}>Add seats</Button>}
+            description="Add a hall/room with seats, create shifts, then assign students."
+            action={<Button onClick={() => setAddSpaceOpen(true)}>Add hall + seats</Button>}
+          />
+        ) : !loading && selectedSpaceId && scopedSeats.length === 0 ? (
+          <AdminEmptyState
+            icon="🏛️"
+            title={`No seats in ${selectedSpaceName || 'this hall'}`}
+            description="Add seats to this hall or pick another space."
+            action={<Button onClick={() => setAddSeatsOpen(true)}>Add seats here</Button>}
           />
         ) : (
           <SeatCardGrid
@@ -521,11 +538,14 @@ export function AdminSeats() {
         addSpaceOpen={addSpaceOpen}
         totalSeats={totalSeatsInput}
         spaceName={spaceNameInput}
+        spaceSeatCount={spaceSeatCountInput}
+        selectedSpaceLabel={selectedSpaceName}
         busy={busy}
         onCloseSeats={() => setAddSeatsOpen(false)}
         onCloseSpace={() => setAddSpaceOpen(false)}
         onTotalChange={setTotalSeatsInput}
         onSpaceNameChange={setSpaceNameInput}
+        onSpaceSeatCountChange={setSpaceSeatCountInput}
         onBulkCreate={handleBulkCreate}
         onCreateSpace={handleCreateSpace}
       />
