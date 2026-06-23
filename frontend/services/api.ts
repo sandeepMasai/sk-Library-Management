@@ -118,10 +118,10 @@ api.interceptors.response.use(
     const bodyObj = body && typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
     const details =
       bodyObj &&
-      "data" in bodyObj &&
-      bodyObj.data != null &&
-      typeof bodyObj.data === "object" &&
-      !Array.isArray(bodyObj.data)
+        "data" in bodyObj &&
+        bodyObj.data != null &&
+        typeof bodyObj.data === "object" &&
+        !Array.isArray(bodyObj.data)
         ? (bodyObj.data as Record<string, unknown>)
         : undefined;
 

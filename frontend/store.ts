@@ -170,7 +170,8 @@ export interface Notification {
   message: string;
   date: string;
   imageUrl?: string | null;
-  messageType?: 'text' | 'image' | 'text_image';
+  documentUrl?: string | null;
+  messageType?: 'text' | 'image' | 'text_image' | 'pdf' | 'text_pdf';
   targetId?: string; // 'all' or studentId
   targetType?: 'all' | 'student' | 'library';
   category?: NotificationCategory;
@@ -182,7 +183,7 @@ export interface Notification {
 }
 
 export type CommunicationAudience = 'all' | 'active' | 'expired' | 'shift' | 'selected';
-export type CommunicationMessageType = 'text' | 'image' | 'text_image';
+export type CommunicationMessageType = 'text' | 'image' | 'text_image' | 'pdf' | 'text_pdf';
 
 export interface CommunicationCampaign {
   id: string;
@@ -338,16 +339,16 @@ interface AppState {
     newPassword: string,
     confirmPassword: string
   ) => Promise<{ ok: boolean; message?: string }>;
-  
+
   // Email OTP
   sendEmailOtp: (p: { email: string; purpose?: string; role?: string }) => Promise<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>;
   verifyEmailOtp: (p: { email: string; otp: string; purpose?: string }) => Promise<{ ok: boolean; message?: string }>;
   resendEmailOtp: (p: { email: string; purpose?: string }) => Promise<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>;
-  
+
   // Library Email Verification
   sendLibraryEmailVerification: () => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>;
   verifyLibraryEmail: (otp: string) => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>;
-  
+
   // Student Email Verification
   sendStudentEmailVerification: () => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>;
   verifyStudentEmail: (otp: string) => Promise<{ ok: boolean; message?: string; isEmailVerified?: boolean }>;
@@ -365,7 +366,7 @@ interface AppState {
 
   // Library - Spaces/Shifts/Allocations (Seat Management)
   fetchSpaces: () => Promise<void>;
-  createSpace: (name: string) => Promise<{ ok: boolean; message?: string; space?: Space }>;
+  createSpace: (name: string, totalSeats?: number) => Promise<{ ok: boolean; message?: string; space?: Space }>;
   fetchShifts: () => Promise<void>;
   createShift: (data: { name: string; type?: Shift['type']; startTime: number | string; endTime: number | string }) => Promise<{ ok: boolean; message?: string; shift?: Shift }>;
   updateShift: (
@@ -393,7 +394,7 @@ interface AppState {
   // Student - Profile
   uploadMyPhoto: (localUri: string) => Promise<{ ok: boolean; message?: string }>;
   deleteMyAccount: () => Promise<{ ok: boolean; message?: string }>;
-  
+
   // Student - Email
   updateStudentEmail: (email: string) => Promise<{ ok: boolean; message?: string }>;
 
@@ -527,7 +528,7 @@ async function hydrateSessionAfterAuth(
   const nextLibraryCode =
     sessionRole === 'library'
       ? (authenticatedUser.libraryCode ?? data.libraryCode ?? null)
-      : (libraryCodeFromForm ?? null);
+      : (libraryCodeFromForm ?? authenticatedUser.libraryCode ?? data.libraryCode ?? null);
 
   let nextLibraryId: string | null =
     sessionRole === 'library'
@@ -715,353 +716,6 @@ const authStorage = createJSONStorage(() => {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-  currentUser: null,
-  authToken: null,
-  token: null,
-  refreshToken: null,
-  role: null,
-  libraryId: null,
-  libraryCode: null,
-  users: [initialAdmin],
-  attendances: [],
-  notifications: [
-    {
-      id: 'notif-1',
-      title: 'Welcome!',
-      message: 'Welcome to SmartLibDesk.',
-      date: new Date().toISOString(),
-      targetId: 'all',
-      category: 'general',
-    },
-  ],
-  dailyQrToken: null,
-  lastNotifSeenAt: null,
-  seats: [],
-  spaces: [],
-  shifts: [],
-  allocations: [],
-  renewalRequests: [],
-  pendingRenewalCount: 0,
-  studentPayments: [],
-
-  isAuthenticated: () => Boolean(get().token),
-  isAdmin: () => get().role === 'admin',
-  isLibrary: () => get().role === 'library',
-  isStudent: () => get().role === 'student',
-
-  upgradeSubscription: async (planKey) => {
-    try {
-      const res = await apiPost<{ ok: boolean; user: User }>(`/api/subscription/upgrade`, { planKey });
-      if (res?.user) {
-        set({ currentUser: res.user });
-      }
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to upgrade plan' };
-    }
-  },
-
-  cancelSubscription: async (data) => {
-    try {
-      const res = await apiPost<{ ok: boolean; user: User }>(`/api/subscription/cancel`, {
-        reason: data?.reason ?? null,
-        note: data?.note ?? null,
-      });
-      if (res?.user) set({ currentUser: res.user });
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to cancel subscription' };
-    }
-  },
-
-  saveRetentionChoice: async (choice) => {
-    try {
-      await apiPost<{ ok: boolean }>(`/api/subscription/retention-choice`, { choice });
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to store choice' };
-    }
-  },
-
-  fetchSeats: async () => {
-    try {
-      const response = await apiGet<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats`);
-      const list = unwrapApiData(response);
-      set({ seats: list });
-    } catch {
-      // keep local state
-    }
-  },
-
-  fetchSpaces: async () => {
-    try {
-      const response = await apiGet<Space[] | ApiEnvelope<Space[]>>(`/api/spaces`);
-      const list = unwrapApiData(response);
-      set({ spaces: list });
-    } catch {
-      // keep local state
-    }
-  },
-
-  createSpace: async (name) => {
-    try {
-      const response = await apiPost<Space | ApiEnvelope<Space>>(`/api/spaces`, { name });
-      const space = unwrapApiData(response);
-      set((s) => ({ spaces: [...s.spaces, space].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) }));
-      return { ok: true, space };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to create space' };
-    }
-  },
-
-  fetchShifts: async () => {
-    try {
-      const response = await apiGet<Shift[] | ApiEnvelope<Shift[]>>(`/api/shifts`);
-      const list = unwrapApiData(response);
-      set({ shifts: list });
-    } catch {
-      // keep local state
-    }
-  },
-
-  createShift: async (data) => {
-    try {
-      const response = await apiPost<Shift | ApiEnvelope<Shift>>(`/api/shifts`, data);
-      const shift = unwrapApiData(response);
-      set((s) => ({ shifts: [...s.shifts, shift].sort((a, b) => a.startTime - b.startTime) }));
-      return { ok: true, shift };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to create shift' };
-    }
-  },
-
-  updateShift: async (id, data) => {
-    try {
-      const response = await apiPatch<Shift | ApiEnvelope<Shift>>(`/api/shifts/${id}`, data);
-      const shift = unwrapApiData(response);
-      set((s) => ({
-        shifts: s.shifts.map((x) => (x.id === id ? shift : x)).sort((a, b) => a.startTime - b.startTime),
-      }));
-      return { ok: true, shift };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to update shift' };
-    }
-  },
-
-  deleteShift: async (id) => {
-    try {
-      await apiDelete<{ ok?: boolean } | ApiEnvelope<{ ok?: boolean }>>(`/api/shifts/${id}`);
-      set((s) => ({ shifts: s.shifts.filter((x) => x.id !== id) }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to delete shift' };
-    }
-  },
-
-  fetchAllocations: async (shiftId, spaceId) => {
-    try {
-      const params: any = {};
-      if (shiftId) params.shiftId = shiftId;
-      if (spaceId) params.spaceId = spaceId;
-      const response = await apiGet<SeatAllocation[] | ApiEnvelope<SeatAllocation[]>>(`/api/allocations`, params);
-      const list = unwrapApiData(response);
-      set({ allocations: list });
-    } catch {
-      // keep local state
-    }
-  },
-
-  assignAllocation: async (data) => {
-    const prev = get().allocations;
-    const optimistic: SeatAllocation = {
-      id: `tmp-${Date.now()}`,
-      libraryId: get().libraryId,
-      seatId: data.seatId,
-      shiftId: data.shiftId,
-      studentId: data.studentId,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      status: 'active',
-    };
-    set((s) => ({ allocations: [optimistic, ...s.allocations] }));
-    try {
-      const response = await apiPost<SeatAllocation | ApiEnvelope<SeatAllocation>>(`/api/allocations`, data);
-      const created = unwrapApiData(response);
-      set((s) => ({ allocations: s.allocations.map((a) => (a.id === optimistic.id ? created : a)) }));
-      return { ok: true, allocation: created };
-    } catch (e) {
-      set({ allocations: prev });
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to assign seat' };
-    }
-  },
-
-  cancelAllocation: async (allocationId) => {
-    const prev = get().allocations;
-    set((s) => ({ allocations: s.allocations.map((a) => (a.id === allocationId ? { ...a, status: 'cancelled' } : a)) }));
-    try {
-      await apiPatch<SeatAllocation | ApiEnvelope<SeatAllocation>>(`/api/allocations/${allocationId}`, { status: 'cancelled' });
-      return { ok: true };
-    } catch (e) {
-      set({ allocations: prev });
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to unassign' };
-    }
-  },
-
-  bulkCreateSeats: async (totalSeats, spaceId) => {
-    try {
-      const response = await apiPost<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats/bulk-create`, { totalSeats, spaceId: spaceId ?? null });
-      const list = unwrapApiData(response);
-      set({ seats: list });
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to create seats' };
-    }
-  },
-
-  setTotalSeats: async (totalSeats) => {
-    try {
-      const response = await apiPost<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats/set-total`, { totalSeats });
-      const list = unwrapApiData(response);
-      set({ seats: list });
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to update seat capacity' };
-    }
-  },
-
-  updateSeatSpace: async (seatId, spaceId) => {
-    const prev = get().seats;
-    set((s) => ({ seats: s.seats.map((x) => (x.id === seatId ? { ...x, spaceId } : x)) }));
-    try {
-      const response = await apiPatch<Seat | ApiEnvelope<Seat>>(`/api/seats/${seatId}`, { spaceId });
-      const updated = unwrapApiData(response);
-      set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
-      return { ok: true };
-    } catch (e) {
-      set({ seats: prev });
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to update seat' };
-    }
-  },
-
-  assignSeat: async (seatId, studentId) => {
-    // Optimistic UI: update immediately, rollback on error
-    const prev = get().seats;
-    set((s) => ({
-      seats: s.seats.map((x) => (x.id === seatId ? { ...x, status: 'occupied', studentId } : x)),
-    }));
-    try {
-      // Backend call: POST /api/seats/assign (alias supported)
-      const response = await apiPost<Seat | ApiEnvelope<Seat>>(`/api/seats/assign`, { seatId, studentId });
-      const updated = unwrapApiData(response);
-      set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
-      return { ok: true };
-    } catch (e) {
-      set({ seats: prev });
-      const err = e as ApiError;
-      return { ok: false, message: err?.message };
-    }
-  },
-
-  unassignSeat: async (seatId) => {
-    const prev = get().seats;
-    set((s) => ({
-      seats: s.seats.map((x) => (x.id === seatId ? { ...x, status: 'available', studentId: null } : x)),
-    }));
-    try {
-      const response = await apiPost<Seat | ApiEnvelope<Seat>>(`/api/seats/unassign`, { seatId });
-      const updated = unwrapApiData(response);
-      set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
-      return { ok: true };
-    } catch (e) {
-      set({ seats: prev });
-      const err = e as ApiError;
-      return { ok: false, message: err?.message };
-    }
-  },
-
-  login: async (usernameOrMobile, pinOrPassword, opts) => {
-    try {
-      const mode = opts?.mode ?? 'pin';
-      const libraryCode = opts?.libraryCode ?? get().libraryCode ?? undefined;
-
-      /**
-       * Connection: POST /api/auth/login
-       * - Axios service attaches Authorization automatically on future requests
-       * - For login itself: we send credentials only (no token yet)
-       */
-      const response = await apiPost<unknown>(`/api/auth/login`, {
-        usernameOrMobile,
-        ...(mode === 'password' ? { password: pinOrPassword } : { pin: pinOrPassword }),
-        ...(mode === 'password' ? { role: 'library' } : { role: 'student' }),
-        ...(libraryCode ? { libraryCode } : {}),
-      });
-      const data = unwrapAuthLoginPayload(response);
-      if (!data) {
-        return { ok: false, message: 'Invalid login response from server' };
-      }
-      const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode);
-      if (!hydrated.ok) return hydrated;
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      const { formatReachabilityError, isNetworkFailure } = await import('./services/networkError');
-      if (isNetworkFailure(e)) {
-        return { ok: false, message: formatReachabilityError(e) };
-      }
-      const msg = err?.message || 'Network error';
-      return { ok: false, message: msg };
-    }
-  },
-
-  adminLogin: async (username, pin) => {
-    try {
-      const response = await apiPost<unknown>(`/api/admin/login`, { username, pin });
-      const data = unwrapAuthLoginPayload(response);
-      if (!data?.user) {
-        return { ok: false, message: 'Invalid login response from server' };
-      }
-      const authenticatedUser = { ...data.user, role: 'admin' as const };
-      const token = data.authToken || (data as { accessToken?: string }).accessToken || null;
-      const refreshToken = data.refreshToken || null;
-      void import('./services/authTokenHolder').then(({ setAuthTokens }) => {
-        setAuthTokens({ accessToken: token, refreshToken });
-      });
-      set((state) => ({
-        currentUser: authenticatedUser,
-        authToken: token,
-        token,
-        refreshToken,
-        role: 'admin',
-        libraryId: null,
-        libraryCode: null,
-        users: [authenticatedUser, ...state.users.filter((u) => u.role === 'student')],
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Network error' };
-    }
-  },
-
-  logout: () => {
-    const prevLibraryId = get().libraryId;
-    void import('./services/libraryContact').then(({ clearLibraryContactCache }) =>
-      clearLibraryContactCache(prevLibraryId)
-    );
-    void import('./services/authTokenHolder').then(({ clearAuthTokens }) => clearAuthTokens());
-    set({
       currentUser: null,
       authToken: null,
       token: null,
@@ -1069,746 +723,1095 @@ export const useAppStore = create<AppState>()(
       role: null,
       libraryId: null,
       libraryCode: null,
-      studentPayments: [],
+      users: [initialAdmin],
+      attendances: [],
+      notifications: [
+        {
+          id: 'notif-1',
+          title: 'Welcome!',
+          message: 'Welcome to SmartLibDesk.',
+          date: new Date().toISOString(),
+          targetId: 'all',
+          category: 'general',
+        },
+      ],
+      dailyQrToken: null,
+      lastNotifSeenAt: null,
+      seats: [],
+      spaces: [],
+      shifts: [],
+      allocations: [],
       renewalRequests: [],
       pendingRenewalCount: 0,
-      attendances: [],
-      notifications: [],
-      lastNotifSeenAt: null,
-    });
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { resetAuthNavigation } = require('./navigation/rootNavigation');
-      resetAuthNavigation('Login');
-    } catch {
-      /* navigation not mounted yet */
-    }
-  },
+      studentPayments: [],
 
-  patchCurrentUser: (patch) =>
-    set((state) => ({
-      currentUser: state.currentUser ? { ...state.currentUser, ...patch } : (state.role ? ({ role: state.role, ...patch } as any) : state.currentUser),
-    })),
+      isAuthenticated: () => Boolean(get().token),
+      isAdmin: () => get().role === 'admin',
+      isLibrary: () => get().role === 'library',
+      isStudent: () => get().role === 'student',
 
-  fetchMyProfile: async () => {
-    const { currentUser: cu, role, libraryId } = get();
-    const effectiveRole = cu?.role || role;
-    if (!effectiveRole) return { ok: false, message: 'Not logged in' };
-    try {
-      if (effectiveRole === 'library') {
-        const hasSubscriptionMeta = Boolean(
-          cu?.subscriptionStatus && (cu?.plan !== undefined || (cu as any)?.currentPlanKey !== undefined)
-        );
-
-        // Fast path: profile only (avoids heavy subscription/me on Profile/Settings open).
-        if (hasSubscriptionMeta && cu?.ownerName && cu?.email) {
-          const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
-          const p = res.profile;
-          set({
-            role: 'library',
-            libraryId: cu?.id || libraryId || p?.id || null,
-            currentUser: {
-              ...(cu || ({} as any)),
-              id: cu?.id || libraryId || p?.id || '',
-              role: 'library',
-              name: p?.libraryName ?? cu?.name,
-              ownerName: p?.name ?? cu?.ownerName,
-              email: p?.email ?? cu?.email,
-              phone: p?.phone ?? cu?.phone,
-              isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
-              emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
-              address: p?.address ?? cu?.address,
-              city: p?.city ?? cu?.city,
-              logoUrl: p?.logoUrl ?? cu?.logoUrl,
-              plan: p?.plan ?? cu?.plan,
-              planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
-              subscriptionStatus: p?.subscriptionStatus ?? cu?.subscriptionStatus,
-              attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
-            } as any,
-          });
+      upgradeSubscription: async (planKey) => {
+        try {
+          const res = await apiPost<{ ok: boolean; user: User }>(`/api/subscription/upgrade`, { planKey });
+          if (res?.user) {
+            set({ currentUser: res.user });
+          }
           return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to upgrade plan' };
         }
+      },
 
-        // Full path: subscription/me (expiry sync + plan gating fields).
-        const { syncSubscriptionMe } = await import('./services/subscriptionSync');
-        const me = await syncSubscriptionMe({ force: true });
-        if (me?.user) {
-          set({
-            currentUser: { ...me.user, role: 'library' } as User,
-            role: 'library',
-            libraryId: String(me.user.id || libraryId || cu?.id || ''),
+      cancelSubscription: async (data) => {
+        try {
+          const res = await apiPost<{ ok: boolean; user: User }>(`/api/subscription/cancel`, {
+            reason: data?.reason ?? null,
+            note: data?.note ?? null,
           });
+          if (res?.user) set({ currentUser: res.user });
           return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to cancel subscription' };
         }
+      },
 
-        const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
-        const p = res.profile;
-        set({
-          role: 'library',
-          libraryId: cu?.id || libraryId || p?.id || null,
-          currentUser: {
-            ...(cu || ({} as any)),
-            id: cu?.id || libraryId || p?.id || '',
-            role: 'library',
-            name: p?.libraryName ?? cu?.name,
-            ownerName: p?.name ?? cu?.ownerName,
-            email: p?.email ?? cu?.email,
-            phone: p?.phone ?? cu?.phone,
-            isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
-            emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
-            address: p?.address ?? cu?.address,
-            city: p?.city ?? cu?.city,
-            logoUrl: p?.logoUrl ?? cu?.logoUrl,
-            plan: p?.plan ?? cu?.plan,
-            planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
-            attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
-          } as any,
-        });
-        return { ok: true };
-      }
+      saveRetentionChoice: async (choice) => {
+        try {
+          await apiPost<{ ok: boolean }>(`/api/subscription/retention-choice`, { choice });
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to store choice' };
+        }
+      },
 
-      if (effectiveRole === 'student') {
-        const res = await apiGet<{ ok: boolean; student: any }>(`/api/student/me`);
-        const s = res.student;
-        set({
-          currentUser: {
-            ...(cu || ({} as any)),
-            ...s,
-            role: 'student',
-            photoUrl: s?.photoUrl ?? (cu as any)?.photoUrl,
-          } as any,
-        });
-        return { ok: true };
-      }
+      fetchSeats: async () => {
+        try {
+          const response = await apiGet<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats`);
+          const list = unwrapApiData(response);
+          set({ seats: list });
+        } catch {
+          // keep local state
+        }
+      },
 
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load profile' };
-    }
-  },
+      fetchSpaces: async () => {
+        try {
+          const response = await apiGet<Space[] | ApiEnvelope<Space[]>>(`/api/spaces`);
+          const list = unwrapApiData(response);
+          set({ spaces: list });
+        } catch {
+          // keep local state
+        }
+      },
 
-  sendForgotPasswordOtp: async (email) => {
-    try {
-      const response = await apiPost<{
-        ok: boolean;
-        message?: string;
-        expiryMinutes?: number;
-        resendAfterSeconds?: number;
-      }>(`/api/auth/forgot-password/send-otp`, { email });
-      return {
-        ok: true,
-        message: response.message,
-        expiryMinutes: response.expiryMinutes,
-        resendAfterSeconds: response.resendAfterSeconds,
-      };
-    } catch (e) {
-      const err = e as ApiError;
-      return {
-        ok: false,
-        message: err?.message || `Backend unavailable (${API_URL})`,
-      };
-    }
-  },
+      createSpace: async (name, totalSeats?: number) => {
+        try {
+          const payload: { name: string; totalSeats?: number } = { name };
+          if (totalSeats != null && totalSeats > 0) payload.totalSeats = totalSeats;
+          const response = await apiPost<Space | ApiEnvelope<Space>>(`/api/spaces`, payload);
+          const space = unwrapApiData(response);
+          set((s) => ({ spaces: [...s.spaces, space].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) }));
+          return { ok: true, space };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to create space' };
+        }
+      },
 
-  verifyForgotPasswordOtp: async (email, otp) => {
-    try {
-      const response = await apiPost<{
-        ok: boolean;
-        resetSessionToken?: string;
-        sessionExpiresMinutes?: number;
-      }>(`/api/auth/forgot-password/verify-otp`, { email, otp });
-      return {
-        ok: true,
-        resetSessionToken: response.resetSessionToken,
-        sessionExpiresMinutes: response.sessionExpiresMinutes,
-      };
-    } catch (e) {
-      const err = e as ApiError;
-      const attemptsRemaining =
-        typeof (e as ApiError).details?.attemptsRemaining === 'number'
-          ? ((e as ApiError).details!.attemptsRemaining as number)
-          : undefined;
-      return {
-        ok: false,
-        message: err?.message || `Backend unavailable (${API_URL})`,
-        attemptsRemaining,
-      };
-    }
-  },
+      fetchShifts: async () => {
+        try {
+          const response = await apiGet<Shift[] | ApiEnvelope<Shift[]>>(`/api/shifts`);
+          const list = unwrapApiData(response);
+          set({ shifts: list });
+        } catch {
+          // keep local state
+        }
+      },
 
-  completeForgotPasswordReset: async (email, resetSessionToken, newPassword) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string }>(`/api/auth/forgot-password/reset-password`, {
-        email,
-        resetSessionToken,
-        newPassword,
-      });
-      return { ok: true, message: response.message };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      createShift: async (data) => {
+        try {
+          const response = await apiPost<Shift | ApiEnvelope<Shift>>(`/api/shifts`, data);
+          const shift = unwrapApiData(response);
+          set((s) => ({ shifts: [...s.shifts, shift].sort((a, b) => a.startTime - b.startTime) }));
+          return { ok: true, shift };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to create shift' };
+        }
+      },
 
-  changeLibraryPassword: async (currentPassword, newPassword, confirmPassword) => {
-    try {
-      const response = await apiPost<{ success?: boolean; data?: unknown; message?: string }>(
-        `/api/auth/change-password`,
-        { currentPassword, newPassword, confirmPassword }
-      );
-      const message =
-        typeof response?.message === 'string' && response.message.trim()
-          ? response.message.trim()
-          : 'Password updated successfully';
-      return { ok: true, message };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      updateShift: async (id, data) => {
+        try {
+          const response = await apiPatch<Shift | ApiEnvelope<Shift>>(`/api/shifts/${id}`, data);
+          const shift = unwrapApiData(response);
+          set((s) => ({
+            shifts: s.shifts.map((x) => (x.id === id ? shift : x)).sort((a, b) => a.startTime - b.startTime),
+          }));
+          return { ok: true, shift };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to update shift' };
+        }
+      },
 
-  // Email OTP
-  sendEmailOtp: async ({ email, purpose = 'verification', role }) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
-        `/api/auth/send-email-otp`,
-        { email, purpose, role }
-      );
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      deleteShift: async (id) => {
+        try {
+          await apiDelete<{ ok?: boolean } | ApiEnvelope<{ ok?: boolean }>>(`/api/shifts/${id}`);
+          set((s) => ({ shifts: s.shifts.filter((x) => x.id !== id) }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to delete shift' };
+        }
+      },
 
-  verifyEmailOtp: async ({ email, otp, purpose = 'verification' }) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string }>(
-        `/api/auth/verify-email-otp`,
-        { email, otp, purpose }
-      );
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      fetchAllocations: async (shiftId, spaceId) => {
+        try {
+          const params: any = {};
+          if (shiftId) params.shiftId = shiftId;
+          if (spaceId) params.spaceId = spaceId;
+          const response = await apiGet<SeatAllocation[] | ApiEnvelope<SeatAllocation[]>>(`/api/allocations`, params);
+          const list = unwrapApiData(response);
+          set({ allocations: list });
+        } catch {
+          // keep local state
+        }
+      },
 
-  resendEmailOtp: async ({ email, purpose = 'verification' }) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
-        `/api/auth/resend-email-otp`,
-        { email, purpose }
-      );
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  // Library Email Verification
-  sendLibraryEmailVerification: async () => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
-        `/api/library/send-verification-email`,
-        {}
-      );
-      if (response.isEmailVerified !== undefined) {
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
-        }));
-      }
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  verifyLibraryEmail: async (otp: string) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>(
-        `/api/library/verify-email`,
-        { otp }
-      );
-      if (response.isEmailVerified !== undefined) {
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified, emailVerifiedAt: response.emailVerifiedAt } : state.currentUser,
-        }));
-      }
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  // Student Email Verification
-  sendStudentEmailVerification: async () => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
-        `/api/student/me/send-verification-email`,
-        {}
-      );
-      if (response.isEmailVerified !== undefined) {
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
-        }));
-      }
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  verifyStudentEmail: async (otp: string) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean }>(
-        `/api/student/me/verify-email`,
-        { otp }
-      );
-      if (response.isEmailVerified !== undefined) {
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
-        }));
-      }
-      return response;
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  // Student - Email
-  updateStudentEmail: async (email: string) => {
-    try {
-      const response = await apiPost<{ ok: boolean; message?: string; student?: any }>(
-        `/api/student/me`,
-        { email }
-      );
-      if (response.student) {
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, email: response.student.email, isEmailVerified: response.student.isEmailVerified } : state.currentUser,
-        }));
-      }
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  fetchStudents: async () => {
-    try {
-      const students = await apiGet<User[]>(`/api/students`);
-      set((state) => ({ users: mergeStudentsInUsers(state.users, students) }));
-    } catch {
-      // Keep existing local users when backend is unavailable.
-    }
-  },
-
-  fetchStudentsPage: async (page, limit) => {
-    // Pagination: avoid loading all data for list screens
-    // Multi-tenant backend filters by token automatically.
-    return await apiGet<User[]>(`/api/students`, { page, limit });
-  },
-
-  addStudent: async (studentData) => {
-    try {
-      const created = await apiPost<User>(`/api/students`, studentData);
-      set((state) => ({ users: [...state.users.filter((u) => u.role !== 'student' || u.id !== created.id), created] }));
-      return { ok: true, student: created };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  updateStudent: async (id, data) => {
-    try {
-      const updated = await apiPut<User>(`/api/students/${id}`, data);
-      set((state) => ({
-        users: state.users.map((u) => (u.id === id ? updated : u)),
-        currentUser: state.currentUser?.id === id ? updated : state.currentUser,
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  deleteStudent: async (id) => {
-    try {
-      await apiDelete(`/api/students/${id}`);
-
-      set((state) => ({
-        users: state.users.filter((u) => u.id !== id),
-        currentUser: state.currentUser?.id === id ? null : state.currentUser,
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  uploadStudentPhoto: async (id, localUri) => {
-    try {
-      const formData = new FormData();
-      const filename = localUri.split('/').pop() ?? 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      // React Native FormData accepts this object shape for file uploads
-      formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
-
-      const response = await api.post<User>(`/api/students/${id}/photo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const updated = response.data;
-      set((state) => ({
-        users: state.users.map((u) => (u.id === id ? updated : u)),
-        currentUser: state.currentUser?.id === id ? updated : state.currentUser,
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  uploadMyPhoto: async (localUri) => {
-    try {
-      const formData = new FormData();
-      const filename = localUri.split('/').pop() ?? 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
-
-      const response = await api.post<{ ok: boolean; student: User }>(`/api/student/me/photo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const updated = response.data?.student;
-      if (updated?.id) {
-        set((state) => ({
-          users: state.users.map((u) => (u.id === updated.id ? updated : u)),
-          currentUser: state.currentUser?.id === updated.id ? updated : state.currentUser,
-        }));
-      }
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  deleteMyAccount: async () => {
-    try {
-      await apiDelete(`/api/student/me`);
-      get().logout();
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  toggleBlockStudent: async (id) => {
-    try {
-      const updated = await apiPatch<User>(`/api/students/${id}/block`);
-      set((state) => ({
-        users: state.users.map((u) => (u.id === id ? updated : u)),
-        currentUser: state.currentUser?.id === id ? updated : state.currentUser,
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
-
-  generateDailyQr: async (opts) => {
-    try {
-      const data = await apiPost<QrTokenInfo>(`/api/attendance/token`, { rotate: Boolean(opts?.rotate) });
-      set({ dailyQrToken: data.token || null });
-      return data;
-    } catch {
-      return null;
-    }
-  },
-
-  fetchTodayAttendance: async () => {
-    try {
-      const list = await apiGet<Attendance[]>(`/api/attendance/today`);
-      set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
-    } catch {
-      // Keep local state if backend fails.
-    }
-  },
-
-  fetchAttendanceByDate: async (date) => {
-    try {
-      const list = await apiGet<Attendance[]>(`/api/attendance`, { date });
-      set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
-    } catch {
-      // Keep local state if backend fails.
-    }
-  },
-
-  fetchNotifications: async (studentId) => {
-    try {
-      const list = await apiGet<Notification[]>(`/api/notifications`, studentId ? { studentId } : undefined);
-      set((state) => {
-        const prevById = new Map(state.notifications.map((n) => [n.id, n]));
-        return {
-          notifications: list.map((n) => {
-            const prev = prevById.get(n.id);
-            const readByMe = prev?.readByMe === true ? true : n.readByMe;
-            return {
-              ...n,
-              readByMe,
-              category: (n.category as NotificationCategory) || 'general',
-            };
-          }),
+      assignAllocation: async (data) => {
+        const prev = get().allocations;
+        const optimistic: SeatAllocation = {
+          id: `tmp-${Date.now()}`,
+          libraryId: get().libraryId,
+          seatId: data.seatId,
+          shiftId: data.shiftId,
+          studentId: data.studentId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          status: 'active',
         };
-      });
-    } catch {
-      // Keep local state if backend fails.
-    }
-  },
+        set((s) => ({ allocations: [optimistic, ...s.allocations] }));
+        try {
+          const response = await apiPost<SeatAllocation | ApiEnvelope<SeatAllocation>>(`/api/allocations`, data);
+          const created = unwrapApiData(response);
+          set((s) => ({ allocations: s.allocations.map((a) => (a.id === optimistic.id ? created : a)) }));
+          return { ok: true, allocation: created };
+        } catch (e) {
+          set({ allocations: prev });
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to assign seat' };
+        }
+      },
 
-  fetchNotificationsPage: async (page, limit, studentId) => {
-    // Pagination: avoid loading all data for list screens
-    const list = await apiGet<Notification[]>(`/api/notifications`, { page, limit, ...(studentId ? { studentId } : {}) });
-    return list.map((n) => ({ ...n, category: (n.category as NotificationCategory) || 'general' }));
-  },
+      cancelAllocation: async (allocationId) => {
+        const prev = get().allocations;
+        set((s) => ({ allocations: s.allocations.map((a) => (a.id === allocationId ? { ...a, status: 'cancelled' } : a)) }));
+        try {
+          await apiPatch<SeatAllocation | ApiEnvelope<SeatAllocation>>(`/api/allocations/${allocationId}`, { status: 'cancelled' });
+          return { ok: true };
+        } catch (e) {
+          set({ allocations: prev });
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to unassign' };
+        }
+      },
 
-  sendNotification: async (title, message, targetId = 'all', category: NotificationCategory = 'general') => {
-    try {
-      const created = await apiPost<Notification>(`/api/notifications`, { title, message, targetId, category });
-      set((state) => ({ notifications: [created, ...state.notifications] }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      bulkCreateSeats: async (totalSeats, spaceId) => {
+        try {
+          const response = await apiPost<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats/bulk-create`, { totalSeats, spaceId: spaceId ?? null });
+          const list = unwrapApiData(response);
+          set({ seats: list });
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to create seats' };
+        }
+      },
 
-  sendCommunicationMessage: async ({
-    title,
-    message = '',
-    messageType,
-    audience,
-    studentIds = [],
-    shiftId = null,
-    category = 'general',
-    imageUri = null,
-  }) => {
-    try {
-      const form = new FormData();
-      form.append('title', title.trim());
-      form.append('message', message.trim());
-      form.append('messageType', messageType);
-      form.append('audience', audience);
-      form.append('category', category);
-      if (studentIds.length) form.append('studentIds', JSON.stringify(studentIds));
-      if (shiftId) form.append('shiftId', shiftId);
-      if (imageUri) {
-        const name = imageUri.split('/').pop() || 'message.jpg';
-        form.append('image', { uri: imageUri, name, type: 'image/jpeg' } as unknown as Blob);
-      }
-      const result = await apiPostFormData<{
-        ok: boolean;
-        recipientCount: number;
-      }>(`/api/communications/send`, form);
-      await get().fetchNotifications();
-      return { ok: true, recipientCount: result.recipientCount };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
-    }
-  },
+      setTotalSeats: async (totalSeats) => {
+        try {
+          const response = await apiPost<Seat[] | ApiEnvelope<Seat[]>>(`/api/seats/set-total`, { totalSeats });
+          const list = unwrapApiData(response);
+          set({ seats: list });
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to update seat capacity' };
+        }
+      },
 
-  fetchCommunicationHistory: async () => {
-    try {
-      const res = await apiGet<{ ok: boolean; history: CommunicationCampaign[] }>(`/api/communications/history`);
-      return res.history || [];
-    } catch {
-      return [];
-    }
-  },
+      updateSeatSpace: async (seatId, spaceId) => {
+        const prev = get().seats;
+        set((s) => ({ seats: s.seats.map((x) => (x.id === seatId ? { ...x, spaceId } : x)) }));
+        try {
+          const response = await apiPatch<Seat | ApiEnvelope<Seat>>(`/api/seats/${seatId}`, { spaceId });
+          const updated = unwrapApiData(response);
+          set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
+          return { ok: true };
+        } catch (e) {
+          set({ seats: prev });
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to update seat' };
+        }
+      },
 
-  fetchCommunicationStats: async () => {
-    try {
-      const res = await apiGet<{ ok: boolean; stats: CommunicationStats }>(`/api/communications/stats`);
-      return res.stats || null;
-    } catch {
-      return null;
-    }
-  },
+      assignSeat: async (seatId, studentId) => {
+        // Optimistic UI: update immediately, rollback on error
+        const prev = get().seats;
+        set((s) => ({
+          seats: s.seats.map((x) => (x.id === seatId ? { ...x, status: 'occupied', studentId } : x)),
+        }));
+        try {
+          // Backend call: POST /api/seats/assign (alias supported)
+          const response = await apiPost<Seat | ApiEnvelope<Seat>>(`/api/seats/assign`, { seatId, studentId });
+          const updated = unwrapApiData(response);
+          set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
+          return { ok: true };
+        } catch (e) {
+          set({ seats: prev });
+          const err = e as ApiError;
+          return { ok: false, message: err?.message };
+        }
+      },
 
-  previewCommunicationRecipientCount: async ({ audience, studentIds = [], shiftId = null }) => {
-    if (audience === 'selected' && studentIds.length === 0) return 0;
-    if (audience === 'shift' && !shiftId) return 0;
-    try {
-      const res = await apiGet<{ ok: boolean; count: number }>(`/api/communications/preview-count`, {
+      unassignSeat: async (seatId) => {
+        const prev = get().seats;
+        set((s) => ({
+          seats: s.seats.map((x) => (x.id === seatId ? { ...x, status: 'available', studentId: null } : x)),
+        }));
+        try {
+          const response = await apiPost<Seat | ApiEnvelope<Seat>>(`/api/seats/unassign`, { seatId });
+          const updated = unwrapApiData(response);
+          set((s) => ({ seats: s.seats.map((x) => (x.id === updated.id ? updated : x)) }));
+          return { ok: true };
+        } catch (e) {
+          set({ seats: prev });
+          const err = e as ApiError;
+          return { ok: false, message: err?.message };
+        }
+      },
+
+      login: async (usernameOrMobile, pinOrPassword, opts) => {
+        try {
+          const mode = opts?.mode ?? 'pin';
+          const libraryCode = opts?.libraryCode ?? get().libraryCode ?? undefined;
+
+          /**
+           * Connection: POST /api/auth/login
+           * - Axios service attaches Authorization automatically on future requests
+           * - For login itself: we send credentials only (no token yet)
+           */
+          const response = await apiPost<unknown>(`/api/auth/login`, {
+            usernameOrMobile,
+            ...(mode === 'password' ? { password: pinOrPassword } : { pin: pinOrPassword }),
+            ...(mode === 'password' ? { role: 'library' } : { role: 'student' }),
+            ...(libraryCode ? { libraryCode } : {}),
+          });
+          const data = unwrapAuthLoginPayload(response);
+          if (!data) {
+            return { ok: false, message: 'Invalid login response from server' };
+          }
+          const hydrated = await hydrateSessionAfterAuth(get, set, data, libraryCode);
+          if (!hydrated.ok) return hydrated;
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          const { formatReachabilityError, isNetworkFailure } = await import('./services/networkError');
+          if (isNetworkFailure(e)) {
+            return { ok: false, message: formatReachabilityError(e) };
+          }
+          const msg = err?.message || 'Network error';
+          return { ok: false, message: msg };
+        }
+      },
+
+      adminLogin: async (username, pin) => {
+        try {
+          const response = await apiPost<unknown>(`/api/admin/login`, { username, pin });
+          const data = unwrapAuthLoginPayload(response);
+          if (!data?.user) {
+            return { ok: false, message: 'Invalid login response from server' };
+          }
+          const authenticatedUser = { ...data.user, role: 'admin' as const };
+          const token = data.authToken || (data as { accessToken?: string }).accessToken || null;
+          const refreshToken = data.refreshToken || null;
+          void import('./services/authTokenHolder').then(({ setAuthTokens }) => {
+            setAuthTokens({ accessToken: token, refreshToken });
+          });
+          set((state) => ({
+            currentUser: authenticatedUser,
+            authToken: token,
+            token,
+            refreshToken,
+            role: 'admin',
+            libraryId: null,
+            libraryCode: null,
+            users: [authenticatedUser, ...state.users.filter((u) => u.role === 'student')],
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Network error' };
+        }
+      },
+
+      logout: () => {
+        const prevLibraryId = get().libraryId;
+        void import('./services/libraryContact').then(({ clearLibraryContactCache }) =>
+          clearLibraryContactCache(prevLibraryId)
+        );
+        void import('./services/authTokenHolder').then(({ clearAuthTokens }) => clearAuthTokens());
+        set({
+          currentUser: null,
+          authToken: null,
+          token: null,
+          refreshToken: null,
+          role: null,
+          libraryId: null,
+          libraryCode: null,
+          studentPayments: [],
+          renewalRequests: [],
+          pendingRenewalCount: 0,
+          attendances: [],
+          notifications: [],
+          lastNotifSeenAt: null,
+        });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { resetAuthNavigation } = require('./navigation/rootNavigation');
+          resetAuthNavigation('Login');
+        } catch {
+          /* navigation not mounted yet */
+        }
+      },
+
+      patchCurrentUser: (patch) =>
+        set((state) => ({
+          currentUser: state.currentUser ? { ...state.currentUser, ...patch } : (state.role ? ({ role: state.role, ...patch } as any) : state.currentUser),
+        })),
+
+      fetchMyProfile: async () => {
+        const { currentUser: cu, role, libraryId } = get();
+        const effectiveRole = cu?.role || role;
+        if (!effectiveRole) return { ok: false, message: 'Not logged in' };
+        try {
+          if (effectiveRole === 'library') {
+            const hasSubscriptionMeta = Boolean(
+              cu?.subscriptionStatus && (cu?.plan !== undefined || (cu as any)?.currentPlanKey !== undefined)
+            );
+
+            // Fast path: profile only (avoids heavy subscription/me on Profile/Settings open).
+            if (hasSubscriptionMeta && cu?.ownerName && cu?.email) {
+              const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
+              const p = res.profile;
+              set({
+                role: 'library',
+                libraryId: cu?.id || libraryId || p?.id || null,
+                currentUser: {
+                  ...(cu || ({} as any)),
+                  id: cu?.id || libraryId || p?.id || '',
+                  role: 'library',
+                  name: p?.libraryName ?? cu?.name,
+                  ownerName: p?.name ?? cu?.ownerName,
+                  email: p?.email ?? cu?.email,
+                  phone: p?.phone ?? cu?.phone,
+                  isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
+                  emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
+                  address: p?.address ?? cu?.address,
+                  city: p?.city ?? cu?.city,
+                  logoUrl: p?.logoUrl ?? cu?.logoUrl,
+                  plan: p?.plan ?? cu?.plan,
+                  planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
+                  subscriptionStatus: p?.subscriptionStatus ?? cu?.subscriptionStatus,
+                  attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
+                } as any,
+              });
+              return { ok: true };
+            }
+
+            // Full path: subscription/me (expiry sync + plan gating fields).
+            const { syncSubscriptionMe } = await import('./services/subscriptionSync');
+            const me = await syncSubscriptionMe({ force: true });
+            if (me?.user) {
+              set({
+                currentUser: { ...me.user, role: 'library' } as User,
+                role: 'library',
+                libraryId: String(me.user.id || libraryId || cu?.id || ''),
+              });
+              return { ok: true };
+            }
+
+            const res = await apiGet<{ ok: boolean; profile: any }>(`/api/library/profile`);
+            const p = res.profile;
+            set({
+              role: 'library',
+              libraryId: cu?.id || libraryId || p?.id || null,
+              currentUser: {
+                ...(cu || ({} as any)),
+                id: cu?.id || libraryId || p?.id || '',
+                role: 'library',
+                name: p?.libraryName ?? cu?.name,
+                ownerName: p?.name ?? cu?.ownerName,
+                email: p?.email ?? cu?.email,
+                phone: p?.phone ?? cu?.phone,
+                isEmailVerified: Boolean(p?.isEmailVerified ?? (cu as any)?.isEmailVerified),
+                emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
+                address: p?.address ?? cu?.address,
+                city: p?.city ?? cu?.city,
+                logoUrl: p?.logoUrl ?? cu?.logoUrl,
+                plan: p?.plan ?? cu?.plan,
+                planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
+                attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
+              } as any,
+            });
+            return { ok: true };
+          }
+
+          if (effectiveRole === 'student') {
+            const res = await apiGet<{ ok: boolean; student: any }>(`/api/student/me`);
+            const s = res.student;
+            set({
+              currentUser: {
+                ...(cu || ({} as any)),
+                ...s,
+                role: 'student',
+                photoUrl: s?.photoUrl ?? (cu as any)?.photoUrl,
+              } as any,
+            });
+            return { ok: true };
+          }
+
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load profile' };
+        }
+      },
+
+      sendForgotPasswordOtp: async (email) => {
+        try {
+          const response = await apiPost<{
+            ok: boolean;
+            message?: string;
+            expiryMinutes?: number;
+            resendAfterSeconds?: number;
+          }>(`/api/auth/forgot-password/send-otp`, { email });
+          return {
+            ok: true,
+            message: response.message,
+            expiryMinutes: response.expiryMinutes,
+            resendAfterSeconds: response.resendAfterSeconds,
+          };
+        } catch (e) {
+          const err = e as ApiError;
+          return {
+            ok: false,
+            message: err?.message || `Backend unavailable (${API_URL})`,
+          };
+        }
+      },
+
+      verifyForgotPasswordOtp: async (email, otp) => {
+        try {
+          const response = await apiPost<{
+            ok: boolean;
+            resetSessionToken?: string;
+            sessionExpiresMinutes?: number;
+          }>(`/api/auth/forgot-password/verify-otp`, { email, otp });
+          return {
+            ok: true,
+            resetSessionToken: response.resetSessionToken,
+            sessionExpiresMinutes: response.sessionExpiresMinutes,
+          };
+        } catch (e) {
+          const err = e as ApiError;
+          const attemptsRemaining =
+            typeof (e as ApiError).details?.attemptsRemaining === 'number'
+              ? ((e as ApiError).details!.attemptsRemaining as number)
+              : undefined;
+          return {
+            ok: false,
+            message: err?.message || `Backend unavailable (${API_URL})`,
+            attemptsRemaining,
+          };
+        }
+      },
+
+      completeForgotPasswordReset: async (email, resetSessionToken, newPassword) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string }>(`/api/auth/forgot-password/reset-password`, {
+            email,
+            resetSessionToken,
+            newPassword,
+          });
+          return { ok: true, message: response.message };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      changeLibraryPassword: async (currentPassword, newPassword, confirmPassword) => {
+        try {
+          const response = await apiPost<{ success?: boolean; data?: unknown; message?: string }>(
+            `/api/auth/change-password`,
+            { currentPassword, newPassword, confirmPassword }
+          );
+          const message =
+            typeof response?.message === 'string' && response.message.trim()
+              ? response.message.trim()
+              : 'Password updated successfully';
+          return { ok: true, message };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      // Email OTP
+      sendEmailOtp: async ({ email, purpose = 'verification', role }) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
+            `/api/auth/send-email-otp`,
+            { email, purpose, role }
+          );
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      verifyEmailOtp: async ({ email, otp, purpose = 'verification' }) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string }>(
+            `/api/auth/verify-email-otp`,
+            { email, otp, purpose }
+          );
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      resendEmailOtp: async ({ email, purpose = 'verification' }) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; expiryMinutes?: number; resendAfterSeconds?: number }>(
+            `/api/auth/resend-email-otp`,
+            { email, purpose }
+          );
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      // Library Email Verification
+      sendLibraryEmailVerification: async () => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
+            `/api/library/send-verification-email`,
+            {}
+          );
+          if (response.isEmailVerified !== undefined) {
+            set((state) => ({
+              currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+            }));
+          }
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      verifyLibraryEmail: async (otp: string) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; emailVerifiedAt?: string | null }>(
+            `/api/library/verify-email`,
+            { otp }
+          );
+          if (response.isEmailVerified !== undefined) {
+            set((state) => ({
+              currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified, emailVerifiedAt: response.emailVerifiedAt } : state.currentUser,
+            }));
+          }
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      // Student Email Verification
+      sendStudentEmailVerification: async () => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean; expiryMinutes?: number; resendAfterSeconds?: number }>(
+            `/api/student/me/send-verification-email`,
+            {}
+          );
+          if (response.isEmailVerified !== undefined) {
+            set((state) => ({
+              currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+            }));
+          }
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      verifyStudentEmail: async (otp: string) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; isEmailVerified?: boolean }>(
+            `/api/student/me/verify-email`,
+            { otp }
+          );
+          if (response.isEmailVerified !== undefined) {
+            set((state) => ({
+              currentUser: state.currentUser ? { ...state.currentUser, isEmailVerified: response.isEmailVerified } : state.currentUser,
+            }));
+          }
+          return response;
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      // Student - Email
+      updateStudentEmail: async (email: string) => {
+        try {
+          const response = await apiPost<{ ok: boolean; message?: string; student?: any }>(
+            `/api/student/me`,
+            { email }
+          );
+          if (response.student) {
+            set((state) => ({
+              currentUser: state.currentUser ? { ...state.currentUser, email: response.student.email, isEmailVerified: response.student.isEmailVerified } : state.currentUser,
+            }));
+          }
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      fetchStudents: async () => {
+        try {
+          const students = await apiGet<User[]>(`/api/students`);
+          set((state) => ({ users: mergeStudentsInUsers(state.users, students) }));
+        } catch {
+          // Keep existing local users when backend is unavailable.
+        }
+      },
+
+      fetchStudentsPage: async (page, limit) => {
+        // Pagination: avoid loading all data for list screens
+        // Multi-tenant backend filters by token automatically.
+        return await apiGet<User[]>(`/api/students`, { page, limit });
+      },
+
+      addStudent: async (studentData) => {
+        try {
+          const created = await apiPost<User>(`/api/students`, studentData);
+          set((state) => ({ users: [...state.users.filter((u) => u.role !== 'student' || u.id !== created.id), created] }));
+          return { ok: true, student: created };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      updateStudent: async (id, data) => {
+        try {
+          const updated = await apiPut<User>(`/api/students/${id}`, data);
+          set((state) => ({
+            users: state.users.map((u) => (u.id === id ? updated : u)),
+            currentUser: state.currentUser?.id === id ? updated : state.currentUser,
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      deleteStudent: async (id) => {
+        try {
+          await apiDelete(`/api/students/${id}`);
+
+          set((state) => ({
+            users: state.users.filter((u) => u.id !== id),
+            currentUser: state.currentUser?.id === id ? null : state.currentUser,
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      uploadStudentPhoto: async (id, localUri) => {
+        try {
+          const formData = new FormData();
+          const filename = localUri.split('/').pop() ?? 'photo.jpg';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          // React Native FormData accepts this object shape for file uploads
+          formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
+
+          const response = await api.post<User>(`/api/students/${id}/photo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const updated = response.data;
+          set((state) => ({
+            users: state.users.map((u) => (u.id === id ? updated : u)),
+            currentUser: state.currentUser?.id === id ? updated : state.currentUser,
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      uploadMyPhoto: async (localUri) => {
+        try {
+          const formData = new FormData();
+          const filename = localUri.split('/').pop() ?? 'photo.jpg';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
+
+          const response = await api.post<{ ok: boolean; student: User }>(`/api/student/me/photo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const updated = response.data?.student;
+          if (updated?.id) {
+            set((state) => ({
+              users: state.users.map((u) => (u.id === updated.id ? updated : u)),
+              currentUser: state.currentUser?.id === updated.id ? updated : state.currentUser,
+            }));
+          }
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      deleteMyAccount: async () => {
+        try {
+          await apiDelete(`/api/student/me`);
+          get().logout();
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      toggleBlockStudent: async (id) => {
+        try {
+          const updated = await apiPatch<User>(`/api/students/${id}/block`);
+          set((state) => ({
+            users: state.users.map((u) => (u.id === id ? updated : u)),
+            currentUser: state.currentUser?.id === id ? updated : state.currentUser,
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      generateDailyQr: async (opts) => {
+        try {
+          const data = await apiPost<QrTokenInfo>(`/api/attendance/token`, { rotate: Boolean(opts?.rotate) });
+          set({ dailyQrToken: data.token || null });
+          return data;
+        } catch {
+          return null;
+        }
+      },
+
+      fetchTodayAttendance: async () => {
+        try {
+          const list = await apiGet<Attendance[]>(`/api/attendance/today`);
+          set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
+        } catch {
+          // Keep local state if backend fails.
+        }
+      },
+
+      fetchAttendanceByDate: async (date) => {
+        try {
+          const list = await apiGet<Attendance[]>(`/api/attendance`, { date });
+          set((state) => (attendanceListUnchanged(state.attendances, list) ? state : { attendances: list }));
+        } catch {
+          // Keep local state if backend fails.
+        }
+      },
+
+      fetchNotifications: async (studentId) => {
+        try {
+          const list = await apiGet<Notification[]>(`/api/notifications`, studentId ? { studentId } : undefined);
+          set((state) => {
+            const prevById = new Map(state.notifications.map((n) => [n.id, n]));
+            return {
+              notifications: list.map((n) => {
+                const prev = prevById.get(n.id);
+                const readByMe = prev?.readByMe === true ? true : n.readByMe;
+                return {
+                  ...n,
+                  readByMe,
+                  category: (n.category as NotificationCategory) || 'general',
+                };
+              }),
+            };
+          });
+        } catch {
+          // Keep local state if backend fails.
+        }
+      },
+
+      fetchNotificationsPage: async (page, limit, studentId) => {
+        // Pagination: avoid loading all data for list screens
+        const list = await apiGet<Notification[]>(`/api/notifications`, { page, limit, ...(studentId ? { studentId } : {}) });
+        return list.map((n) => ({ ...n, category: (n.category as NotificationCategory) || 'general' }));
+      },
+
+      sendNotification: async (title, message, targetId = 'all', category: NotificationCategory = 'general') => {
+        try {
+          const created = await apiPost<Notification>(`/api/notifications`, { title, message, targetId, category });
+          set((state) => ({ notifications: [created, ...state.notifications] }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      sendCommunicationMessage: async ({
+        title,
+        message = '',
+        messageType,
         audience,
-        ...(studentIds.length ? { studentIds: studentIds.join(',') } : {}),
-        ...(shiftId ? { shiftId } : {}),
-      });
-      return res.count ?? 0;
-    } catch {
-      return 0;
-    }
-  },
+        studentIds = [],
+        shiftId = null,
+        category = 'general',
+        imageUri = null,
+      }) => {
+        try {
+          const form = new FormData();
+          form.append('title', title.trim());
+          form.append('message', message.trim());
+          form.append('messageType', messageType);
+          form.append('audience', audience);
+          form.append('category', category);
+          if (studentIds.length) form.append('studentIds', JSON.stringify(studentIds));
+          if (shiftId) form.append('shiftId', shiftId);
+          if (imageUri) {
+            const name = imageUri.split('/').pop() || 'message.jpg';
+            form.append('image', { uri: imageUri, name, type: 'image/jpeg' } as unknown as Blob);
+          }
+          const result = await apiPostFormData<{
+            ok: boolean;
+            recipientCount: number;
+          }>(`/api/communications/send`, form);
+          await get().fetchNotifications();
+          return { ok: true, recipientCount: result.recipientCount };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
 
-  markNotificationRead: async (id) => {
-    if (!id || id.startsWith('sys-')) return { ok: true };
-    set((s) => ({
-      notifications: s.notifications.map((n) =>
-        n.id === id ? { ...n, readByMe: true } : n
-      ),
-    }));
-    try {
-      await apiPatch<{ ok?: boolean; readByMe?: boolean }>(`/api/notifications/${id}/read`, {});
-      return { ok: true };
-    } catch {
-      return { ok: false };
-    }
-  },
+      fetchCommunicationHistory: async () => {
+        try {
+          const res = await apiGet<{ ok: boolean; history: CommunicationCampaign[] }>(`/api/communications/history`);
+          return res.history || [];
+        } catch {
+          return [];
+        }
+      },
 
-  markAllNotificationsRead: async (studentId) => {
-    const { notifications, lastNotifSeenAt } = get();
-    const unreadIds = notifications
-      .filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt))
-      .map((n) => n.id);
+      fetchCommunicationStats: async () => {
+        try {
+          const res = await apiGet<{ ok: boolean; stats: CommunicationStats }>(`/api/communications/stats`);
+          return res.stats || null;
+        } catch {
+          return null;
+        }
+      },
 
-    if (unreadIds.length === 0) {
-      set({ lastNotifSeenAt: new Date().toISOString() });
-      return { ok: true, count: 0 };
-    }
+      previewCommunicationRecipientCount: async ({ audience, studentIds = [], shiftId = null }) => {
+        if (audience === 'selected' && studentIds.length === 0) return 0;
+        if (audience === 'shift' && !shiftId) return 0;
+        try {
+          const res = await apiGet<{ ok: boolean; count: number }>(`/api/communications/preview-count`, {
+            audience,
+            ...(studentIds.length ? { studentIds: studentIds.join(',') } : {}),
+            ...(shiftId ? { shiftId } : {}),
+          });
+          return res.count ?? 0;
+        } catch {
+          return 0;
+        }
+      },
 
-    const idSet = new Set(unreadIds);
-    set({
-      lastNotifSeenAt: new Date().toISOString(),
-      notifications: notifications.map((n) => (idSet.has(n.id) ? { ...n, readByMe: true } : n)),
-    });
+      markNotificationRead: async (id) => {
+        if (!id || id.startsWith('sys-')) return { ok: true };
+        set((s) => ({
+          notifications: s.notifications.map((n) =>
+            n.id === id ? { ...n, readByMe: true } : n
+          ),
+        }));
+        try {
+          await apiPatch<{ ok?: boolean; readByMe?: boolean }>(`/api/notifications/${id}/read`, {});
+          return { ok: true };
+        } catch {
+          return { ok: false };
+        }
+      },
 
-    const results = await Promise.all(
-      unreadIds.map((id) =>
-        apiPatch<{ ok?: boolean }>(`/api/notifications/${id}/read`, {}).catch(() => null)
-      )
-    );
-    const failed = results.filter((r) => r === null).length;
-    return { ok: failed === 0, count: unreadIds.length };
-  },
+      markAllNotificationsRead: async (studentId) => {
+        const { notifications, lastNotifSeenAt } = get();
+        const unreadIds = notifications
+          .filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt))
+          .map((n) => n.id);
 
-  fetchRenewContext: async () => {
-    if (get().role !== 'student') return { ok: false, message: 'Students only' };
-    try {
-      const res = await apiGet<{ ok: boolean } & RenewContext>(`/api/student/renew-context`);
-      return { ok: true, context: res };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load renewal options' };
-    }
-  },
+        if (unreadIds.length === 0) {
+          set({ lastNotifSeenAt: new Date().toISOString() });
+          return { ok: true, count: 0 };
+        }
 
-  fetchRenewDashboard: async () => {
-    if (get().role !== 'student') return { ok: false, message: 'Students only' };
-    try {
-      const res = await apiGet<{
-        ok: boolean;
-        requests: RenewalRequest[];
-      } & RenewContext>(`/api/student/renew-dashboard`);
-      const { requests, ...ctx } = res;
-      const context: RenewContext = ctx;
-      set({ renewalRequests: requests || [] });
-      return { ok: true, context, requests: requests || [] };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load renewal data' };
-    }
-  },
+        const idSet = new Set(unreadIds);
+        set({
+          lastNotifSeenAt: new Date().toISOString(),
+          notifications: notifications.map((n) => (idSet.has(n.id) ? { ...n, readByMe: true } : n)),
+        });
 
-  submitRenewalRequest: async (payload) => {
-    try {
-      const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(`/api/student/renew-request`, payload);
-      const request = res.request;
-      set((s) => ({
-        renewalRequests: [request, ...s.renewalRequests.filter((r) => r.id !== request.id)],
-      }));
-      return { ok: true, request };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to submit request' };
-    }
-  },
+        const results = await Promise.all(
+          unreadIds.map((id) =>
+            apiPatch<{ ok?: boolean }>(`/api/notifications/${id}/read`, {}).catch(() => null)
+          )
+        );
+        const failed = results.filter((r) => r === null).length;
+        return { ok: failed === 0, count: unreadIds.length };
+      },
 
-  fetchMyRenewalRequests: async () => {
-    if (get().role !== 'student') return { ok: true, requests: [] };
-    try {
-      const res = await apiGet<{ ok: boolean; requests: RenewalRequest[] }>(`/api/student/renew-requests`);
-      set({ renewalRequests: res.requests || [] });
-      return { ok: true, requests: res.requests || [] };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load requests' };
-    }
-  },
+      fetchRenewContext: async () => {
+        if (get().role !== 'student') return { ok: false, message: 'Students only' };
+        try {
+          const res = await apiGet<{ ok: boolean } & RenewContext>(`/api/student/renew-context`);
+          return { ok: true, context: res };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load renewal options' };
+        }
+      },
 
-  fetchMyStudentPayments: async () => {
-    try {
-      const res = await apiGet<{ ok: boolean; payments: StudentPaymentRecord[] }>(
-        `/api/student/payments`
-      );
-      set({ studentPayments: res.payments || [] });
-      return { ok: true, payments: res.payments || [] };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load payments' };
-    }
-  },
+      fetchRenewDashboard: async () => {
+        if (get().role !== 'student') return { ok: false, message: 'Students only' };
+        try {
+          const res = await apiGet<{
+            ok: boolean;
+            requests: RenewalRequest[];
+          } & RenewContext>(`/api/student/renew-dashboard`);
+          const { requests, ...ctx } = res;
+          const context: RenewContext = ctx;
+          set({ renewalRequests: requests || [] });
+          return { ok: true, context, requests: requests || [] };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load renewal data' };
+        }
+      },
 
-  fetchLibraryRenewalRequests: async (status = 'pending') => {
-    try {
-      const res = await apiGet<{
-        ok: boolean;
-        requests: RenewalRequest[];
-        pendingCount: number;
-      }>(`/api/library/renew-requests`, { status });
-      set({
-        renewalRequests: res.requests || [],
-        pendingRenewalCount: res.pendingCount ?? 0,
-      });
-      return {
-        ok: true,
-        requests: res.requests || [],
-        pendingCount: res.pendingCount ?? 0,
-      };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to load renewal requests' };
-    }
-  },
+      submitRenewalRequest: async (payload) => {
+        try {
+          const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(`/api/student/renew-request`, payload);
+          const request = res.request;
+          set((s) => ({
+            renewalRequests: [request, ...s.renewalRequests.filter((r) => r.id !== request.id)],
+          }));
+          return { ok: true, request };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to submit request' };
+        }
+      },
 
-  approveRenewalRequest: async (id, data) => {
-    try {
-      const res = await apiPost<{
-        ok: boolean;
-        request: RenewalRequest;
-        student?: { id: string; expiryDate: string; feeStatus: string; feeAmount: number };
-      }>(`/api/library/renew-requests/${id}/approve`, data || {});
-      set((s) => ({
-        renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
-        pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
-        users: res.student
-          ? s.users.map((u) =>
-              u.id === res.student!.id
-                ? {
+      fetchMyRenewalRequests: async () => {
+        if (get().role !== 'student') return { ok: true, requests: [] };
+        try {
+          const res = await apiGet<{ ok: boolean; requests: RenewalRequest[] }>(`/api/student/renew-requests`);
+          set({ renewalRequests: res.requests || [] });
+          return { ok: true, requests: res.requests || [] };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load requests' };
+        }
+      },
+
+      fetchMyStudentPayments: async () => {
+        try {
+          const res = await apiGet<{ ok: boolean; payments: StudentPaymentRecord[] }>(
+            `/api/student/payments`
+          );
+          set({ studentPayments: res.payments || [] });
+          return { ok: true, payments: res.payments || [] };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load payments' };
+        }
+      },
+
+      fetchLibraryRenewalRequests: async (status = 'pending') => {
+        try {
+          const res = await apiGet<{
+            ok: boolean;
+            requests: RenewalRequest[];
+            pendingCount: number;
+          }>(`/api/library/renew-requests`, { status });
+          set({
+            renewalRequests: res.requests || [],
+            pendingRenewalCount: res.pendingCount ?? 0,
+          });
+          return {
+            ok: true,
+            requests: res.requests || [],
+            pendingCount: res.pendingCount ?? 0,
+          };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to load renewal requests' };
+        }
+      },
+
+      approveRenewalRequest: async (id, data) => {
+        try {
+          const res = await apiPost<{
+            ok: boolean;
+            request: RenewalRequest;
+            student?: { id: string; expiryDate: string; feeStatus: string; feeAmount: number };
+          }>(`/api/library/renew-requests/${id}/approve`, data || {});
+          set((s) => ({
+            renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
+            pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
+            users: res.student
+              ? s.users.map((u) =>
+                u.id === res.student!.id
+                  ? {
                     ...u,
                     expiryDate: res.student!.expiryDate,
                     feeStatus:
@@ -1819,156 +1822,156 @@ export const useAppStore = create<AppState>()(
                           : 'Pending',
                     feeAmount: res.student!.feeAmount,
                   }
-                : u
-            )
-          : s.users,
-      }));
-      if (res.student && get().currentUser?.id === res.student.id) {
-        set((s) => ({
-          currentUser: s.currentUser
-            ? {
-                ...s.currentUser,
-                expiryDate: res.student!.expiryDate,
-                feeAmount: res.student!.feeAmount,
-                feeStatus:
-                  res.student!.feeStatus === 'paid'
-                    ? 'Paid'
-                    : res.student!.feeStatus === 'partial'
-                      ? 'Half Paid'
-                      : 'Pending',
-              }
-            : s.currentUser,
-        }));
-      }
-      await get().fetchNotifications();
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to approve request' };
-    }
-  },
+                  : u
+              )
+              : s.users,
+          }));
+          if (res.student && get().currentUser?.id === res.student.id) {
+            set((s) => ({
+              currentUser: s.currentUser
+                ? {
+                  ...s.currentUser,
+                  expiryDate: res.student!.expiryDate,
+                  feeAmount: res.student!.feeAmount,
+                  feeStatus:
+                    res.student!.feeStatus === 'paid'
+                      ? 'Paid'
+                      : res.student!.feeStatus === 'partial'
+                        ? 'Half Paid'
+                        : 'Pending',
+                }
+                : s.currentUser,
+            }));
+          }
+          await get().fetchNotifications();
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to approve request' };
+        }
+      },
 
-  rejectRenewalRequest: async (id, reason) => {
-    try {
-      const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(
-        `/api/library/renew-requests/${id}/reject`,
-        { reason }
-      );
-      set((s) => ({
-        renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
-        pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
-      }));
-      return { ok: true };
-    } catch (e) {
-      const err = e as ApiError;
-      return { ok: false, message: err?.message || 'Failed to reject request' };
-    }
-  },
+      rejectRenewalRequest: async (id, reason) => {
+        try {
+          const res = await apiPost<{ ok: boolean; request: RenewalRequest }>(
+            `/api/library/renew-requests/${id}/reject`,
+            { reason }
+          );
+          set((s) => ({
+            renewalRequests: s.renewalRequests.map((r) => (r.id === id ? res.request : r)),
+            pendingRenewalCount: Math.max(0, s.pendingRenewalCount - 1),
+          }));
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || 'Failed to reject request' };
+        }
+      },
 
-  fetchStudentAttendance: async (studentId, year, month) => {
-    if (get().role !== 'student') return;
-    try {
-      const now = new Date();
-      const y = year ?? now.getFullYear();
-      const m = month ?? (now.getMonth() + 1);
-      const items = await apiGet<{ date: string; status: string }[]>(`/api/attendance/student/${studentId}`, { year: y, month: m });
-      const mapped: Attendance[] = items.map((item) => ({
-        id: `${studentId}-${item.date}`,
-        studentId,
-        date: item.date,
-      }));
-      set((state) => {
-        // Merge: keep non-student or other-month records, add fresh ones
-        const others = state.attendances.filter(
-          (a) => a.studentId !== studentId || !a.date.startsWith(`${y}-${String(m).padStart(2, '0')}`)
-        );
-        return { attendances: [...others, ...mapped] };
-      });
-    } catch {
-      // Silently ignore — user sees stale data but app doesn't crash
-    }
-  },
+      fetchStudentAttendance: async (studentId, year, month) => {
+        if (get().role !== 'student') return;
+        try {
+          const now = new Date();
+          const y = year ?? now.getFullYear();
+          const m = month ?? (now.getMonth() + 1);
+          const items = await apiGet<{ date: string; status: string }[]>(`/api/attendance/student/${studentId}`, { year: y, month: m });
+          const mapped: Attendance[] = items.map((item) => ({
+            id: `${studentId}-${item.date}`,
+            studentId,
+            date: item.date,
+          }));
+          set((state) => {
+            // Merge: keep non-student or other-month records, add fresh ones
+            const others = state.attendances.filter(
+              (a) => a.studentId !== studentId || !a.date.startsWith(`${y}-${String(m).padStart(2, '0')}`)
+            );
+            return { attendances: [...others, ...mapped] };
+          });
+        } catch {
+          // Silently ignore — user sees stale data but app doesn't crash
+        }
+      },
 
-  markAttendance: async (token) => {
-    const { currentUser, authToken } = get();
-    if (!currentUser || currentUser.role !== 'student') {
-      return { ok: false, message: 'Only students can mark attendance' };
-    }
-    if (!authToken) {
-      return { ok: false, message: 'Unauthorized. Please login again.' };
-    }
+      markAttendance: async (token) => {
+        const { currentUser, authToken } = get();
+        if (!currentUser || currentUser.role !== 'student') {
+          return { ok: false, message: 'Only students can mark attendance' };
+        }
+        if (!authToken) {
+          return { ok: false, message: 'Unauthorized. Please login again.' };
+        }
 
-    const normalized = prepareAttendanceQrPayload(token);
+        const normalized = prepareAttendanceQrPayload(token);
 
-    try {
-      const data = await apiPost<{ ok: boolean; alreadyMarked?: boolean; message?: string }>(`/api/attendance/mark`, { token: normalized });
-      const { currentUser: cu } = get();
-      if (cu) await get().fetchStudentAttendance(cu.id);
-      return { ok: true, alreadyMarked: Boolean(data.alreadyMarked), message: data.message };
-    } catch (e) {
-      const err = e as ApiError;
-      return {
-        ok: false,
-        membershipExpired: Boolean(err.membershipExpired || err.code === 'MEMBERSHIP_EXPIRED'),
-        message: err?.message || `Backend unavailable (${API_URL})`,
-      };
-    }
-  },
+        try {
+          const data = await apiPost<{ ok: boolean; alreadyMarked?: boolean; message?: string }>(`/api/attendance/mark`, { token: normalized });
+          const { currentUser: cu } = get();
+          if (cu) await get().fetchStudentAttendance(cu.id);
+          return { ok: true, alreadyMarked: Boolean(data.alreadyMarked), message: data.message };
+        } catch (e) {
+          const err = e as ApiError;
+          return {
+            ok: false,
+            membershipExpired: Boolean(err.membershipExpired || err.code === 'MEMBERSHIP_EXPIRED'),
+            message: err?.message || `Backend unavailable (${API_URL})`,
+          };
+        }
+      },
 
-  getTodayAttendance: () => {
-    const { attendances } = get();
-    const today = new Date();
-    return attendances.filter((a) => isSameDay(new Date(a.date), today));
-  },
+      getTodayAttendance: () => {
+        const { attendances } = get();
+        const today = new Date();
+        return attendances.filter((a) => isSameDay(new Date(a.date), today));
+      },
 
-  getStudentAttendance: (studentId) => {
-    const { attendances } = get();
-    return attendances.filter((a) => a.studentId === studentId);
-  },
+      getStudentAttendance: (studentId) => {
+        const { attendances } = get();
+        return attendances.filter((a) => a.studentId === studentId);
+      },
 
-  getStudentNotifications: (studentId) => {
-    const { notifications, users, currentUser } = get();
-    // Fallback to currentUser so the function works even if users list isn't populated yet
-    const student = users.find((u) => u.id === studentId)
-      ?? (currentUser?.id === studentId ? currentUser : null);
-    if (!student) return [];
+      getStudentNotifications: (studentId) => {
+        const { notifications, users, currentUser } = get();
+        // Fallback to currentUser so the function works even if users list isn't populated yet
+        const student = users.find((u) => u.id === studentId)
+          ?? (currentUser?.id === studentId ? currentUser : null);
+        if (!student) return [];
 
-    const studentNotifs = notifications.filter((n) => n.targetId === 'all' || n.targetId === studentId);
+        const studentNotifs = notifications.filter((n) => n.targetId === 'all' || n.targetId === studentId);
 
-    // Auto-generate expiry reminders
-    const daysRemaining = differenceInDays(new Date(student.expiryDate), new Date());
-    if (daysRemaining <= 3 && daysRemaining >= 0) {
-      studentNotifs.unshift({
-        id: 'sys-reminder',
-        title: 'Membership Expiring Soon',
-        message: `Your library membership will expire in ${daysRemaining} days. Please renew soon.`,
-        date: new Date().toISOString(),
-        targetId: studentId,
-        category: 'rules',
-      });
-    } else if (daysRemaining < 0) {
-      studentNotifs.unshift({
-        id: 'sys-expired',
-        title: 'Membership Expired',
-        message: `Your library membership has expired. Please renew to continue access.`,
-        date: new Date().toISOString(),
-        targetId: studentId,
-        category: 'rules',
-      });
-    }
+        // Auto-generate expiry reminders
+        const daysRemaining = differenceInDays(new Date(student.expiryDate), new Date());
+        if (daysRemaining <= 3 && daysRemaining >= 0) {
+          studentNotifs.unshift({
+            id: 'sys-reminder',
+            title: 'Membership Expiring Soon',
+            message: `Your library membership will expire in ${daysRemaining} days. Please renew soon.`,
+            date: new Date().toISOString(),
+            targetId: studentId,
+            category: 'rules',
+          });
+        } else if (daysRemaining < 0) {
+          studentNotifs.unshift({
+            id: 'sys-expired',
+            title: 'Membership Expired',
+            message: `Your library membership has expired. Please renew to continue access.`,
+            date: new Date().toISOString(),
+            targetId: studentId,
+            category: 'rules',
+          });
+        }
 
-    return studentNotifs;
-  },
+        return studentNotifs;
+      },
 
-  markNotifsRead: () => {
-    set({ lastNotifSeenAt: new Date().toISOString() });
-  },
+      markNotifsRead: () => {
+        set({ lastNotifSeenAt: new Date().toISOString() });
+      },
 
-  getUnreadNotifCount: (studentId) => {
-    const { notifications, lastNotifSeenAt } = get();
-    return notifications.filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt)).length;
-  },
-}),
+      getUnreadNotifCount: (studentId) => {
+        const { notifications, lastNotifSeenAt } = get();
+        return notifications.filter((n) => isNotificationUnread(n, studentId, lastNotifSeenAt)).length;
+      },
+    }),
     {
       name: 'auth-state-v1',
       storage: authStorage,

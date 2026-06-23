@@ -19,20 +19,20 @@ import { ConfirmModal, type ConfirmTone } from '../../components/ConfirmModal';
 import { isStudentMembershipActiveForAttendance } from '../../utils/studentMembership';
 
 const ACCENT = '#4F46E5';
-const GREEN  = '#059669';
-const AMBER  = '#D97706';
+const GREEN = '#059669';
+const AMBER = '#D97706';
 
 export default function StudentScanQR() {
-  const insets             = useSafeAreaInsets();
-  const { width, height }  = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [scanned,       setScanned]       = useState(false);
-  const [isSubmitting,  setIsSubmitting]  = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const markAttendance = useAppStore((s) => s.markAttendance);
   const currentUser = useAppStore((s) => s.currentUser);
-  const navigation     = useNavigation<any>();
+  const navigation = useNavigation<any>();
   const [resultModal, setResultModal] = useState<{
     tone: ConfirmTone;
     title: string;
@@ -143,12 +143,12 @@ export default function StudentScanQR() {
 
   const status = isSubmitting ? 'verifying' : scanned ? 'scanned' : 'idle';
   const statusColor =
-    status === 'idle'    ? GREEN :
-    status === 'scanned' ? AMBER : ACCENT;
+    status === 'idle' ? GREEN :
+      status === 'scanned' ? AMBER : ACCENT;
   const statusLabel =
-    status === 'idle'      ? 'Position the QR code inside the frame' :
-    status === 'scanned'   ? 'QR code detected — please wait'        :
-                             'Checking your attendance…';
+    status === 'idle' ? 'Position the QR code inside the frame' :
+      status === 'scanned' ? 'QR code detected — please wait' :
+        'Checking your attendance…';
 
   // ── Main UI ────────────────────────────────────────────────────────────
   return (
@@ -293,123 +293,123 @@ export default function StudentScanQR() {
 }
 
 // ── Tick constant (UNCHANGED) ─────────────────────────────────────────────
-const T   = 14;
+const T = 14;
 const DIM = 'rgba(0,0,0,0.62)';
 
 function makeStyles() {
   return StyleSheet.create({
 
-  // Permission
-  permScreen: {
-    flex: 1, backgroundColor: theme.colors.background,
-    alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32,
-  },
-  permLoadTxt: { fontSize: 14, fontWeight: '600', color: ACCENT },
-  permIconBox: {
-    width: 76, height: 76, borderRadius: 22,
-    backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  permTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.text },
-  permSub:   { fontSize: 13, color: theme.colors.mutedText, textAlign: 'center', lineHeight: 20 },
+    // Permission
+    permScreen: {
+      flex: 1, backgroundColor: theme.colors.background,
+      alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32,
+    },
+    permLoadTxt: { fontSize: 14, fontWeight: '600', color: ACCENT },
+    permIconBox: {
+      width: 76, height: 76, borderRadius: 22,
+      backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    permTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.text },
+    permSub: { fontSize: 13, color: theme.colors.mutedText, textAlign: 'center', lineHeight: 20 },
 
-  // Root
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  warnBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    marginBottom: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.24)',
-  },
-  warnBannerTxt: { flex: 1, fontSize: 12, fontWeight: '700', color: '#B91C1C', lineHeight: 17 },
-  inner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
+    // Root
+    root: { flex: 1, backgroundColor: theme.colors.background },
+    warnBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      width: '100%',
+      marginBottom: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: 'rgba(239,68,68,0.10)',
+      borderWidth: 1,
+      borderColor: 'rgba(239,68,68,0.24)',
+    },
+    warnBannerTxt: { flex: 1, fontSize: 12, fontWeight: '700', color: '#B91C1C', lineHeight: 17 },
+    inner: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'space-evenly',
+      paddingHorizontal: 20,
+      paddingTop: 8,
+    },
 
-  // Status row
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-    paddingHorizontal: 4,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  statusTxt: { fontSize: 13, fontWeight: '600', textAlign: 'center', flex: 1 },
+    // Status row
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 14,
+      paddingHorizontal: 4,
+    },
+    statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+    statusTxt: { fontSize: 13, fontWeight: '600', textAlign: 'center', flex: 1 },
 
-  // Square camera card
-  camCard: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    shadowColor: '#1E1B4B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 14,
-    marginBottom: 20,
-  },
+    // Square camera card
+    camCard: {
+      borderRadius: 24,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+      shadowColor: '#1E1B4B',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 24,
+      elevation: 14,
+      marginBottom: 20,
+    },
 
-  // Dim overlay
-  dimTop:    { flex: 1, backgroundColor: DIM },
-  dimMidRow: { flexDirection: 'row' },
-  dimSide:   { flex: 1, backgroundColor: DIM },
-  dimBottom: { flex: 1, backgroundColor: DIM },
-  scanHole:  { backgroundColor: 'transparent' },
+    // Dim overlay
+    dimTop: { flex: 1, backgroundColor: DIM },
+    dimMidRow: { flexDirection: 'row' },
+    dimSide: { flex: 1, backgroundColor: DIM },
+    dimBottom: { flex: 1, backgroundColor: DIM },
+    scanHole: { backgroundColor: 'transparent' },
 
-  // Corner ticks (UNCHANGED)
-  tick: { position: 'absolute', width: T, height: T, borderColor: '#EEF2FF' },
-  tl: { top: 0,    left:  0, borderTopWidth: 3,    borderLeftWidth: 3,  borderTopLeftRadius: 10 },
-  tr: { top: 0,    right: 0, borderTopWidth: 3,    borderRightWidth: 3, borderTopRightRadius: 10 },
-  bl: { bottom: 0, left:  0, borderBottomWidth: 3, borderLeftWidth: 3,  borderBottomLeftRadius: 10 },
-  br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
+    // Corner ticks (UNCHANGED)
+    tick: { position: 'absolute', width: T, height: T, borderColor: '#EEF2FF' },
+    tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
+    tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
+    bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
+    br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
 
-  // Verifying overlay
-  verifyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,10,20,0.75)',
-    alignItems: 'center', justifyContent: 'center', gap: 12,
-  },
-  verifyTxt: { color: '#C7D2FE', fontSize: 14, fontWeight: '700' },
+    // Verifying overlay
+    verifyOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(10,10,20,0.75)',
+      alignItems: 'center', justifyContent: 'center', gap: 12,
+    },
+    verifyTxt: { color: '#C7D2FE', fontSize: 14, fontWeight: '700' },
 
-  // Scan again
-  againBtn: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 4 },
-  againGrad: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 10, paddingVertical: 15,
-  },
-  againTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
+    // Scan again
+    againBtn: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 4 },
+    againGrad: {
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'center', gap: 10, paddingVertical: 15,
+    },
+    againTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
-  // Divider
-  divider: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 10, width: '100%', marginBottom: 14,
-  },
-  divLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  divTxt:  { fontSize: 10, fontWeight: '800', color: theme.colors.mutedText, letterSpacing: 1.2 },
+    // Divider
+    divider: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: 10, width: '100%', marginBottom: 14,
+    },
+    divLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
+    divTxt: { fontSize: 10, fontWeight: '800', color: theme.colors.mutedText, letterSpacing: 1.2 },
 
-  // 3 pills
-  pillsRow: {
-    flexDirection: 'row', gap: 8,
-    flexWrap: 'wrap', justifyContent: 'center',
-    width: '100%', marginBottom: 14,
-  },
-  pill: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999,
-  },
-  pillTxt: { fontSize: 12, fontWeight: '700' },
+    // 3 pills
+    pillsRow: {
+      flexDirection: 'row', gap: 8,
+      flexWrap: 'wrap', justifyContent: 'center',
+      width: '100%', marginBottom: 14,
+    },
+    pill: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999,
+    },
+    pillTxt: { fontSize: 12, fontWeight: '700' },
 
-});
+  });
 }

@@ -35,6 +35,13 @@ export function normalizeAttendanceQrPayload(raw: string): string {
   return s;
 }
 
+/** Last 8 chars — compare website vs app QR without exposing full token. */
+export function attendanceQrRef(token: string) {
+  const t = String(token || '').trim();
+  if (t.length < 8) return t || '—';
+  return `…${t.slice(-8)}`;
+}
+
 /** Same rules as the server: strip whitespace/control chars inside the token. */
 export function prepareAttendanceQrPayload(raw: string): string {
   return normalizeAttendanceQrPayload(raw).replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, '');

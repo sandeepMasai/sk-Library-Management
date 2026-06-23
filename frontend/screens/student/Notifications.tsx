@@ -7,6 +7,7 @@ import {
   Platform,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useAppStore } from '../../store';
@@ -26,6 +27,12 @@ import {
   type StudentNotificationRowStyles,
 } from '../../components/student/StudentNotificationRow';
 import { NotificationImageViewer } from '../../components/student/NotificationImageViewer';
+import { NotificationPdfViewer } from '../../components/student/NotificationPdfViewer';
+import {
+  resolveNotificationDisplayMessage,
+  resolveNotificationDocumentUrl,
+  notificationHasPdf,
+} from '../../utils/notificationDocument';
 
 type RowItem = StudentNotificationRowData;
 
@@ -89,6 +96,7 @@ export default function StudentNotifications() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<FilterKey>('all');
   const [viewer, setViewer] = useState<{ url: string; title: string } | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<{ url: string; title: string } | null>(null);
 
   const allRows: RowItem[] = useMemo(() => {
     if (!currentUser) return [];
@@ -100,8 +108,10 @@ export default function StudentNotifications() {
         return {
           id: n.id,
           title: n.title,
-          message: n.message,
+          message: resolveNotificationDisplayMessage(n),
           imageUrl: n.imageUrl || null,
+          documentUrl: resolveNotificationDocumentUrl(n),
+          hasPdf: notificationHasPdf(n),
           timeLabel: timeLabel(n.date),
           isSystem,
           category: resolveNotificationCategory(n.category, isSystem),
@@ -187,6 +197,19 @@ export default function StudentNotifications() {
     setViewer({ url: imageUrl, title });
   }, []);
 
+  const handlePdfPress = useCallback(async (documentUrl: string, title: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(documentUrl);
+      if (canOpen) {
+        await Linking.openURL(documentUrl);
+        return;
+      }
+    } catch {
+      // Fall through to in-app viewer.
+    }
+    setPdfViewer({ url: documentUrl, title });
+  }, []);
+
   const renderItem = useCallback(
     ({ item }: { item: RowItem }) => (
       <StudentNotificationRow
@@ -195,9 +218,10 @@ export default function StudentNotifications() {
         styles={rowStyles}
         onPress={handleNotificationPress}
         onImagePress={handleImagePress}
+        onPdfPress={handlePdfPress}
       />
     ),
-    [expanded, rowStyles, handleNotificationPress, handleImagePress]
+    [expanded, rowStyles, handleNotificationPress, handleImagePress, handlePdfPress]
   );
 
   const listHeader = useMemo(
@@ -307,7 +331,7 @@ export default function StudentNotifications() {
           data={rows}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          extraData={`${expanded.size}-${unreadCount}-${viewer?.url || ''}`}
+          extraData={`${expanded.size}-${unreadCount}-${viewer?.url || ''}-${pdfViewer?.url || ''}`}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
           ItemSeparatorComponent={ListSeparator}
@@ -323,6 +347,11 @@ export default function StudentNotifications() {
         imageUrl={viewer?.url ?? null}
         title={viewer?.title}
         onClose={() => setViewer(null)}
+      />
+      <NotificationPdfViewer
+        pdfUrl={pdfViewer?.url ?? null}
+        title={pdfViewer?.title}
+        onClose={() => setPdfViewer(null)}
       />
     </SafeAreaView>
   );

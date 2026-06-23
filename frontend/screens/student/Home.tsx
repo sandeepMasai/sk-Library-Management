@@ -15,6 +15,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import LibraryCard from '../../components/LibraryCard';
 import { CATEGORY_META, resolveNotificationCategory } from '../../constants/notificationCategoryUi';
+import {
+  resolveNotificationDisplayMessage,
+  notificationHasPdf,
+} from '../../utils/notificationDocument';
 import { theme } from '../../theme';
 import { apiGet, type ApiError } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -332,9 +336,17 @@ export default function StudentHome() {
                           <Text style={[styles.catChipText, { color: meta.color }]}>{meta.short}</Text>
                         </View>
                       </View>
-                      {!!n.message && (
-                        <Text style={styles.actMsg} numberOfLines={2}>{n.message}</Text>
+                      {!!n.message && !notificationHasPdf(n) && (
+                        <Text style={styles.actMsg} numberOfLines={2}>
+                          {resolveNotificationDisplayMessage(n)}
+                        </Text>
                       )}
+                      {notificationHasPdf(n) ? (
+                        <View style={styles.actPdfRow}>
+                          <Ionicons name="document-text" size={14} color="#DC2626" />
+                          <Text style={styles.actPdfTxt}>PDF attached — open Notifications to view</Text>
+                        </View>
+                      ) : null}
                       <Text style={styles.actTime}>{format(new Date(n.date), 'dd MMM · hh:mm a')}</Text>
                     </View>
                   </View>
@@ -577,6 +589,18 @@ function makeStyles() {
     catChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 },
     catChipText: { fontSize: 9, fontWeight: '800' },
     actMsg: { marginTop: 4, fontSize: 12, color: theme.colors.mutedText, fontWeight: '500', lineHeight: 17 },
+    actPdfRow: {
+      marginTop: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: '#FEF2F2',
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      alignSelf: 'flex-start',
+    },
+    actPdfTxt: { fontSize: 11, fontWeight: '700', color: '#DC2626' },
     actTime: { marginTop: 5, fontSize: 11, color: theme.colors.mutedText, fontWeight: '600' },
 
     // ── Empty state ──

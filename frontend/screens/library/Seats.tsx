@@ -117,6 +117,7 @@ export default function LibrarySeatsScreen() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [addSpaceOpen, setAddSpaceOpen] = useState(false);
   const [spaceName, setSpaceName] = useState('');
+  const [spaceSeatCount, setSpaceSeatCount] = useState('40');
   const [shiftFormOpen, setShiftFormOpen] = useState(false);
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [manageShiftsOpen, setManageShiftsOpen] = useState(false);
@@ -587,8 +588,10 @@ export default function LibrarySeatsScreen() {
                 <Ionicons name="close" size={22} color={theme.colors.mutedText} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalHint}>Example: Main Hall, Room A</Text>
-            <TextInput value={spaceName} onChangeText={setSpaceName} placeholder="Space name" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
+            <Text style={styles.modalHint}>Example: Hall A, Room 1</Text>
+            <TextInput value={spaceName} onChangeText={setSpaceName} placeholder="Hall name" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
+            <Text style={[styles.modalHint, { marginTop: 12 }]}>Seats in this hall</Text>
+            <TextInput value={spaceSeatCount} onChangeText={setSpaceSeatCount} keyboardType="number-pad" placeholder="40" placeholderTextColor={theme.colors.mutedText} style={styles.modalInput} />
             <TouchableOpacity
               activeOpacity={0.9}
               style={styles.primaryBtn}
@@ -598,12 +601,19 @@ export default function LibrarySeatsScreen() {
                   showError('Space name required', 'Please enter a space name.');
                   return;
                 }
-                const res = await createSpace(name);
+                const n = Number(spaceSeatCount);
+                if (!Number.isInteger(n) || n < 1) {
+                  showError('Invalid seat count', 'Enter seats between 1 and 5000.');
+                  return;
+                }
+                const res = await createSpace(name, n);
                 if (!res.ok) {
                   showError('Could not create space', res.message || 'Failed to create space.');
                   return;
                 }
                 await fetchSpaces();
+                await fetchSeats();
+                if (res.space?.id) setSelectedSpaceId(res.space.id);
                 setAddSpaceOpen(false);
               }}
             >

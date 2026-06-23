@@ -185,11 +185,15 @@ export default function AdminAttendance() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchAttendanceByDate(selectedDate), loadBlockedAttempts()]);
+      await Promise.all([
+        generateDailyQr(),
+        fetchAttendanceByDate(selectedDate),
+        loadBlockedAttempts(),
+      ]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchAttendanceByDate, selectedDate, loadBlockedAttempts]);
+  }, [fetchAttendanceByDate, selectedDate, loadBlockedAttempts, generateDailyQr]);
 
   const handlePrint = useCallback(async () => {
     if (!dailyQrToken) {
@@ -430,6 +434,13 @@ function makeStyles(mode: 'light' | 'dark') {
       backgroundColor: theme.colors.background,
     },
     btnOutlineTxt: { fontSize: 15, fontWeight: '800', color: theme.colors.primary },
+    qrRefTxt: {
+      marginTop: 10,
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.colors.mutedText,
+      textAlign: 'center',
+    },
     btnSolid: {
       flex: 1,
       flexDirection: 'row',

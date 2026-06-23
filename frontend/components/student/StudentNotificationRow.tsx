@@ -11,6 +11,8 @@ export type StudentNotificationRowData = {
   title: string;
   message: string;
   imageUrl?: string | null;
+  documentUrl?: string | null;
+  hasPdf?: boolean;
   timeLabel: string;
   isSystem: boolean;
   category: NotificationCategory;
@@ -46,12 +48,15 @@ type Props = {
   styles: StudentNotificationRowStyles;
   onPress: (id: string, isUnread: boolean) => void;
   onImagePress?: (imageUrl: string, title: string) => void;
+  onPdfPress?: (documentUrl: string, title: string) => void;
 };
 
-function StudentNotificationRowComponent({ item, isOpen, styles: s, onPress, onImagePress }: Props) {
+function StudentNotificationRowComponent({ item, isOpen, styles: s, onPress, onImagePress, onPdfPress }: Props) {
   const meta = CATEGORY_META[item.category];
+  const pdfUrl = item.documentUrl || null;
+  const showPdf = Boolean(pdfUrl || item.hasPdf);
   const hasLongMessage = item.message.length > 80;
-  const showReadMore = hasLongMessage || Boolean(item.imageUrl);
+  const showReadMore = hasLongMessage || Boolean(item.imageUrl) || showPdf;
 
   return (
     <View style={[s.card, item.isUnread && s.cardUnread]}>
@@ -124,6 +129,33 @@ function StudentNotificationRowComponent({ item, isOpen, styles: s, onPress, onI
           </View>
         </TouchableOpacity>
       ) : null}
+
+      {showPdf ? (
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() => pdfUrl && onPdfPress?.(pdfUrl, item.title)}
+          style={localStyles.pdfCard}
+          disabled={!pdfUrl}
+        >
+          <View style={localStyles.pdfIconWrap}>
+            <Ionicons name="document-text" size={28} color="#DC2626" />
+          </View>
+          <View style={localStyles.pdfBody}>
+            <Text style={localStyles.pdfTitle}>PDF attachment</Text>
+            <Text style={localStyles.pdfSub}>
+              {pdfUrl ? 'Tap to open or download on your phone' : 'PDF attached — pull down to refresh'}
+            </Text>
+          </View>
+          {pdfUrl ? (
+            <View style={localStyles.pdfActions}>
+              <View style={localStyles.pdfViewBtn}>
+                <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
+                <Text style={localStyles.pdfViewBtnTxt}>View</Text>
+              </View>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -163,6 +195,60 @@ const localStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  pdfCard: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pdfIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  pdfBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pdfTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pdfSub: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  pdfActions: {
+    flexShrink: 0,
+  },
+  pdfViewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  pdfViewBtnTxt: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
 });
 
 function propsAreEqual(prev: Props, next: Props) {
@@ -174,8 +260,11 @@ function propsAreEqual(prev: Props, next: Props) {
     prev.item.title === next.item.title &&
     prev.item.message === next.item.message &&
     prev.item.imageUrl === next.item.imageUrl &&
+    prev.item.documentUrl === next.item.documentUrl &&
+    prev.item.hasPdf === next.item.hasPdf &&
     prev.item.timeLabel === next.item.timeLabel &&
-    prev.onImagePress === next.onImagePress
+    prev.onImagePress === next.onImagePress &&
+    prev.onPdfPress === next.onPdfPress
   );
 }
 

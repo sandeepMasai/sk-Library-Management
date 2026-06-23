@@ -13,7 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import QRCode from 'react-native-qrcode-svg';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
-import { theme } from '../../theme';
+import { attendanceQrRef } from '../../utils/attendanceQr';
 
 export type AttendanceListHeaderStyles = Record<string, ViewStyle | TextStyle>;
 
@@ -107,6 +107,11 @@ function AttendanceListHeaderComponent({
             )}
           </TouchableOpacity>
         </View>
+        {dailyQrToken ? (
+          <Text style={s.qrRefTxt as TextStyle}>
+            Code ref: {attendanceQrRef(dailyQrToken)} — match website Attendance QR
+          </Text>
+        ) : null}
       </View>
 
       <TouchableOpacity style={s.dateCard as ViewStyle} onPress={onOpenDatePicker} activeOpacity={0.88}>
