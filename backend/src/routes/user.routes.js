@@ -24,16 +24,22 @@ router.post("/upload-profile", requireAuth, requireRole("library", "student"), u
     if (!req.file?.buffer) return res.status(400).json({ message: "photo is required" });
     if (!isCloudinaryConfigured()) return res.status(500).json({ message: "Cloudinary is not configured" });
 
-    const { url } = await uploadBuffer(req.file.buffer, {
-      folder: "libdesk/profile",
-      transformation: [{ width: 512, height: 512, crop: "fill", gravity: "face" }],
-    });
-
     if (req.user?.role === "library") {
       const id = String(req.user?.libraryId || "").trim();
       if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid library account" });
-      await Library.findByIdAndUpdate(id, { $set: { logoUrl: url } });
-      return res.json({ ok: true, imageUrl: url });
+
+      const { url } = await uploadBuffer(req.file.buffer, {
+        folder: "libdesk/library-logos",
+        public_id: `library_${id}`,
+        overwrite: true,
+        transformation: [{ width: 512, height: 512, crop: "fill", gravity: "center" }],
+      });
+      if (!url) {
+        return res.status(500).json({ message: "Profile image uploaded but Cloudinary did not return a URL" });
+      }
+
+      await Library.findByIdAndUpdate(id, { $set: { logoUrl: url } }, { runValidators: true });
+      return res.json({ ok: true, imageUrl: url, logoUrl: url });
     }
 
     // student
@@ -42,7 +48,22 @@ router.post("/upload-profile", requireAuth, requireRole("library", "student"), u
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(libraryId)) {
       return res.status(400).json({ message: "Invalid auth payload" });
     }
-    await Student.findOneAndUpdate({ _id: userId, libraryId, isDeleted: false }, { $set: { photoUrl: url } });
+
+    const { url } = await uploadBuffer(req.file.buffer, {
+      folder: "libdesk/students",
+      public_id: `student_${userId}`,
+      overwrite: true,
+      transformation: [{ width: 512, height: 512, crop: "fill", gravity: "face" }],
+    });
+    if (!url) {
+      return res.status(500).json({ message: "Profile image uploaded but Cloudinary did not return a URL" });
+    }
+
+    await Student.findOneAndUpdate(
+      { _id: userId, libraryId, isDeleted: false },
+      { $set: { photoUrl: url } },
+      { runValidators: true }
+    );
     return res.json({ ok: true, imageUrl: url });
   } catch (error) {
     return res.status(500).json({ message: "Failed to upload profile image", error: error.message });

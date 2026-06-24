@@ -179,9 +179,13 @@ router.post("/me/photo", requireAuth, requireRole("student"), upload.single("pho
     if (student.isBlocked) return res.status(403).json({ message: "Account is blocked" });
 
     const { url } = await uploadBuffer(req.file.buffer, {
+      folder: "libdesk/students",
       public_id: `student_${student._id}`,
       overwrite: true,
     });
+    if (!url) {
+      return res.status(500).json({ message: "Photo uploaded but Cloudinary did not return a URL" });
+    }
 
     student.photoUrl = url;
     await student.save();
