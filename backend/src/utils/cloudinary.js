@@ -23,9 +23,13 @@ function buildUploadOptions(options = {}) {
   const uploadOptions = {
     folder,
     resource_type: resourceType,
+    // New Cloudinary accounts default to async uploads (status: "pending", no secure_url).
+    // We need the delivery URL immediately to save logoUrl / imageUrl in MongoDB.
+    async: options.async ?? false,
     ...options,
     folder,
     resource_type: resourceType,
+    async: options.async ?? false,
   };
 
   // Image transforms break raw/video uploads — only apply for images.
@@ -63,6 +67,23 @@ async function uploadBuffer(buffer, options = {}) {
           public_id: uploadOptions.public_id || null,
         });
         return reject(error);
+      }
+
+      if (!result?.secure_url) {
+        const pending = result?.status === "pending";
+        logger.error("Cloudinary upload missing secure_url", {
+          public_id: result?.public_id,
+          status: result?.status,
+          batch_id: result?.batch_id,
+          pending,
+        });
+        return reject(
+          new Error(
+            pending
+              ? "Cloudinary returned async pending upload — set async:false or check account upload settings"
+              : "Cloudinary upload succeeded but no delivery URL was returned"
+          )
+        );
       }
 
       logger.info("Cloudinary upload ok", {

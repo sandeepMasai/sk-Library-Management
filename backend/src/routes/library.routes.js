@@ -246,13 +246,24 @@ router.post("/logo", requireAuth, requireRole("library"), upload.single("logo"),
     if (!req.file?.buffer) return res.status(400).json({ message: "logo is required" });
     if (!isCloudinaryConfigured()) return res.status(500).json({ message: "Cloudinary is not configured" });
 
+    const id = req.user?.libraryId;
+    if (!id) return res.status(400).json({ message: "libraryId missing" });
+
     const { url } = await uploadBuffer(req.file.buffer, {
       folder: "libdesk/library-logos",
+      public_id: `library_${id}`,
+      overwrite: true,
       transformation: [{ width: 512, height: 512, crop: "fill", gravity: "center" }],
     });
+    if (!url) {
+      return res.status(500).json({ message: "Logo uploaded but Cloudinary did not return a URL" });
+    }
 
-    const id = req.user?.libraryId;
-    const updated = await Library.findByIdAndUpdate(id, { $set: { logoUrl: url } }, { new: true }).lean();
+    const updated = await Library.findByIdAndUpdate(
+      id,
+      { $set: { logoUrl: url } },
+      { new: true, runValidators: true }
+    ).lean();
     if (!updated) return res.status(404).json({ message: "Library not found" });
 
     return res.json({ ok: true, logoUrl: url, profile: toLibraryProfile(updated) });
