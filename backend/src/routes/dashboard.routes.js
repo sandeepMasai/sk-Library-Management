@@ -6,6 +6,7 @@ const RenewalRequest = require("../models/RenewalRequest");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
 const { requireNotExpiredSubscription } = require("../middleware/subscription.middleware");
+const { computeMonthlyCollection } = require("../utils/monthlyCollection");
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
     // Multi-tenant isolation applied
     const [students, todayAttendanceCount, pendingRenewalCount] = await Promise.all([
       Student.find({ libraryId, isDeleted: false })
-        .select("expiryDate isBlocked feeStatus feeAmount")
+        .select("joinDate createdAt expiryDate isBlocked feeStatus feeAmount")
         .lean(),
       Attendance.countDocuments({
         libraryId,
@@ -86,6 +87,12 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
     );
     const collectedAmount = Math.max(0, totalFeeAmount - dueAmount);
 
+    const { monthlyCollection, monthlyPaymentCount } = await computeMonthlyCollection(
+      libraryId,
+      students,
+      nowDate
+    );
+
     const attendancePct =
       totalStudents > 0 ? Math.round((todayAttendanceCount / totalStudents) * 100) : 0;
 
@@ -103,6 +110,8 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
         collectedAmount,
         dueAmount,
         totalFeeAmount,
+        monthlyCollection,
+        monthlyPaymentCount,
       },
       attendance: {
         date: todayKey,

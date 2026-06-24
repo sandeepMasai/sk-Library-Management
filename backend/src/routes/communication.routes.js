@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const upload = require("../middleware/upload.middleware");
+const uploadCommunication = require("../middleware/upload.communication.middleware");
+const { isPdfFile } = uploadCommunication;
 const { uploadBuffer, isCloudinaryConfigured } = require("../utils/cloudinary");
 const { requireAuth } = require("../middleware/auth.middleware");
 const { requireRole } = require("../middleware/role.middleware");
@@ -10,6 +11,8 @@ const {
   listCommunicationHistory,
   resolveRecipients,
   getCommunicationStats,
+  updateCommunicationCampaign,
+  deleteCommunicationCampaign,
 } = require("../services/communication.service");
 const asyncHandler = require("../utils/asyncHandler");
 const { createHttpError } = require("../utils/httpError");
@@ -114,7 +117,10 @@ router.post(
   requireAuth,
   requireRole("library", "admin"),
   requireNotExpiredSubscription,
-  upload.single("image"),
+  uploadCommunication.fields([
+    { name: "image", maxCount: 1 },
+    { name: "document", maxCount: 1 },
+  ]),
   asyncHandler(async (req, res) => {
     const libraryId =
       req.user.role === "admin"
@@ -135,15 +141,36 @@ router.post(
     const studentIds = parseStudentIds(req.body?.studentIds);
 
     let imageUrl = String(req.body?.imageUrl || "").trim() || null;
-    if (req.file?.buffer) {
+    let documentUrl = String(req.body?.documentUrl || "").trim() || null;
+    let bodyMessage = String(message || "").trim();
+    let bodyMessageType = messageType;
+
+    const uploadedFile =
+      req.files?.document?.[0] || req.files?.image?.[0] || req.file || null;
+
+    if (uploadedFile?.buffer) {
       if (!isCloudinaryConfigured()) {
-        throw createHttpError(500, "Image upload is not configured");
+        throw createHttpError(500, "File upload is not configured");
       }
-      const { url } = await uploadBuffer(req.file.buffer, {
+      const isPdf = isPdfFile(uploadedFile);
+      const { url } = await uploadBuffer(uploadedFile.buffer, {
         folder: "libdesk/communications",
-        transformation: [{ width: 1200, crop: "limit" }],
+        ...(isPdf
+          ? { resource_type: "raw", format: "pdf", type: "upload", access_mode: "public" }
+          : { transformation: [{ width: 1200, crop: "limit" }] }),
       });
-      imageUrl = url;
+      if (isPdf) {
+        documentUrl = url;
+        const pdfLine = `📎 PDF: ${url}`;
+        if (!bodyMessage.includes(url)) {
+          bodyMessage = bodyMessage ? `${bodyMessage}\n\n${pdfLine}` : pdfLine;
+        }
+        bodyMessageType = bodyMessage === pdfLine ? "pdf" : "text_pdf";
+      } else {
+        imageUrl = url;
+        if (bodyMessage && bodyMessageType === "text") bodyMessageType = "text_image";
+        else if (!bodyMessage) bodyMessageType = "image";
+      }
     }
 
     let shiftName = null;
@@ -156,9 +183,10 @@ router.post(
       libraryId,
       createdBy: req.user.libraryId || libraryId,
       title,
-      message,
+      message: bodyMessage,
       imageUrl,
-      messageType,
+      documentUrl,
+      messageType: bodyMessageType,
       audience,
       studentIds,
       shiftId,
@@ -167,6 +195,64 @@ router.post(
     });
 
     res.status(201).json(result);
+  })
+);
+
+/**
+ * PATCH /api/communications/:id
+ * Body: { title, message }
+ */
+router.patch(
+  "/:id",
+  requireAuth,
+  requireRole("library", "admin"),
+  requireNotExpiredSubscription,
+  asyncHandler(async (req, res) => {
+    const libraryId =
+      req.user.role === "admin"
+        ? String(req.body.libraryId || req.query.libraryId || "").trim()
+        : String(req.user.libraryId || "").trim();
+    if (!libraryId || !mongoose.Types.ObjectId.isValid(libraryId)) {
+      throw createHttpError(400, "libraryId is required");
+    }
+
+    const campaignId = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(campaignId)) {
+      throw createHttpError(400, "Invalid message id");
+    }
+
+    const title = String(req.body?.title || "").trim();
+    const message = String(req.body?.message ?? "").trim();
+
+    const updated = await updateCommunicationCampaign(libraryId, campaignId, { title, message });
+    res.json({ ok: true, message: updated });
+  })
+);
+
+/**
+ * DELETE /api/communications/:id
+ */
+router.delete(
+  "/:id",
+  requireAuth,
+  requireRole("library", "admin"),
+  requireNotExpiredSubscription,
+  asyncHandler(async (req, res) => {
+    const libraryId =
+      req.user.role === "admin"
+        ? String(req.query.libraryId || "").trim()
+        : String(req.user.libraryId || "").trim();
+    if (!libraryId || !mongoose.Types.ObjectId.isValid(libraryId)) {
+      throw createHttpError(400, "libraryId is required");
+    }
+
+    const campaignId = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(campaignId)) {
+      throw createHttpError(400, "Invalid message id");
+    }
+
+    const result = await deleteCommunicationCampaign(libraryId, campaignId);
+    res.json(result);
   })
 );
 

@@ -5,6 +5,7 @@ const SeatAllocation = require("../models/SeatAllocation");
 const Notification = require("../models/Notification");
 const CommunicationCampaign = require("../models/CommunicationCampaign");
 const StudentPushToken = require("../models/StudentPushToken");
+const { getSignedDocumentDownloadUrl } = require("../utils/cloudinary");
 const { sendExpoPushMessages, buildStudentPushPayload } = require("./expoPush.service");
 const { createHttpError } = require("../utils/httpError");
 const { renderTemplate, PLACEHOLDER_TOKEN_RE } = require("../utils/templateRender");
@@ -21,6 +22,8 @@ function normalizeMessageType(raw) {
   const t = String(raw || "text").trim().toLowerCase();
   if (t === "text+image" || t === "text_image") return "text_image";
   if (t === "image") return "image";
+  if (t === "pdf") return "pdf";
+  if (t === "text+pdf" || t === "text_pdf") return "text_pdf";
   return "text";
 }
 
@@ -113,6 +116,7 @@ async function sendCommunicationMessage({
   title,
   message,
   imageUrl,
+  documentUrl,
   messageType,
   audience,
   studentIds,
@@ -123,6 +127,7 @@ async function sendCommunicationMessage({
   const t = String(title || "").trim();
   const m = String(message || "").trim();
   const img = String(imageUrl || "").trim() || null;
+  const doc = String(documentUrl || "").trim() || null;
   const type = normalizeMessageType(messageType);
 
   if (!t) throw createHttpError(400, "title is required");
@@ -130,6 +135,10 @@ async function sendCommunicationMessage({
   if (type === "image" && !img) throw createHttpError(400, "image is required for image messages");
   if (type === "text_image" && (!m || !img)) {
     throw createHttpError(400, "Both message and image are required for text + image");
+  }
+  if (type === "pdf" && !doc) throw createHttpError(400, "PDF document is required for pdf messages");
+  if (type === "text_pdf" && (!m || !doc)) {
+    throw createHttpError(400, "Both message and PDF are required for text + PDF");
   }
 
   const aud = String(audience || "all").trim().toLowerCase();
@@ -154,6 +163,7 @@ async function sendCommunicationMessage({
     title: t,
     message: m,
     imageUrl: img,
+    documentUrl: doc,
     messageType: type,
     audience: aud,
     audienceLabel: audienceLabel(aud, recipients.length, shiftName),
@@ -173,6 +183,7 @@ async function sendCommunicationMessage({
       title: t,
       message: m,
       imageUrl: img,
+      documentUrl: doc,
       messageType: type,
       campaignId,
       targetType: "all",
@@ -190,6 +201,7 @@ async function sendCommunicationMessage({
         title: personalizeText(t, student, libraryName),
         message: personalizeText(m, student, libraryName),
         imageUrl: img,
+        documentUrl: doc,
         messageType: type,
         campaignId,
         targetType: "student",
@@ -290,6 +302,7 @@ async function listCommunicationHistory(libraryId, { limit = 50 } = {}) {
     title: r.title,
     message: r.message,
     imageUrl: r.imageUrl || null,
+    documentUrl: r.documentUrl ? getSignedDocumentDownloadUrl(r.documentUrl) : null,
     messageType: r.messageType,
     audience: r.audience,
     audienceLabel: r.audienceLabel,
@@ -321,9 +334,77 @@ async function getCommunicationStats(libraryId) {
   return { totalSent, delivered, read, pending, campaignCount: campaigns.length };
 }
 
+async function updateCommunicationCampaign(libraryId, campaignId, { title, message }) {
+  const lid = new mongoose.Types.ObjectId(String(libraryId));
+  const cid = new mongoose.Types.ObjectId(String(campaignId));
+
+  const t = String(title || "").trim();
+  const m = String(message || "").trim();
+  if (!t) throw createHttpError(400, "title is required");
+
+  const campaign = await CommunicationCampaign.findOne({ _id: cid, libraryId: lid });
+  if (!campaign) throw createHttpError(404, "Message not found");
+
+  const hasImage = Boolean(campaign.imageUrl && String(campaign.imageUrl).trim());
+  const hasDocument = Boolean(campaign.documentUrl && String(campaign.documentUrl).trim());
+  if (!m && !hasImage && !hasDocument) {
+    throw createHttpError(400, "message is required");
+  }
+
+  let finalMessage = m;
+  if (hasDocument) {
+    const pdfUrl = String(campaign.documentUrl).trim();
+    const pdfLine = `📎 PDF: ${pdfUrl}`;
+    if (!finalMessage.includes(pdfUrl)) {
+      finalMessage = finalMessage ? `${finalMessage}\n\n${pdfLine}` : pdfLine;
+    }
+  }
+
+  campaign.title = t;
+  campaign.message = finalMessage;
+  await campaign.save();
+
+  await Notification.updateMany(
+    { libraryId: lid, campaignId: cid },
+    { $set: { title: t, message: finalMessage } }
+  );
+
+  return {
+    id: campaign._id.toString(),
+    title: t,
+    message: finalMessage,
+    imageUrl: campaign.imageUrl || null,
+    documentUrl: campaign.documentUrl || null,
+    messageType: campaign.messageType,
+    audience: campaign.audience,
+    audienceLabel: campaign.audienceLabel,
+    recipientCount: campaign.recipientCount,
+    pushSentCount: campaign.pushSentCount || 0,
+    sentAt: campaign.sentAt?.toISOString?.() || null,
+  };
+}
+
+async function deleteCommunicationCampaign(libraryId, campaignId) {
+  const lid = new mongoose.Types.ObjectId(String(libraryId));
+  const cid = new mongoose.Types.ObjectId(String(campaignId));
+
+  const campaign = await CommunicationCampaign.findOne({ _id: cid, libraryId: lid });
+  if (!campaign) throw createHttpError(404, "Message not found");
+
+  const notifResult = await Notification.deleteMany({ libraryId: lid, campaignId: cid });
+  await CommunicationCampaign.deleteOne({ _id: cid, libraryId: lid });
+
+  return {
+    ok: true,
+    deletedNotifications: notifResult.deletedCount || 0,
+  };
+}
+
 module.exports = {
   resolveRecipients,
   sendCommunicationMessage,
   listCommunicationHistory,
   getCommunicationStats,
+  updateCommunicationCampaign,
+  deleteCommunicationCampaign,
 };

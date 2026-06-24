@@ -67,9 +67,40 @@ async function main() {
       startBackgroundJobs(dbConnected);
       logger.info("Background bootstrap finished", { dbConnected });
       warnRazorpayKeysAsync();
+      warnCloudinaryAsync();
     })
     .catch((err) => {
       logger.error("Background bootstrap error", { message: err?.message });
+    });
+}
+
+function warnCloudinaryAsync() {
+  const { verifyCloudinaryConnection, getCloudinaryStatus } = require("./src/utils/cloudinary");
+  const status = getCloudinaryStatus();
+  if (!status.configured) {
+    logger.warn("Cloudinary not configured — photo/PDF uploads will return 503", {
+      fix: "Set CLOUDINARY_URL in backend/.env and Railway variables",
+    });
+    return;
+  }
+  verifyCloudinaryConnection()
+    .then((result) => {
+      if (result.ok) {
+        logger.info("Cloudinary OK — uploads ready", {
+          cloud_name: result.status.cloud_name,
+          source: result.status.source,
+        });
+      } else {
+        logger.error("Cloudinary INVALID — uploads will fail", {
+          reason: result.reason,
+          message: result.message,
+          cloud_name: result.status.cloud_name,
+          fix: "Cloudinary Dashboard → confirm API key/secret match CLOUDINARY_URL cloud_name",
+        });
+      }
+    })
+    .catch((err) => {
+      logger.warn("Cloudinary startup check skipped", { message: err?.message });
     });
 }
 

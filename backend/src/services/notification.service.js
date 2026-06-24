@@ -1,5 +1,48 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
+const { getSignedDocumentDownloadUrl } = require("../utils/cloudinary");
+
+const LEGACY_PDF_LINE_RE = /📎\s*PDF:\s*(https?:\/\/\S+)/i;
+const PDF_LABEL_RE = /PDF\s*:?\s*(https?:\/\/\S+)/i;
+const PDF_URL_RE = /(https?:\/\/[^\s<>"']+\.pdf(?:\?[^\s<>"']*)?)/i;
+const CLOUDINARY_RAW_RE = /(https?:\/\/res\.cloudinary\.com\/[^\s<>"']+\/raw\/upload\/[^\s<>"']+)/i;
+
+function cleanUrl(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/[),.;]+$/g, "");
+}
+
+function extractLegacyPdfUrl(message) {
+  const text = String(message || "");
+
+  const legacy = LEGACY_PDF_LINE_RE.exec(text);
+  if (legacy?.[1]) return cleanUrl(legacy[1]);
+
+  const labeled = PDF_LABEL_RE.exec(text);
+  if (labeled?.[1]) return cleanUrl(labeled[1]);
+
+  const pdfUrl = PDF_URL_RE.exec(text);
+  if (pdfUrl?.[1]) return cleanUrl(pdfUrl[1]);
+
+  const cloudinaryRaw = CLOUDINARY_RAW_RE.exec(text);
+  if (cloudinaryRaw?.[1]) return cleanUrl(cloudinaryRaw[1]);
+
+  const trimmed = text.trim();
+  if (/^https?:\/\/\S+$/i.test(trimmed)) return cleanUrl(trimmed);
+
+  return null;
+}
+
+function stripLegacyPdfLine(message) {
+  let next = String(message || "");
+  next = next.replace(LEGACY_PDF_LINE_RE, "");
+  next = next.replace(PDF_LABEL_RE, "");
+  next = next.replace(PDF_URL_RE, "");
+  next = next.replace(CLOUDINARY_RAW_RE, "");
+  if (/^https?:\/\/\S+$/i.test(next.trim())) return "";
+  return next.replace(/\n{3,}/g, "\n\n").trim();
+}
 
 function getMaxReadReceipts() {
   const raw = Number.parseInt(
@@ -59,12 +102,26 @@ function formatNotificationForClient(doc, viewerUserId) {
     ? Notification.hasReadReceipt(doc, viewerUserId)
     : false;
 
+  let documentUrl = doc.documentUrl ? String(doc.documentUrl).trim() || null : null;
+  let message = doc.message;
+  if (!documentUrl) {
+    const legacyPdf = extractLegacyPdfUrl(message) || extractLegacyPdfUrl(doc.title);
+    if (legacyPdf) {
+      documentUrl = legacyPdf;
+      message = stripLegacyPdfLine(message);
+    }
+  }
+  if (documentUrl) {
+    documentUrl = getSignedDocumentDownloadUrl(documentUrl);
+  }
+
   return {
     id,
     libraryId: doc.libraryId?.toString?.() || null,
     title: doc.title,
-    message: doc.message,
+    message,
     imageUrl: doc.imageUrl || null,
+    documentUrl,
     messageType: doc.messageType || "text",
     date:
       doc.date instanceof Date

@@ -121,7 +121,7 @@ router.get(
         .skip(skip)
         .limit(limit)
         .select(
-          "libraryId title message imageUrl messageType date targetId targetType category isRead readAt readReceipts"
+          "libraryId title message imageUrl documentUrl messageType date targetId targetType category isRead readAt readReceipts"
         )
         .lean(),
     ]);

@@ -50,8 +50,15 @@ const notificationSchema = new mongoose.Schema(
 
     messageType: {
       type: String,
-      enum: ["text", "image", "text_image"],
+      enum: ["text", "image", "text_image", "pdf", "text_pdf"],
       default: "text",
+    },
+
+    documentUrl: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 2048,
     },
 
     campaignId: {
@@ -217,8 +224,9 @@ notificationSchema.pre("validate", function (next) {
 
   const hasImage = Boolean(this.imageUrl && String(this.imageUrl).trim());
   const hasMessage = Boolean(this.message && String(this.message).trim());
-  if (!hasMessage && !hasImage) {
-    return next(new Error("message or imageUrl is required"));
+  const hasDocument = Boolean(this.documentUrl && String(this.documentUrl).trim());
+  if (!hasMessage && !hasImage && !hasDocument) {
+    return next(new Error("message, imageUrl, or documentUrl is required"));
   }
 
   // Protect against unbounded document growth.

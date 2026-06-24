@@ -9,6 +9,8 @@ const { requireRole } = require("../middleware/role.middleware");
 const { requireNotExpiredSubscription } = require("../middleware/subscription.middleware");
 const { writeLog } = require("../utils/logging");
 const { normalizeIndianMobile, hasNonIndiaPlusPrefix } = require("../utils/mobile");
+const StudentPayment = require("../models/StudentPayment");
+const { generateInvoiceNumber, durationLabel } = require("../utils/renewal");
 
 const router = express.Router();
 
@@ -30,6 +32,7 @@ function toStudentResponse(student) {
     username: student.username,
     pin: "", // never return sensitive fields
     joinDate: student.joinDate.toISOString(),
+    createdAt: student.createdAt?.toISOString?.() || null,
     expiryDate: student.expiryDate.toISOString(),
     feeAmount: student.feeAmount,
     feeStatus: feeStatusLegacy,
@@ -160,6 +163,27 @@ router.post("/", requireAuth, requireRole("library"), async (req, res) => {
       createdBy: libraryId,
       updatedBy: libraryId,
     });
+
+    if (normalizedFeeStatus === "paid" || normalizedFeeStatus === "partial") {
+      await StudentPayment.create({
+        libraryId,
+        studentId: student._id,
+        studentName: student.name,
+        amount: Number(feeAmount),
+        durationDays: days,
+        paymentDate: new Date(),
+        startDate: parsedJoinDate,
+        expiryDate: student.expiryDate,
+        status: normalizedFeeStatus === "partial" ? "partial" : "paid",
+        feeMethod: student.feeMethod,
+        timing: "",
+        seatNumber: null,
+        renewalRequestId: null,
+        invoiceNumber: generateInvoiceNumber(libraryId, student._id),
+        note: `Admission — ${durationLabel(days)}`,
+        createdBy: libraryId,
+      });
+    }
 
     // Track: student added
     writeLog({ action: "student_created", userId: String(req.user?.userId || ""), role: String(req.user?.role || ""), libraryId });
