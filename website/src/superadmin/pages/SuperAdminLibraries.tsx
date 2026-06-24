@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Input } from '../../components/ui/Input';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
-import { fetchSuperAdminLibraries, type SuperAdminLibrary } from '../api/superadminApi';
+import {
+  canDeleteLibrary,
+  deleteLibrary,
+  fetchSuperAdminLibraries,
+  setLibraryBlocked,
+  type SuperAdminLibrary,
+} from '../api/superadminApi';
 import { SuperAdminPageTitle } from '../components/SuperAdminPageTitle';
 import { SuperAdminPagination } from '../components/SuperAdminPagination';
 import { SuperAdminTableScroll } from '../components/SuperAdminTableScroll';
@@ -61,6 +67,7 @@ export function SuperAdminLibraries() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [actionId, setActionId] = useState<string | null>(null);
   const requestId = useRef(0);
   const isFirstSearchEffect = useRef(true);
 
@@ -125,6 +132,41 @@ export function SuperAdminLibraries() {
 
   const toggleNameSort = () => {
     applyFilters({ sort: sort === 'name_asc' ? 'name_desc' : 'name_asc' });
+  };
+
+  const handleToggleBlock = async (lib: SuperAdminLibrary) => {
+    const next = !lib.isActive;
+    const label = next ? 'activate' : 'block';
+    if (!window.confirm(`${next ? 'Activate' : 'Block'} "${lib.name}"?`)) return;
+    setActionId(lib.id);
+    try {
+      const updated = await setLibraryBlocked(lib.id, next);
+      setLibraries((rows) => rows.map((r) => (r.id === lib.id ? { ...r, isActive: updated.isActive } : r)));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : `Failed to ${label} library`);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleDelete = async (lib: SuperAdminLibrary) => {
+    if (
+      !window.confirm(
+        `Permanently delete "${lib.name}"?\n\nThis removes students, attendance, seats, and notifications for this library. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setActionId(lib.id);
+    try {
+      await deleteLibrary(lib.id);
+      setLibraries((rows) => rows.filter((r) => r.id !== lib.id));
+      setTotal((t) => Math.max(0, t - 1));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete library');
+    } finally {
+      setActionId(null);
+    }
   };
 
   const showEmpty = !loading && !searching && libraries.length === 0;
@@ -217,11 +259,18 @@ export function SuperAdminLibraries() {
                   <th>Plan</th>
                   <th>Students</th>
                   <th>Status</th>
-                  <th />
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {libraries.map((lib) => (
+                {libraries.map((lib) => {
+                  const busy = actionId === lib.id;
+                  const deletable = canDeleteLibrary({
+                    plan: lib.plan,
+                    subscriptionStatus: lib.subscriptionStatus,
+                    planExpiryDate: lib.planExpiryDate,
+                  });
+                  return (
                   <tr key={lib.id}>
                     <td>
                       <Link to={`/superadmin/libraries/${lib.id}`} className="font-medium text-white hover:text-emerald-200">
@@ -242,15 +291,39 @@ export function SuperAdminLibraries() {
                       </span>
                     </td>
                     <td>
-                      <Link
-                        to={`/superadmin/libraries/${lib.id}`}
-                        className="text-xs font-semibold text-emerald-200 hover:underline"
-                      >
-                        Manage →
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          to={`/superadmin/libraries/${lib.id}`}
+                          className="text-xs font-semibold text-emerald-200 hover:underline"
+                        >
+                          Manage
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handleToggleBlock(lib)}
+                          className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+                        >
+                          {lib.isActive ? 'Block' : 'Unblock'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || !deletable}
+                          title={
+                            deletable
+                              ? 'Delete library and all tenant data'
+                              : 'Only active PRO libraries (before expiry) can be deleted'
+                          }
+                          onClick={() => void handleDelete(lib)}
+                          className="rounded-lg border border-red-400/35 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </SuperAdminTableScroll>

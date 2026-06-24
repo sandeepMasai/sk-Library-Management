@@ -4,7 +4,7 @@ const ACTIONS = [
   { to: '/admin/students', label: 'Add Student', icon: '👨‍🎓', tone: 'violet' },
   { to: '/admin/attendance', label: 'Attendance', icon: '📅', tone: 'blue' },
   { to: '/admin/students', label: 'Collect Fee', icon: '💰', tone: 'emerald' },
-  { to: '/admin/communications', label: 'Send Message', icon: '💬', tone: 'cyan' },
+  { to: '/admin/communications', label: 'Communication Center', icon: '💬', tone: 'cyan' },
   { to: '/admin/seats', label: 'Add Seat', icon: '🪑', tone: 'amber' },
   { to: '/admin/students', label: 'Reports', icon: '📊', tone: 'rose' },
 ] as const;

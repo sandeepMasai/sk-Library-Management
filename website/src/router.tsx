@@ -1,12 +1,6 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { AdminLayout } from './admin/AdminLayout';
-import { AdminAttendance } from './admin/pages/AdminAttendance';
-import { AdminCommunication } from './admin/pages/AdminCommunication';
-import { AdminDashboard } from './admin/pages/AdminDashboard';
-import { AdminSeats } from './admin/pages/AdminSeats';
-import { AdminSettings } from './admin/pages/AdminSettings';
-import { AdminStudents } from './admin/pages/AdminStudents';
-import { AdminSubscription } from './admin/pages/AdminSubscription';
+import { lazyNamed } from './lib/lazyRoute';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Home } from './pages/Home';
@@ -33,7 +27,17 @@ import { SuperAdminPlans } from './superadmin/pages/SuperAdminPlans';
 import { SuperAdminSubscriptions } from './superadmin/pages/SuperAdminSubscriptions';
 import { SuperAdminStudents } from './superadmin/pages/SuperAdminStudents';
 import { SuperAdminNotifications } from './superadmin/pages/SuperAdminNotifications';
+import { SuperAdminPayments } from './superadmin/pages/SuperAdminPayments';
+import { RouteErrorPage } from './components/RouteErrorPage';
 import { SUPER_ADMIN_LOGIN_PATH } from './lib/routes';
+
+const AdminDashboard = lazyNamed(() => import('./admin/pages/AdminDashboard'), 'AdminDashboard');
+const AdminStudents = lazyNamed(() => import('./admin/pages/AdminStudents'), 'AdminStudents');
+const AdminAttendance = lazyNamed(() => import('./admin/pages/AdminAttendance'), 'AdminAttendance');
+const AdminSeats = lazyNamed(() => import('./admin/pages/AdminSeats'), 'AdminSeats');
+const AdminCommunication = lazyNamed(() => import('./admin/pages/AdminCommunication'), 'AdminCommunication');
+const AdminSubscription = lazyNamed(() => import('./admin/pages/AdminSubscription'), 'AdminSubscription');
+const AdminSettings = lazyNamed(() => import('./admin/pages/AdminSettings'), 'AdminSettings');
 
 export const router = createBrowserRouter([
   {
@@ -100,14 +104,21 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to="/superadmin/dashboard" replace /> },
-      { path: 'dashboard', element: <SuperAdminDashboard /> },
-      { path: 'libraries', element: <SuperAdminLibraries /> },
-      { path: 'libraries/:id', element: <SuperAdminLibraryDetail /> },
-      { path: 'plans', element: <SuperAdminPlans /> },
-      { path: 'subscriptions', element: <SuperAdminSubscriptions /> },
-      { path: 'students', element: <SuperAdminStudents /> },
-      { path: 'notifications', element: <SuperAdminNotifications /> },
+      {
+        element: <Outlet />,
+        errorElement: <RouteErrorPage />,
+        children: [
+          { index: true, element: <Navigate to="/superadmin/dashboard" replace /> },
+          { path: 'dashboard', element: <SuperAdminDashboard /> },
+          { path: 'libraries', element: <SuperAdminLibraries /> },
+          { path: 'libraries/:id', element: <SuperAdminLibraryDetail /> },
+          { path: 'plans', element: <SuperAdminPlans /> },
+          { path: 'subscriptions', element: <SuperAdminSubscriptions /> },
+          { path: 'payments', element: <SuperAdminPayments /> },
+          { path: 'students', element: <SuperAdminStudents /> },
+          { path: 'notifications', element: <SuperAdminNotifications /> },
+        ],
+      },
     ],
   },
 ]);

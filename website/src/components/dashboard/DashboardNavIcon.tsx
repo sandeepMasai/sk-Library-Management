@@ -8,6 +8,7 @@ const icons: Record<string, string> = {
   settings: '⚙',
   libraries: '🏛',
   subscriptions: '📊',
+  payments: '💳',
   plans: '📋',
   notifications: '🔔',
 };

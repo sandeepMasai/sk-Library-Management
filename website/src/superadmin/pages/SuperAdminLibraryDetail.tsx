@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DashboardPageHeader } from '../../components/dashboard/DashboardPageHeader';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import {
   assignLibraryPlan,
   cancelLibrarySubscription,
+  canDeleteLibrary,
+  deleteLibrary,
   extendLibraryPlan,
   fetchLibraryDetail,
   fetchLibrarySubscription,
   fetchPlans,
+  setLibraryBlocked,
   type LibraryDetail,
   type LibraryStats,
   type LibrarySubscriptionDetail,
@@ -54,6 +57,7 @@ const toneClass = {
 
 export function SuperAdminLibraryDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [library, setLibrary] = useState<LibraryDetail | null>(null);
   const [stats, setStats] = useState<LibraryStats | null>(null);
   const [subscription, setSubscription] = useState<LibrarySubscriptionDetail | null>(null);
@@ -148,6 +152,40 @@ export function SuperAdminLibraryDetail() {
     }
   };
 
+  const handleToggleBlock = async () => {
+    if (!library) return;
+    const next = !library.isActive;
+    if (!window.confirm(`${next ? 'Activate' : 'Block'} "${library.name}"?`)) return;
+    setBusy(true);
+    try {
+      await setLibraryBlocked(library.id, next);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update library status');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!library) return;
+    if (
+      !window.confirm(
+        `Permanently delete "${library.name}"?\n\nStudents, attendance, seats, and notifications will be removed. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteLibrary(library.id);
+      navigate('/superadmin/libraries', { replace: true });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete library');
+      setBusy(false);
+    }
+  };
+
   if (loading) return <p className="page-pad text-white/65">Loading library profile…</p>;
 
   if (error || !library || !stats || !subscription) {
@@ -165,6 +203,7 @@ export function SuperAdminLibraryDetail() {
 
   const subStatus = subscription.subscription.status;
   const tone = statusTone(subStatus);
+  const deletable = canDeleteLibrary(library);
 
   return (
     <div className="page-pad">
@@ -249,6 +288,39 @@ export function SuperAdminLibraryDetail() {
           </div>
         </SaasCard>
       </div>
+
+      <SaasCard className="mt-6 border border-red-400/20">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-200">Danger zone</p>
+        <h3 className="mt-1 text-lg font-bold text-white">Library access</h3>
+        <p className="mt-2 text-sm text-white/65">
+          Block stops library login and operations. Delete permanently removes this library and its tenant data.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            className="!border-white/25 !text-white hover:!bg-white/10"
+            onClick={() => void handleToggleBlock()}
+            disabled={busy}
+          >
+            {library.isActive ? 'Block library' : 'Activate library'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="!border-red-400/40 !text-red-200 hover:!bg-red-500/15"
+            onClick={() => void handleDelete()}
+            disabled={busy || !deletable}
+          >
+            Delete library
+          </Button>
+        </div>
+        {!deletable ? (
+          <p className="mt-3 text-xs text-white/50">
+            Delete is only available for active PRO libraries before plan expiry (platform rule).
+          </p>
+        ) : null}
+      </SaasCard>
 
       {subscription.payments.length > 0 ? (
         <div className="mt-6">

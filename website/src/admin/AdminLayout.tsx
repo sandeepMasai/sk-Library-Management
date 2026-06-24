@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell';
+import { PageLoadFallback } from '../components/PageLoadFallback';
 import { SeoNoIndex } from '../seo/Seo';
 import { AdminMobileNav } from './components/AdminMobileNav';
 import { AdminSidebar } from './AdminSidebar';
@@ -30,7 +32,9 @@ export function AdminLayout() {
             aria-hidden
           />
           <div className="relative z-[1]">
-            <Outlet />
+            <Suspense fallback={<PageLoadFallback />}>
+              <Outlet />
+            </Suspense>
             <AdminMobileNav />
           </div>
         </div>

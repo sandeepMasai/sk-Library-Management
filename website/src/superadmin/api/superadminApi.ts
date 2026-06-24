@@ -417,6 +417,35 @@ export async function cancelLibrarySubscription(libraryId: string): Promise<void
   });
 }
 
+export async function setLibraryBlocked(libraryId: string, isActive: boolean): Promise<SuperAdminLibrary> {
+  const res = await apiRaw<{ ok?: boolean; library?: SuperAdminLibrary; message?: string }>(
+    `/api/admin/libraries/${libraryId}/block`,
+    { method: 'PATCH', body: JSON.stringify({ isActive }) }
+  );
+  if (!res.library) throw new Error(res.message || 'Failed to update library status');
+  return res.library;
+}
+
+export async function deleteLibrary(libraryId: string): Promise<void> {
+  await apiRaw(`/api/admin/libraries/${libraryId}`, { method: 'DELETE' });
+}
+
+/** Backend allows delete only for PRO libraries still active until plan expiry. */
+export function canDeleteLibrary(library: {
+  plan?: string;
+  subscriptionStatus?: string;
+  planExpiryDate?: string | null;
+}): boolean {
+  const expiryMs = library.planExpiryDate ? new Date(library.planExpiryDate).getTime() : null;
+  return (
+    library.plan === 'pro' &&
+    library.subscriptionStatus !== 'expired' &&
+    expiryMs != null &&
+    Number.isFinite(expiryMs) &&
+    Date.now() < expiryMs
+  );
+}
+
 export async function fetchRecentLibraries(limit = 8): Promise<SuperAdminLibrary[]> {
   const res = await apiRaw<{ ok?: boolean; libraries?: SuperAdminLibrary[] }>(
     `/api/superadmin/recent-libraries?limit=${limit}`
@@ -465,4 +494,119 @@ export async function updateSuperAdminNotification(
 
 export async function deleteSuperAdminNotification(id: string): Promise<void> {
   await apiRaw(`/api/admin/notifications/${id}`, { method: 'DELETE' });
+}
+
+export type SuperAdminPaymentRow = {
+  id: string;
+  libraryId: string | null;
+  libraryName: string;
+  ownerName: string;
+  mobile: string;
+  email: string;
+  transactionId: string;
+  razorpayPaymentId: string;
+  amount: number;
+  planName: string;
+  planKey?: string;
+  status: string;
+  paymentDate: string | null;
+  expiryDate: string | null;
+  subscriptionActive: boolean;
+  isExpired: boolean;
+};
+
+export type PaymentsOverview = {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  todayRevenue: number;
+  growthPercent: number;
+  pendingPayments: number;
+  failedPayments: number;
+  activeSubscriptions: number;
+  sparkline: { date: string; revenue: number }[];
+  subscriptionMix: { active: number; expired: number };
+  statusCounts: Record<string, number>;
+};
+
+export type PaymentsListTotals = {
+  totalRevenue: number;
+  successCount: number;
+  pendingCount: number;
+  pendingTotal: number;
+  failedCount: number;
+  failedTotal: number;
+};
+
+export type PlanLibraryCounts = {
+  all: number;
+  free: number;
+  pro: number;
+  trial: number;
+  none: number;
+};
+
+export function isPaymentWithLibrary(row: SuperAdminPaymentRow): boolean {
+  if (!row.libraryId) return false;
+  const name = String(row.libraryName || '').trim();
+  return name.length > 0 && name !== '—' && name !== '-';
+}
+
+export async function fetchPaymentsOverview(): Promise<PaymentsOverview> {
+  const res = await apiRaw<{ ok?: boolean; overview?: PaymentsOverview }>('/api/superadmin/payments/overview');
+  if (!res.overview) throw new Error('Failed to load payment overview');
+  return res.overview;
+}
+
+export async function fetchSuperAdminPayments(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  paymentStatus?: string;
+  planType?: string;
+  libraryStatus?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ payments: SuperAdminPaymentRow[]; total: number; totals: PaymentsListTotals | null }> {
+  const q = new URLSearchParams();
+  if (params?.page) q.set('page', String(params.page));
+  if (params?.limit) q.set('limit', String(params.limit));
+  if (params?.search?.trim()) q.set('search', params.search.trim());
+  if (params?.paymentStatus && params.paymentStatus !== 'all') q.set('paymentStatus', params.paymentStatus);
+  if (params?.planType && params.planType !== 'all') q.set('planType', params.planType);
+  if (params?.libraryStatus && params.libraryStatus !== 'all') q.set('libraryStatus', params.libraryStatus);
+  if (params?.from) q.set('from', params.from);
+  if (params?.to) q.set('to', params.to);
+
+  const res = await apiRaw<{
+    ok?: boolean;
+    payments?: SuperAdminPaymentRow[];
+    total?: number;
+    totals?: PaymentsListTotals;
+  }>(`/api/superadmin/payments?${q}`);
+
+  const payments = (res.payments ?? []).filter(isPaymentWithLibrary);
+  return {
+    payments,
+    total: Number(res.total ?? 0),
+    totals: res.totals ?? null,
+  };
+}
+
+export async function fetchLibraryPlanCounts(): Promise<PlanLibraryCounts> {
+  const types = ['all', 'free', 'pro', 'trial', 'none'] as const;
+  const totals = await Promise.all(
+    types.map(async (planType) => {
+      const q = new URLSearchParams({ page: '1', limit: '1' });
+      if (planType !== 'all') q.set('planType', planType);
+      const res = await apiRaw<{ total?: number }>(`/api/admin/libraries?${q}`);
+      return Number(res.total || 0);
+    })
+  );
+  return {
+    all: totals[0],
+    free: totals[1],
+    pro: totals[2],
+    trial: totals[3],
+    none: totals[4],
+  };
 }

@@ -11,6 +11,7 @@ const NAV = [
   { to: '/superadmin/libraries', label: 'Libraries', icon: 'libraries' },
   { to: '/superadmin/plans', label: 'Plans', icon: 'plans' },
   { to: '/superadmin/subscriptions', label: 'Subscriptions', icon: 'subscriptions' },
+  { to: '/superadmin/payments', label: 'Payment Details', icon: 'payments' },
   { to: '/superadmin/students', label: 'Students', icon: 'students' },
   { to: '/superadmin/notifications', label: 'Library Messages', icon: 'notifications' },
 ] as const;
