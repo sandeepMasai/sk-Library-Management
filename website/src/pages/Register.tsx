@@ -141,8 +141,8 @@ export function Register() {
       }
     }
     if (current === 2) {
-      if (password.length < 8) {
-        setError('Password must be at least 8 characters.');
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters.');
         return false;
       }
     }
@@ -175,6 +175,11 @@ export function Register() {
     if (!registrationToken) {
       setError('Verify your email with the OTP before registering.');
       setStep(1);
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      setStep(2);
       return;
     }
     setLoading(true);
@@ -339,11 +344,11 @@ export function Register() {
               label="Password *"
               type="password"
               required
-              minLength={8}
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              hint="Minimum 8 characters"
-              placeholder="Create a strong password"
+              hint="Minimum 6 characters"
+              placeholder="Create a password"
             />
             <Input
               dark

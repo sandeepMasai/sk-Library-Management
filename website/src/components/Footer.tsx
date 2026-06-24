@@ -15,7 +15,7 @@ export function Footer() {
               <a href={`mailto:${SITE.supportEmail}`} className="block text-teal-300 transition hover:text-white">
                 {SITE.supportEmail}
               </a>
-              <span className="block text-slate-500">{SITE.noreplyEmail} (automated emails)</span>
+              <span className="block text-slate-500">{SITE.noreplyEmail}</span>
             </p>
           </div>
 

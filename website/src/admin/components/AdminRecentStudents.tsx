@@ -2,13 +2,15 @@ import { Link } from 'react-router-dom';
 import type { StudentRow } from '../api/libraryApi';
 import { formatExpiry, statusBadge } from '../utils/studentHelpers';
 
+const RECENT_LIMIT = 5;
+
 type AdminRecentStudentsProps = {
   students: StudentRow[];
   loading?: boolean;
 };
 
 export function AdminRecentStudents({ students, loading }: AdminRecentStudentsProps) {
-  const rows = students.slice(0, 6);
+  const rows = students.slice(0, RECENT_LIMIT);
 
   return (
     <section className="admin-panel admin-card rounded-2xl p-4 sm:p-5">
@@ -21,7 +23,7 @@ export function AdminRecentStudents({ students, loading }: AdminRecentStudentsPr
 
       {loading ? (
         <div className="mt-4 space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: RECENT_LIMIT }).map((_, i) => (
             <div key={i} className="admin-skeleton h-12 rounded-xl" />
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthShell } from '../components/AuthShell';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -11,16 +11,17 @@ type Tab = 'library' | 'student';
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setSession } = useAuth();
   const [tab, setTab] = useState<Tab>('library');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const resetMessage = (location.state as { message?: string } | null)?.message ?? '';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mobile, setMobile] = useState('');
   const [pin, setPin] = useState('');
-  const [libraryCode, setLibraryCode] = useState('');
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,7 +31,7 @@ export function Login() {
       const session =
         tab === 'library'
           ? await loginLibrary(email, password)
-          : await loginStudent(mobile, pin, libraryCode);
+          : await loginStudent(mobile, pin);
       setSession(session);
       navigate(session.user.role === 'library' ? '/admin' : '/dashboard');
     } catch (err) {
@@ -91,6 +92,11 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <div className="text-right">
+              <Link to="/forgot-password" className="text-sm font-medium text-teal-400 hover:text-teal-300">
+                Forgot password?
+              </Link>
+            </div>
           </>
         ) : (
           <>
@@ -113,16 +119,14 @@ export function Login() {
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
             />
-            <Input
-              dark
-              label="Library code (optional)"
-              value={libraryCode}
-              onChange={(e) => setLibraryCode(e.target.value.toUpperCase())}
-              placeholder="e.g. LIB12AB"
-              hint="Required if your mobile is registered at multiple libraries"
-            />
           </>
         )}
+
+        {resetMessage ? (
+          <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-sm text-teal-200">
+            {resetMessage}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>

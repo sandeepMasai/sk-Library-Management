@@ -3,7 +3,7 @@ import { Seo } from '../seo/Seo';
 import { Footer } from './Footer';
 import { Header } from './Header';
 
-const AUTH_PATHS = new Set(['/login', '/register']);
+const AUTH_PATHS = new Set(['/login', '/register', '/forgot-password']);
 
 export function Layout() {
   const { pathname } = useLocation();

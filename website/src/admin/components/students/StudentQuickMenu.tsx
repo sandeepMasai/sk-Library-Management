@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import type { EnrichedStudent } from '../../utils/studentHelpers';
 import { formatExpiry, statusBadge } from '../../utils/studentHelpers';
@@ -7,41 +8,99 @@ type StudentQuickMenuProps = {
   student: EnrichedStudent;
   onView: () => void;
   onEdit: () => void;
+  onFees: () => void;
+  onAttendance: () => void;
   onMessage: () => void;
   onBlock: () => void;
   onDelete: () => void;
 };
 
+type MenuItem = {
+  label: string;
+  action: () => void;
+  danger?: boolean;
+  icon?: string;
+};
+
+type MenuPosition = { top: number; left: number };
+
+const MENU_WIDTH = 224;
+
+function computeMenuPosition(anchor: HTMLElement): MenuPosition {
+  const rect = anchor.getBoundingClientRect();
+  const estimatedHeight = 360;
+  const gap = 8;
+  let top = rect.bottom + gap;
+  if (top + estimatedHeight > window.innerHeight - 8) {
+    top = Math.max(8, rect.top - estimatedHeight - gap);
+  }
+  const left = Math.min(
+    Math.max(8, rect.right - MENU_WIDTH),
+    window.innerWidth - MENU_WIDTH - 8
+  );
+  return { top, left };
+}
+
 export function StudentQuickMenu({
   student,
   onView,
   onEdit,
+  onFees,
+  onAttendance,
   onMessage,
   onBlock,
   onDelete,
 }: StudentQuickMenuProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) return;
+    const update = () => {
+      if (!anchorRef.current) return;
+      setPosition(computeMenuPosition(anchorRef.current));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (anchorRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
   }, [open]);
 
-  const items = [
-    { label: 'View profile', action: onView },
-    { label: 'Edit student', action: onEdit },
-    { label: 'Collect fee', action: onEdit },
-    { label: 'Renew membership', action: onEdit },
-    { label: 'Assign seat', action: () => window.location.assign('/admin/seats') },
-    { label: 'Attendance history', action: onView },
-    { label: 'Send message', action: onMessage },
+  const items: MenuItem[] = [
+    { label: 'View profile', action: onView, icon: '👤' },
+    { label: 'Edit student', action: onEdit, icon: '✏️' },
+    { label: 'Collect fee', action: onFees, icon: '💰' },
+    { label: 'Renew membership', action: onEdit, icon: '🔄' },
+    { label: 'Assign seat', action: () => window.location.assign('/admin/seats'), icon: '💺' },
+    { label: 'Attendance history', action: onAttendance, icon: '📊' },
+    { label: 'Send message', action: onMessage, icon: '💬' },
     {
       label: 'Download profile',
+      icon: '⬇️',
       action: () => {
         const blob = new Blob([JSON.stringify(student, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -52,40 +111,68 @@ export function StudentQuickMenu({
         URL.revokeObjectURL(url);
       },
     },
-    { label: student.isBlocked ? 'Unblock' : 'Block', action: onBlock },
-    { label: 'Delete', action: onDelete, danger: true },
+    { label: student.isBlocked ? 'Unblock' : 'Block', action: onBlock, icon: student.isBlocked ? '✅' : '🚫' },
+    { label: 'Delete', action: onDelete, danger: true, icon: '🗑️' },
   ];
 
+  const menu =
+    open && position
+      ? createPortal(
+          <>
+            <div className="student-quick-menu-backdrop fixed inset-0 z-[190]" aria-hidden onClick={() => setOpen(false)} />
+            <div
+              ref={panelRef}
+              className="student-quick-menu-panel admin-card fixed z-[200] overflow-hidden rounded-2xl border border-white/15 shadow-2xl"
+              style={{ top: position.top, left: position.left, width: MENU_WIDTH }}
+              role="menu"
+              aria-label="Student actions"
+            >
+              <div className="border-b border-white/10 px-3 py-2.5">
+                <p className="truncate text-sm font-semibold text-white">{student.name}</p>
+                <p className="truncate text-xs text-white/60">@{student.username}</p>
+              </div>
+              <div className="max-h-[min(24rem,calc(100dvh-6rem))] overflow-y-auto py-1">
+                {items.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      item.action();
+                    }}
+                    className={`student-quick-menu-item flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition ${
+                      item.danger ? 'text-rose-300 hover:bg-rose-500/15' : 'text-white/90 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="text-base leading-none" aria-hidden>
+                      {item.icon}
+                    </span>
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>,
+          document.body
+        )
+      : null;
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={anchorRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded-lg p-1.5 text-muted hover:bg-slate-100 hover:text-slate-900"
+        className={`student-action-btn student-action-btn--menu ${open ? 'student-action-btn--active' : ''}`}
         aria-label="More actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
         ⋮
       </button>
-      {open ? (
-        <div className="absolute right-0 top-full z-20 mt-1 min-w-[11rem] rounded-xl border border-white/20 bg-emerald-900/95 py-1 shadow-lg backdrop-blur-md">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                item.action();
-              }}
-              className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${
-                item.danger ? 'text-red-600' : 'text-slate-700'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+      {menu}
+    </>
   );
 }
 
@@ -100,10 +187,7 @@ export function StudentMobileList({ students, onView }: StudentMobileListProps) 
       {students.map((student) => {
         const badge = statusBadge(student);
         return (
-          <div
-            key={student.id}
-            className="student-mobile-card admin-card rounded-2xl p-4"
-          >
+          <div key={student.id} className="student-mobile-card admin-card rounded-2xl p-4">
             <div className="flex items-start gap-3">
               {student.photoUrl ? (
                 <img src={student.photoUrl} alt="" className="h-12 w-12 rounded-2xl object-cover" />
@@ -113,13 +197,13 @@ export function StudentMobileList({ students, onView }: StudentMobileListProps) 
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-slate-900">{student.name}</p>
+                <p className="font-semibold text-white">{student.name}</p>
                 <p className="text-sm text-muted">📱 {student.mobile}</p>
                 <p className="mt-1 text-xs text-muted">
                   {student.seatNumber ? `💺 Seat ${student.seatNumber}` : 'No seat'} · 📅 {student.membershipPlan}
                 </p>
               </div>
-              <span className={`shrink-0 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>
+              <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>
                 {badge.label}
               </span>
             </div>
@@ -130,7 +214,7 @@ export function StudentMobileList({ students, onView }: StudentMobileListProps) 
             <button
               type="button"
               onClick={() => onView(student.id)}
-              className="mt-3 w-full rounded-xl bg-primary/10 py-2.5 text-sm font-semibold text-primary"
+              className="student-action-btn student-action-btn--view mt-3 w-full"
             >
               View profile
             </button>
@@ -158,7 +242,7 @@ export function StudentBulkBar({
 
   return (
     <div className="student-bulk-bar flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
-      <p className="text-sm font-semibold text-slate-900">{count} selected</p>
+      <p className="text-sm font-semibold text-white">{count} selected</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onMessage} className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
           Send message
@@ -175,7 +259,7 @@ export function StudentBulkBar({
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600"
+          className="rounded-lg bg-rose-500/20 px-3 py-1.5 text-xs font-semibold text-rose-200"
         >
           Delete selected
         </button>

@@ -30,6 +30,71 @@ import {
 } from '../../utils/studentHelpers';
 
 const MEMBERSHIP_DAYS = [30, 90, 180, 365] as const;
+
+const MEMBERSHIP_DAY_STYLES: Record<
+  (typeof MEMBERSHIP_DAYS)[number],
+  { active: string; idle: string; dot: string }
+> = {
+  30: {
+    active: 'border-sky-400/70 bg-sky-500/30 text-white shadow-md shadow-sky-900/30 ring-1 ring-sky-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-sky-400/40 hover:bg-sky-500/10',
+    dot: 'bg-sky-400',
+  },
+  90: {
+    active: 'border-teal-400/70 bg-teal-500/30 text-white shadow-md shadow-teal-900/30 ring-1 ring-teal-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-teal-400/40 hover:bg-teal-500/10',
+    dot: 'bg-teal-400',
+  },
+  180: {
+    active: 'border-amber-400/70 bg-amber-500/30 text-white shadow-md shadow-amber-900/30 ring-1 ring-amber-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-amber-400/40 hover:bg-amber-500/10',
+    dot: 'bg-amber-400',
+  },
+  365: {
+    active: 'border-violet-400/70 bg-violet-500/30 text-white shadow-md shadow-violet-900/30 ring-1 ring-violet-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-violet-400/40 hover:bg-violet-500/10',
+    dot: 'bg-violet-400',
+  },
+};
+
+const FEE_STATUS_OPTIONS: {
+  value: (typeof FEE_STATUSES)[number];
+  label: string;
+  hint: string;
+  icon: string;
+  active: string;
+  idle: string;
+}[] = [
+  {
+    value: 'Paid',
+    label: 'Full',
+    hint: 'Fully paid',
+    icon: '✓',
+    active: 'border-emerald-400/70 bg-emerald-500/30 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-emerald-400/40 hover:bg-emerald-500/10',
+  },
+  {
+    value: 'Half Paid',
+    label: 'Half',
+    hint: 'Partial paid',
+    icon: '◐',
+    active: 'border-amber-400/70 bg-amber-500/30 text-white shadow-md shadow-amber-900/30 ring-1 ring-amber-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-amber-400/40 hover:bg-amber-500/10',
+  },
+  {
+    value: 'Pending',
+    label: 'Pending',
+    hint: 'Not paid',
+    icon: '○',
+    active: 'border-rose-400/70 bg-rose-500/30 text-white shadow-md shadow-rose-900/30 ring-1 ring-rose-300/50',
+    idle: 'border-white/15 text-white/75 hover:border-rose-400/40 hover:bg-rose-500/10',
+  },
+];
+
+const FEE_METHOD_OPTIONS = [
+  { value: 'cash' as const, label: 'Cash', icon: '💵' },
+  { value: 'upi' as const, label: 'UPI', icon: '📱' },
+];
 const FEE_STATUSES = ['Paid', 'Half Paid', 'Pending'] as const;
 
 type DrawerTab = 'overview' | 'edit' | 'fees' | 'attendance' | 'seat' | 'messages';
@@ -81,8 +146,8 @@ function daysUntilExpiry(expiryDate?: string) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="admin-card rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+    <section className="student-drawer-section admin-card rounded-2xl p-4">
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -106,6 +171,7 @@ export function StudentDetailDrawer({
   const [renewals, setRenewals] = useState<RenewalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [feeSaving, setFeeSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [renewalBusy, setRenewalBusy] = useState(false);
   const [error, setError] = useState('');
@@ -231,6 +297,38 @@ export function StudentDetailDrawer({
     }
   }
 
+  async function handleFeeSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form || !student) return;
+
+    const feeNum = Number(form.feeAmount);
+    if (!Number.isFinite(feeNum) || feeNum < 0) {
+      setError('Enter a valid fee amount');
+      return;
+    }
+
+    setFeeSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await updateStudent(student.id, {
+        feeAmount: feeNum,
+        feeStatus: form.feeStatus,
+        feeMethod: form.feeMethod,
+      });
+      setStudent(updated);
+      setForm(toForm(updated));
+      setSuccess('Fee updated successfully.');
+      onUpdated();
+      const pay = await fetchStudentPayments(student.id);
+      setPayments(pay);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fee update failed');
+    } finally {
+      setFeeSaving(false);
+    }
+  }
+
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !student) return;
@@ -258,24 +356,24 @@ export function StudentDetailDrawer({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm">
+    <div className="student-drawer-overlay fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-sm">
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div className="student-drawer admin-card relative flex h-full w-full max-w-2xl flex-col overflow-hidden shadow-2xl">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-primary/5 to-white px-5 py-4">
+        <div className="student-drawer-header border-b border-white/10 bg-white/5 px-5 py-4 backdrop-blur-md">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-4">
               {loading ? (
                 <div className="admin-skeleton h-16 w-16 rounded-2xl" />
               ) : student?.photoUrl ? (
-                <img src={student.photoUrl} alt="" className="h-16 w-16 rounded-2xl object-cover shadow-md" />
+                <img src={student.photoUrl} alt="" className="h-16 w-16 rounded-2xl object-cover shadow-md ring-1 ring-white/15" />
               ) : (
-                <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-2xl font-bold text-primary">
+                <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 text-2xl font-bold text-primary">
                   {student?.name?.charAt(0).toUpperCase() || '👤'}
                 </span>
               )}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">Student profile</p>
-                <h2 className="font-display text-xl font-bold text-slate-900">{loading ? 'Loading…' : student?.name}</h2>
+                <h2 className="font-display text-xl font-bold text-white">{loading ? 'Loading…' : student?.name}</h2>
                 {student ? (
                   <p className="text-sm text-muted">
                     {studentDisplayId(student)} · @{student.username}
@@ -283,7 +381,7 @@ export function StudentDetailDrawer({
                 ) : null}
               </div>
             </div>
-            <button type="button" className="rounded-lg p-2 text-muted hover:bg-slate-100" onClick={onClose}>
+            <button type="button" className="rounded-lg p-2 text-muted hover:bg-white/10 hover:text-white" onClick={onClose}>
               ✕
             </button>
           </div>
@@ -294,8 +392,8 @@ export function StudentDetailDrawer({
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  tab === t.id ? 'bg-primary text-white shadow-sm' : 'text-muted hover:bg-slate-100'
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  tab === t.id ? 'bg-primary text-white shadow-sm' : 'text-white/70 hover:bg-white/10'
                 }`}
               >
                 {t.label}
@@ -304,7 +402,7 @@ export function StudentDetailDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="student-drawer-body flex-1 overflow-y-auto bg-transparent p-5">
           {loading ? (
             <div className="space-y-4">
               <div className="admin-skeleton h-32 rounded-2xl" />
@@ -375,24 +473,24 @@ export function StudentDetailDrawer({
                   <div><dt className="text-muted">Last payment</dt><dd className="font-medium">₹{fees.last?.amount ?? student.feeAmount}</dd></div>
                   <div><dt className="text-muted">Payment date</dt><dd className="font-medium">{formatExpiry(fees.last?.paymentDate || undefined)}</dd></div>
                 </dl>
-                <button type="button" onClick={() => setTab('fees')} className="mt-2 text-sm font-semibold text-primary">
+                <button type="button" onClick={() => setTab('fees')} className="mt-2 text-sm font-semibold text-white hover:text-white/80">
                   View payment history →
                 </button>
               </Section>
 
               <Section title="Attendance">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl bg-emerald-50 p-3 text-center">
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-center">
                     <p className="text-xs text-muted">Today</p>
-                    <p className="text-lg font-bold text-emerald-700">
+                    <p className="text-lg font-bold text-emerald-300">
                       {attendance.some((a) => a.date.startsWith(new Date().toISOString().slice(0, 10)))
                         ? 'Present'
                         : 'Absent'}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-blue-50 p-3 text-center">
+                  <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-3 text-center">
                     <p className="text-xs text-muted">Monthly</p>
-                    <p className="text-lg font-bold text-blue-700">{attendancePct}%</p>
+                    <p className="text-lg font-bold text-sky-300">{attendancePct}%</p>
                   </div>
                 </div>
               </Section>
@@ -406,7 +504,7 @@ export function StudentDetailDrawer({
                       <li key={i} className="flex gap-3 text-sm">
                         <span className="text-lg">{item.icon}</span>
                         <div>
-                          <p className="font-medium text-slate-900">{item.label}</p>
+                          <p className="font-medium text-white">{item.label}</p>
                           <p className="text-xs text-muted">{formatExpiry(item.date)}</p>
                         </div>
                       </li>
@@ -441,19 +539,27 @@ export function StudentDetailDrawer({
                   <Input label="Fee (₹) *" type="number" required value={form.feeAmount} onChange={(e) => setForm({ ...form, feeAmount: e.target.value })} />
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {MEMBERSHIP_DAYS.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setForm({ ...form, membershipDays: d })}
-                      className={`rounded-xl border px-3 py-1.5 text-sm ${
-                        form.membershipDays === d ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200'
-                      }`}
-                    >
-                      {d} days
-                    </button>
-                  ))}
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Select membership days</p>
+                  <div className="flex flex-wrap gap-2">
+                    {MEMBERSHIP_DAYS.map((d) => {
+                      const selected = form.membershipDays === d;
+                      const tone = MEMBERSHIP_DAY_STYLES[d];
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setForm({ ...form, membershipDays: d })}
+                          className={`inline-flex min-w-[5.5rem] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                            selected ? tone.active : tone.idle
+                          }`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${selected ? tone.dot : 'bg-white/25'}`} aria-hidden />
+                          {d} days
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </Section>
 
@@ -477,23 +583,91 @@ export function StudentDetailDrawer({
             </form>
           ) : tab === 'fees' ? (
             <div className="space-y-4">
+              <form onSubmit={handleFeeSave}>
+                <Section title="Collect / update fee">
+                  <Input
+                    dark
+                    label="Fee amount (₹)"
+                    type="number"
+                    required
+                    min={0}
+                    value={form.feeAmount}
+                    onChange={(e) => setForm({ ...form, feeAmount: e.target.value })}
+                    placeholder="Enter fee amount"
+                  />
+
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Fee status</p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {FEE_STATUS_OPTIONS.map((option) => {
+                        const selected = form.feeStatus === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setForm({ ...form, feeStatus: option.value })}
+                            className={`flex flex-col items-start rounded-xl border px-3 py-3 text-left transition ${
+                              selected ? option.active : option.idle
+                            }`}
+                          >
+                            <span className="text-base leading-none" aria-hidden>
+                              {option.icon}
+                            </span>
+                            <span className="mt-2 text-sm font-bold">{option.label}</span>
+                            <span className="mt-0.5 text-[11px] text-white/65">{option.hint}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payment method</p>
+                    <div className="flex flex-wrap gap-2">
+                      {FEE_METHOD_OPTIONS.map((method) => {
+                        const selected = form.feeMethod === method.value;
+                        return (
+                          <button
+                            key={method.value}
+                            type="button"
+                            onClick={() => setForm({ ...form, feeMethod: method.value })}
+                            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                              selected
+                                ? 'border-primary bg-primary/25 text-white ring-1 ring-primary/40'
+                                : 'border-white/15 text-white/75 hover:bg-white/5'
+                            }`}
+                          >
+                            <span aria-hidden>{method.icon}</span>
+                            {method.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+                  {success ? <p className="mt-4 text-sm text-emerald-300">{success}</p> : null}
+
+                  <Button type="submit" className="mt-4" disabled={feeSaving}>
+                    {feeSaving ? 'Saving fee…' : 'Save fee'}
+                  </Button>
+                </Section>
+              </form>
+
               <Section title="Fee summary">
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                  <div><dt className="text-muted">Status</dt><dd className="font-semibold">{student.feeStatus}</dd></div>
-                  <div><dt className="text-muted">Amount due</dt><dd className="font-semibold">₹{student.feeAmount}</dd></div>
-                  <div><dt className="text-muted">Total paid</dt><dd className="font-semibold text-primary">₹{fees.totalPaid}</dd></div>
-                  <div><dt className="text-muted">Pending</dt><dd className="font-semibold text-amber-600">₹{fees.pending}</dd></div>
+                  <div><dt className="text-muted">Status</dt><dd className="font-semibold text-white">{student.feeStatus}</dd></div>
+                  <div><dt className="text-muted">Amount due</dt><dd className="font-semibold text-white">₹{student.feeAmount}</dd></div>
+                  <div><dt className="text-muted">Total paid</dt><dd className="font-semibold text-emerald-300">₹{fees.totalPaid}</dd></div>
+                  <div><dt className="text-muted">Pending</dt><dd className="font-semibold text-amber-300">₹{fees.pending}</dd></div>
                 </dl>
-                <Button size="sm" variant="outline" className="mt-3" onClick={() => setTab('edit')}>
-                  Collect / update fee
-                </Button>
               </Section>
 
               <Section title="Payment history">
                 {payments.length === 0 ? (
                   <p className="text-sm text-muted">No payments recorded yet.</p>
                 ) : (
-                  <ul className="divide-y divide-slate-50">
+                  <ul className="divide-y divide-white/10">
                     {payments.map((p) => (
                       <li key={p.id} className="flex justify-between py-3 text-sm">
                         <div>
@@ -511,15 +685,15 @@ export function StudentDetailDrawer({
             <div className="space-y-4">
               <Section title="Attendance overview">
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                     <p className="text-xs text-muted">This month</p>
                     <p className="text-2xl font-bold text-primary">{attendancePct}%</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                     <p className="text-xs text-muted">Days present</p>
-                    <p className="text-2xl font-bold">{attendance.length}</p>
+                    <p className="text-2xl font-bold text-white">{attendance.length}</p>
                   </div>
-                  <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                     <p className="text-xs text-muted">Status</p>
                     <p className="text-lg font-bold capitalize">{getStudentStatus(student)}</p>
                   </div>
@@ -531,7 +705,7 @@ export function StudentDetailDrawer({
                   {weekTrend.map((day) => (
                     <div key={day.label} className="flex flex-1 flex-col items-center gap-1">
                       <div
-                        className={`w-full max-w-[2rem] rounded-t-lg ${day.present ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                        className={`w-full max-w-[2rem] rounded-t-lg ${day.present ? 'bg-emerald-500' : 'bg-white/15'}`}
                         style={{ height: day.present ? '80%' : '20%' }}
                       />
                       <span className="text-[10px] text-muted">{day.label}</span>
@@ -546,7 +720,7 @@ export function StudentDetailDrawer({
                 ) : (
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {attendance.map((row) => (
-                      <div key={row.date} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-2 text-center text-xs">
+                      <div key={row.date} className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2 py-2 text-center text-xs text-emerald-100">
                         {new Date(row.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                       </div>
                     ))}
@@ -584,7 +758,7 @@ export function StudentDetailDrawer({
               {student.photoUrl ? (
                 <div className="mt-4">
                   <p className="text-xs font-semibold text-muted">Student photo</p>
-                  <img src={student.photoUrl} alt="" className="mt-2 max-h-40 rounded-xl border" />
+                  <img src={student.photoUrl} alt="" className="mt-2 max-h-40 rounded-xl border border-white/15" />
                 </div>
               ) : null}
             </Section>

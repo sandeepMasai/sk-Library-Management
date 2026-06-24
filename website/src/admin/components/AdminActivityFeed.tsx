@@ -12,10 +12,14 @@ type AdminActivityFeedProps = {
   items: FeedItem[];
   loading?: boolean;
   id?: string;
+  limit?: number;
   onItemClick?: (item: FeedItem) => void;
 };
 
-export function AdminActivityFeed({ items, loading, id, onItemClick }: AdminActivityFeedProps) {
+const DEFAULT_LIMIT = 5;
+
+export function AdminActivityFeed({ items, loading, id, limit = DEFAULT_LIMIT, onItemClick }: AdminActivityFeedProps) {
+  const visibleItems = items.slice(0, limit);
   return (
     <section
       id={id}
@@ -25,15 +29,15 @@ export function AdminActivityFeed({ items, loading, id, onItemClick }: AdminActi
 
       {loading ? (
         <div className="mt-4 space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: DEFAULT_LIMIT }).map((_, i) => (
             <div key={i} className="admin-skeleton h-14 rounded-xl" />
           ))}
         </div>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <p className="mt-6 text-sm text-muted">No recent activity yet.</p>
       ) : (
         <ul className="mt-4 space-y-2">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <li key={item.id}>
               <button
                 type="button"

@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import type { CommunicationMessage, CommunicationStats } from '../api/libraryApi';
 
+const RECENT_LIMIT = 5;
+
 function formatWhen(iso?: string | null) {
   if (!iso) return 'Recently';
   const diff = Date.now() - new Date(iso).getTime();
@@ -48,7 +50,7 @@ export function AdminCommunicationPanel({ history, stats, loading }: AdminCommun
         <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Recent messages</p>
         {loading ? (
           <div className="mt-2 space-y-2">
-            {Array.from({ length: 2 }).map((_, i) => (
+            {Array.from({ length: RECENT_LIMIT }).map((_, i) => (
               <div key={i} className="admin-skeleton h-12 rounded-xl" />
             ))}
           </div>
@@ -61,7 +63,7 @@ export function AdminCommunicationPanel({ history, stats, loading }: AdminCommun
           </div>
         ) : (
           <ul className="mt-2 space-y-2">
-            {history.slice(0, 4).map((item) => (
+            {history.slice(0, RECENT_LIMIT).map((item) => (
               <li
                 key={item.id}
                 className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white/85"

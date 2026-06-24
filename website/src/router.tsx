@@ -20,6 +20,7 @@ import { Terms } from './pages/Terms';
 import { RefundPolicy } from './pages/RefundPolicy';
 import { NotFound } from './pages/NotFound';
 import { Login } from './pages/Login';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { StudentRenew } from './pages/StudentRenew';
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: 'contact', element: <Contact /> },
       { path: 'download', element: <DownloadApp /> },
       { path: 'login', element: <Login /> },
+      { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'register', element: <Register /> },
       {
         path: 'dashboard',

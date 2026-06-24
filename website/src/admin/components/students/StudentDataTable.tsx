@@ -1,4 +1,3 @@
-import { Button } from '../../../components/ui/Button';
 import type { EnrichedStudent } from '../../utils/studentHelpers';
 import { formatExpiry, statusBadge } from '../../utils/studentHelpers';
 import { StudentQuickMenu } from './StudentQuickMenu';
@@ -10,6 +9,8 @@ type StudentDataTableProps = {
   onToggleAll: () => void;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
+  onFees: (id: string) => void;
+  onAttendance: (id: string) => void;
   onBlock: (id: string) => void;
   onDelete: (id: string) => void;
   onMessage: (id: string) => void;
@@ -22,6 +23,8 @@ export function StudentDataTable({
   onToggleAll,
   onView,
   onEdit,
+  onFees,
+  onAttendance,
   onBlock,
   onDelete,
   onMessage,
@@ -113,17 +116,27 @@ export function StudentDataTable({
                   </span>
                 </td>
                 <td className="py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => onView(student.id)}>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="student-action-btn student-action-btn--view"
+                      onClick={() => onView(student.id)}
+                    >
                       View
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => onEdit(student.id)}>
+                    </button>
+                    <button
+                      type="button"
+                      className="student-action-btn student-action-btn--edit"
+                      onClick={() => onEdit(student.id)}
+                    >
                       Edit
-                    </Button>
+                    </button>
                     <StudentQuickMenu
                       student={student}
                       onView={() => onView(student.id)}
                       onEdit={() => onEdit(student.id)}
+                      onFees={() => onFees(student.id)}
+                      onAttendance={() => onAttendance(student.id)}
                       onMessage={() => onMessage(student.id)}
                       onBlock={() => onBlock(student.id)}
                       onDelete={() => onDelete(student.id)}

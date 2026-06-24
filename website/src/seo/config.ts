@@ -124,6 +124,7 @@ export const NOINDEX_PATH_PREFIXES = [
   '/dashboard',
   '/login',
   '/register',
+  '/forgot-password',
 ] as const;
 
 export function isNoIndexPath(pathname: string): boolean {

@@ -64,7 +64,9 @@ export function AdminStudents() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawerTab, setDrawerTab] = useState<'overview' | 'edit'>('overview');
+  const [drawerTab, setDrawerTab] = useState<
+    'overview' | 'edit' | 'fees' | 'attendance' | 'seat' | 'messages'
+  >('overview');
   const [showAdd, setShowAdd] = useState(false);
   const [messageTargets, setMessageTargets] = useState<string[]>([]);
   const [renewalBusy, setRenewalBusy] = useState<string | null>(null);
@@ -199,7 +201,10 @@ export function AdminStudents() {
     });
   }
 
-  function openStudent(id: string, tab: 'overview' | 'edit' = 'overview') {
+  function openStudent(
+    id: string,
+    tab: 'overview' | 'edit' | 'fees' | 'attendance' | 'seat' | 'messages' = 'overview'
+  ) {
     setSelectedId(id);
     setDrawerTab(tab);
   }
@@ -358,6 +363,8 @@ export function AdminStudents() {
                 onToggleAll={toggleAllPage}
                 onView={(id) => openStudent(id, 'overview')}
                 onEdit={(id) => openStudent(id, 'edit')}
+                onFees={(id) => openStudent(id, 'fees')}
+                onAttendance={(id) => openStudent(id, 'attendance')}
                 onBlock={async (id) => {
                   await toggleBlockStudent(id);
                   load();

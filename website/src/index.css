@@ -842,7 +842,109 @@ body {
 /* Students module */
 .student-table-wrap {
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+}
+
+.student-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  border-radius: 0.65rem;
+  border: 1px solid transparent;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+.student-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.student-action-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.student-action-btn--view {
+  border-color: rgb(56 189 248 / 0.45);
+  background: rgb(14 165 233 / 0.2);
+  color: #e0f2fe;
+  box-shadow: 0 4px 14px rgb(14 165 233 / 0.15);
+}
+
+.student-action-btn--view:hover {
+  border-color: rgb(56 189 248 / 0.7);
+  background: rgb(14 165 233 / 0.32);
+  box-shadow: 0 6px 18px rgb(14 165 233 / 0.28);
+}
+
+.student-action-btn--edit {
+  border-color: rgb(45 212 191 / 0.45);
+  background: rgb(20 184 166 / 0.22);
+  color: #ccfbf1;
+  box-shadow: 0 4px 14px rgb(20 184 166 / 0.15);
+}
+
+.student-action-btn--edit:hover {
+  border-color: rgb(45 212 191 / 0.75);
+  background: rgb(20 184 166 / 0.34);
+  box-shadow: 0 6px 18px rgb(20 184 166 / 0.28);
+}
+
+.student-action-btn--menu {
+  min-width: 2rem;
+  padding-inline: 0.55rem;
+  border-color: rgb(167 139 250 / 0.4);
+  background: rgb(139 92 246 / 0.2);
+  color: #ede9fe;
+  box-shadow: 0 4px 14px rgb(139 92 246 / 0.15);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.student-action-btn--menu:hover,
+.student-action-btn--menu.student-action-btn--active {
+  border-color: rgb(167 139 250 / 0.75);
+  background: rgb(139 92 246 / 0.34);
+  box-shadow: 0 6px 18px rgb(139 92 246 / 0.3);
+}
+
+.student-quick-menu-backdrop {
+  background: oklch(8% 0.02 250 / 0.35);
+  backdrop-filter: blur(1px);
+}
+
+.student-quick-menu-panel {
+  animation: student-drawer-in 0.18s ease-out;
+  border: 1px solid oklch(100% 0 0 / 0.18) !important;
+  background: oklch(14% 0.03 250 / 0.96) !important;
+  color: white;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 16px 42px oklch(8% 0.02 250 / 0.55);
+}
+
+.student-quick-menu-item:focus-visible {
+  outline: 2px solid rgb(45 212 191 / 0.55);
+  outline-offset: -2px;
+}
+
+.student-dashboard-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgb(20 184 166 / 0.18), transparent 55%),
+    linear-gradient(180deg, #0b1220 0%, #0f172a 45%, #0b1220 100%);
+}
+
+.student-library-card {
+  isolation: isolate;
 }
 
 .student-table {
@@ -868,6 +970,24 @@ body {
 
 .student-drawer {
   animation: student-drawer-in 0.25s ease-out;
+}
+
+.admin-dashboard-bg .student-drawer-header {
+  border-color: oklch(100% 0 0 / 0.12) !important;
+  background: oklch(100% 0 0 / 0.06) !important;
+}
+
+.admin-dashboard-bg .student-drawer-body {
+  background: transparent !important;
+}
+
+.admin-dashboard-bg .student-drawer-section {
+  background: oklch(100% 0 0 / 0.08) !important;
+  border-color: oklch(100% 0 0 / 0.14) !important;
+}
+
+.student-drawer-overlay {
+  background: oklch(8% 0.02 250 / 0.55) !important;
 }
 
 @keyframes student-drawer-in {

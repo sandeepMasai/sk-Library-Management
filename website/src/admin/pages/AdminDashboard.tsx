@@ -130,7 +130,7 @@ export function AdminDashboard() {
       fetchStudents(),
       fetchWeekAttendanceTrend(),
       fetchNotifications({ limit: 50 }),
-      fetchCommunicationHistory(8),
+      fetchCommunicationHistory(5),
       fetchCommunicationStats(),
       fetchStudentPayments(),
       fetchRenewalRequests('pending'),
@@ -162,7 +162,7 @@ export function AdminDashboard() {
           setCommStats(stats);
           setPayments(paymentRows);
           setActivity(
-            attendance.slice(0, 6).map((row, i) => ({
+            attendance.slice(0, 5).map((row, i) => ({
               id: row.id || `${row.studentId}-${i}`,
               title: `${row.studentName || 'Student'} checked in`,
               time: row.checkInTime ? 'Today' : 'Today',

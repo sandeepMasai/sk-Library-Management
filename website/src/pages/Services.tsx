@@ -39,7 +39,7 @@ export function Services() {
             <h3 className="font-display text-2xl font-bold">Start with your library account</h3>
             <p className="mx-auto mt-2 max-w-lg text-white/85">Register, verify email, and invite students from the app.</p>
             <Link to="/register" className="mt-6 inline-block">
-              <Button className="!bg-white !text-primary">Register now</Button>
+              <Button className="!bg-white ">Register now</Button>
             </Link>
           </div>
         </PageContainer>

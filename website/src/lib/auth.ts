@@ -150,6 +150,65 @@ export async function registerLibrary(payload: RegisterLibraryPayload): Promise<
   return session;
 }
 
+export async function sendForgotPasswordOtp(email: string): Promise<{
+  message?: string;
+  expiryMinutes?: number;
+  resendAfterSeconds?: number;
+}> {
+  const raw = await apiFetch<{
+    ok?: boolean;
+    message?: string;
+    expiryMinutes?: number;
+    resendAfterSeconds?: number;
+  }>('/api/auth/forgot-password/send-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  });
+  return {
+    message: raw.message,
+    expiryMinutes: raw.expiryMinutes,
+    resendAfterSeconds: raw.resendAfterSeconds,
+  };
+}
+
+export async function verifyForgotPasswordOtp(
+  email: string,
+  otp: string
+): Promise<{ resetSessionToken: string; sessionExpiresMinutes?: number }> {
+  const raw = await apiFetch<{
+    ok?: boolean;
+    resetSessionToken?: string;
+    sessionExpiresMinutes?: number;
+  }>('/api/auth/forgot-password/verify-otp', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      otp: otp.replace(/\D/g, '').slice(0, 6),
+    }),
+  });
+  if (!raw.resetSessionToken) throw new Error('Verification incomplete. Try again.');
+  return {
+    resetSessionToken: raw.resetSessionToken,
+    sessionExpiresMinutes: raw.sessionExpiresMinutes,
+  };
+}
+
+export async function completeForgotPasswordReset(
+  email: string,
+  resetSessionToken: string,
+  newPassword: string
+): Promise<{ message?: string }> {
+  const raw = await apiFetch<{ ok?: boolean; message?: string }>('/api/auth/forgot-password/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      resetSessionToken,
+      newPassword,
+    }),
+  });
+  return { message: raw.message };
+}
+
 export async function bulkCreateSeats(totalSeats: number): Promise<void> {
   await apiFetch('/api/seats/bulk-create', {
     method: 'POST',

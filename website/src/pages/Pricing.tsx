@@ -1,74 +1,74 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PricingPlanGrid } from '../components/pricing/PricingPlanGrid';
 import { PageHero } from '../components/PageHero';
-import { Button } from '../components/ui/Button';
 import { GlassCard } from '../components/ui/GlassCard';
 import { PageContainer } from '../components/ui/PageContainer';
 import { PLANS } from '../content/site';
+import { fetchPublicPlans, type PublicPlan } from '../lib/plansApi';
 
-function formatInr(amount: number) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
-    amount
-  );
+/** Fallback when API is unreachable (offline dev). */
+function staticPlansToPublic(): PublicPlan[] {
+  return PLANS.map((p) => ({
+    key: p.key,
+    name: p.name,
+    price: p.price,
+    finalPrice: p.price,
+    duration:
+      p.key === 'yearly' ? 365 : p.key === '6month' ? 180 : p.key === 'monthly' ? 30 : 10,
+    tag: p.tag,
+    isTrial: p.key === 'trial',
+    features: [...p.features],
+  }));
 }
 
 export function Pricing() {
+  const [plans, setPlans] = useState<PublicPlan[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetchPublicPlans();
+        if (cancelled) return;
+        if (res.plans.length) {
+          setPlans(res.plans);
+          setUpdatedAt(res.updatedAt || null);
+        } else {
+          setPlans(staticPlansToPublic());
+          setError('Showing default plans — live plans will appear when the backend is connected.');
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setPlans(staticPlansToPublic());
+        setError(e instanceof Error ? e.message : 'Could not load live plans');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <>
       <PageHero
         title="Simple, transparent pricing"
-        subtitle="Library subscriptions billed via Razorpay in the app. No hidden fees."
+        subtitle="Plans sync from Super Admin — price, duration, discounts, and offers update in real time."
         badge="💰 Pricing"
       />
       <section className="gradient-mesh border-b border-white/10 py-12 sm:py-16">
         <PageContainer>
-          <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4">
-            {PLANS.map((plan) => {
-              const isPopular = plan.tag === 'Popular';
-              return (
-                <GlassCard
-                  key={plan.key}
-                  dark
-                  hover
-                  padding="lg"
-                  className={`relative flex flex-col ${
-                    isPopular ? 'ring-2 ring-teal-400/50 shadow-lg shadow-teal-500/20' : ''
-                  }`}
-                >
-                  {plan.tag ? (
-                    <span
-                      className={`absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-xs font-bold text-white ${
-                        isPopular ? 'bg-gradient-to-r from-primary to-accent shadow-lg' : 'bg-primary'
-                      }`}
-                    >
-                      {plan.tag}
-                    </span>
-                  ) : null}
-                  <h2 className="text-xl font-bold text-white">{plan.name}</h2>
-                  <p className="mt-3 text-4xl font-extrabold text-teal-300">{formatInr(plan.price)}</p>
-                  <p className="text-sm text-white/60">per {plan.duration}</p>
-                  <ul className="mt-8 flex-1 space-y-3 border-t border-white/10 pt-6">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex gap-2 text-sm text-white/75">
-                        <span className="text-teal-300">✓</span> {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to="/register" className="mt-8 block">
-                    <Button
-                      variant={isPopular ? 'primary' : 'outline'}
-                      fullWidth
-                      className={!isPopular ? '!border-white/30 !bg-white/5 !text-white hover:!bg-white/15' : undefined}
-                    >
-                      Get started
-                    </Button>
-                  </Link>
-                </GlassCard>
-              );
-            })}
-          </div>
+          <PricingPlanGrid plans={plans} updatedAt={updatedAt} loading={loading} error={error} />
           <GlassCard dark padding="md" className="mt-12 text-center">
             <p className="text-sm text-white/70">
-              Payments are processed securely by Razorpay. After registering, open the SmartLibDesk app to subscribe.{' '}
+              Payments are processed securely by Razorpay. After registering, open SmartLibDesk to subscribe.{' '}
               <Link to="/contact" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
                 Questions? Contact us
               </Link>

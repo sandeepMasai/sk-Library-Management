@@ -26,8 +26,8 @@ export const FEATURE_PILLS = [
 ] as const;
 
 export const STATS = [
-  { value: '10K+', label: 'Daily check-ins' },
-  { value: '500+', label: 'Libraries onboarded' },
+  { value: '1K+', label: 'Daily check-ins' },
+  { value: '100+', label: 'Libraries onboarded' },
   { value: '99.9%', label: 'Uptime target' },
   { value: '24/7', label: 'Cloud backed' },
 ] as const;
