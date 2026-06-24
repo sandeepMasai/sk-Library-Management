@@ -467,6 +467,12 @@ async function registerLibrary({ body, metadata }) {
   if (!libraryName || !ownerName || !email || !password || !city || !state || !place || !pincode) {
     throw createHttpError(400, "libraryName, ownerName, email, password, city, state, place, pincode are required");
   }
+  if (password.length < 6) {
+    throw createHttpError(400, "Password must be at least 6 characters long");
+  }
+  if (password.length > 128) {
+    throw createHttpError(400, "Password is too long");
+  }
   if (!/^\d{6}$/.test(pincode)) {
     throw createHttpError(400, "pincode must be exactly 6 digits");
   }

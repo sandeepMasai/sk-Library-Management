@@ -93,6 +93,46 @@ function toResponse(attendance) {
   };
 }
 
+async function mapAttendanceListWithStudents(list) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+
+  const studentIds = [
+    ...new Set(
+      list
+        .map((row) => (row?.studentId != null ? String(row.studentId) : ""))
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+    ),
+  ];
+
+  const nameById = new Map();
+  const photoById = new Map();
+  if (studentIds.length) {
+    const students = await Student.find({ _id: { $in: studentIds } })
+      .select("name photoUrl")
+      .lean();
+    for (const student of students) {
+      const id = student._id.toString();
+      const name = String(student.name || "").trim();
+      if (name) nameById.set(id, name);
+      if (student.photoUrl) photoById.set(id, student.photoUrl);
+    }
+  }
+
+  return list.map((row) => {
+    const base = toResponse(row);
+    const sid = base.studentId;
+    const studentName = nameById.get(sid);
+    const photoUrl = photoById.get(sid);
+    return {
+      ...base,
+      checkInTime: base.date,
+      attendanceDate: base.date,
+      ...(studentName ? { studentName } : {}),
+      ...(photoUrl ? { photoUrl } : {}),
+    };
+  });
+}
+
 function toDateKey(date = new Date()) {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -288,7 +328,7 @@ router.get("/", requireAuth, requireRole("admin", "library"), requireNotExpiredS
       libraryId,
       attendanceDate: { $gte: range.start, $lt: range.end },
     }).sort({ attendanceDate: -1 });
-    return res.json(list.map(toResponse));
+    return res.json(await mapAttendanceListWithStudents(list));
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch attendance", error: error.message });
   }
@@ -304,7 +344,7 @@ router.get("/today", requireAuth, requireRole("admin", "library"), requireNotExp
       libraryId,
       attendanceDate: { $gte: todayRange.start, $lt: todayRange.end },
     }).sort({ attendanceDate: -1 });
-    return res.json(list.map(toResponse));
+    return res.json(await mapAttendanceListWithStudents(list));
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch attendance", error: error.message });
   }

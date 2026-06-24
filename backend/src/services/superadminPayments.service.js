@@ -163,7 +163,12 @@ async function listPayments(query = {}) {
         as: "library",
       },
     },
-    { $unwind: { path: "$library", preserveNullAndEmptyArrays: true } },
+    { $unwind: "$library" },
+    {
+      $match: {
+        "library.name": { $exists: true, $nin: [null, ""] },
+      },
+    },
   ];
 
   if (libraryStatus === "active") {

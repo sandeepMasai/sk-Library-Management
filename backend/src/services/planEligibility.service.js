@@ -48,6 +48,16 @@ function promoDaysRemaining(plan, now = new Date()) {
   return Math.max(0, diff);
 }
 
+function normalizePlanFeatures(plan) {
+  const raw = plan?.features;
+  if (Array.isArray(raw)) return raw.map((item) => String(item || "").trim()).filter(Boolean);
+  if (raw && typeof raw === "object") {
+    const list = raw.list || raw.items || raw.features;
+    if (Array.isArray(list)) return list.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return [];
+}
+
 /**
  * True when the library has ever subscribed (trial or any paid plan).
  * Used to hide ₹99 trial for non-brand-new libraries forever.
@@ -182,6 +192,8 @@ function formatPlanForClient(plan) {
       limitedTime: Boolean(plan.badgeLimitedTime || (plan.promoEndDate && promoDaysRemaining(plan) != null)),
       exclusive: Boolean(plan.badgeExclusive || plan.isPublic === false),
     },
+    features: normalizePlanFeatures(plan),
+    updatedAt: plan.updatedAt?.toISOString?.() || null,
   };
 }
 

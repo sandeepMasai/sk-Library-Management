@@ -137,7 +137,45 @@ async function ensureSeed() {
 }
 
 const PLAN_SELECT =
-  "name key price discount finalPrice originalPrice duration isActive tag isTrial showOnlyForNew isPublic isOneTimeOffer allowedLibraryIds description campaignName promoStartDate promoEndDate badgeRecommended badgeBestValue badgeLimitedTime badgeExclusive viewCount purchaseCount revenueTotal";
+  "name key price discount finalPrice originalPrice duration isActive tag isTrial showOnlyForNew isPublic isOneTimeOffer allowedLibraryIds description campaignName promoStartDate promoEndDate badgeRecommended badgeBestValue badgeLimitedTime badgeExclusive viewCount purchaseCount revenueTotal features updatedAt";
+
+/**
+ * GET /api/plans/public — Marketing site (no auth): active public plans only.
+ */
+router.get("/public", async (req, res) => {
+  try {
+    await ensureSeed();
+    const now = new Date();
+    const raw = await Plan.find({ isActive: true, isPublic: true })
+      .sort({ duration: 1, finalPrice: 1 })
+      .select(PLAN_SELECT)
+      .lean();
+
+    const visible = (raw || []).filter((p) => {
+      if ((p.promoStartDate || p.promoEndDate) && !isPromotionActive(p, now)) return false;
+      return true;
+    });
+
+    const plans = visible.map((p) =>
+      formatPlanForClient({ ...p, finalPrice: calcFinal(p?.price, p?.discount) })
+    );
+
+    const updatedTimes = (raw || [])
+      .map((p) => p.updatedAt)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    const latestUpdatedAt = updatedTimes[0] || null;
+
+    return res.json({
+      ok: true,
+      plans,
+      count: plans.length,
+      updatedAt: latestUpdatedAt ? new Date(latestUpdatedAt).toISOString() : new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load public plans", error: error.message });
+  }
+});
 
 /**
  * GET /api/plans/management-overview — Super Admin dashboard cards
