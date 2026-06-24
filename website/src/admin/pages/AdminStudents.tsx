@@ -130,34 +130,45 @@ export function AdminStudents() {
     setPage(1);
   }, [search, searchField, filters]);
 
+  const pageStudentIds = useMemo(
+    () => pageStudents.map((s) => s.id).join(','),
+    [pageStudents]
+  );
+
   useEffect(() => {
-    if (pageStudents.length === 0) return;
+    if (!pageStudentIds) return;
     let cancelled = false;
+    const ids = pageStudentIds.split(',').filter(Boolean);
     const loadAttendance = async () => {
       const results = await Promise.all(
-        pageStudents.map(async (s) => {
+        ids.map(async (id) => {
           try {
-            const days = await fetchStudentAttendance(s.id);
-            return { id: s.id, pct: calcAttendancePct(days.length) };
+            const days = await fetchStudentAttendance(id);
+            return { id, pct: calcAttendancePct(days.length) };
           } catch {
-            return { id: s.id, pct: null as number | null };
+            return { id, pct: null as number | null };
           }
         })
       );
       if (cancelled) return;
       setAttendancePctMap((prev) => {
+        let changed = false;
         const next = new Map(prev);
         for (const r of results) {
-          if (r.pct != null) next.set(r.id, r.pct);
+          if (r.pct == null) continue;
+          if (next.get(r.id) !== r.pct) {
+            next.set(r.id, r.pct);
+            changed = true;
+          }
         }
-        return next;
+        return changed ? next : prev;
       });
     };
     loadAttendance();
     return () => {
       cancelled = true;
     };
-  }, [pageStudents]);
+  }, [pageStudentIds]);
 
   const selectedStudent = useMemo(
     () => (selectedId ? enriched.find((s) => s.id === selectedId) ?? null : null),

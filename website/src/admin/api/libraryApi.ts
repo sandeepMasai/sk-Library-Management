@@ -16,7 +16,14 @@ function normalizeAllocation(row: AllocationRow): AllocationRow {
 export type DashboardData = {
   ok: boolean;
   students: { total: number; active: number; expired: number; blocked: number };
-  payments: { feeDueCount: number; collectedAmount: number; dueAmount: number; totalFeeAmount: number };
+  payments: {
+    feeDueCount: number;
+    collectedAmount: number;
+    dueAmount: number;
+    totalFeeAmount: number;
+    monthlyCollection?: number;
+    monthlyPaymentCount?: number;
+  };
   attendance: { date: string; todayCount: number; attendancePct: number };
   renewalRequests?: { pending: number };
 };
@@ -34,6 +41,7 @@ export type StudentRow = {
   expiryDate: string;
   isBlocked: boolean;
   joinDate?: string;
+  createdAt?: string | null;
   photoUrl?: string | null;
 };
 
@@ -511,6 +519,9 @@ export type CommunicationStats = {
   campaignCount: number;
 };
 
+export type CommunicationAudience = 'all' | 'active' | 'expired' | 'shift' | 'selected';
+export type CommunicationMessageType = 'text' | 'image' | 'text_image' | 'pdf' | 'text_pdf';
+
 export async function fetchCommunicationStats(): Promise<CommunicationStats> {
   const res = await apiRaw<{ ok?: boolean; stats?: CommunicationStats }>('/api/communications/stats');
   return (
@@ -529,18 +540,108 @@ export type CommunicationMessage = {
   title: string;
   message: string;
   imageUrl?: string | null;
+  documentUrl?: string | null;
   messageType?: string;
+  audience?: string;
   audienceLabel?: string;
   recipientCount?: number;
+  pushSentCount?: number;
   readCount?: number;
   sentAt?: string | null;
 };
 
-export async function fetchCommunicationHistory(limit = 10): Promise<CommunicationMessage[]> {
+export async function fetchCommunicationHistory(limit = 50): Promise<CommunicationMessage[]> {
   const res = await apiRaw<{ ok?: boolean; history?: CommunicationMessage[] }>(
     `/api/communications/history?limit=${limit}`
   );
   return res.history ?? [];
+}
+
+export async function updateCommunicationMessage(
+  id: string,
+  body: { title: string; message: string }
+): Promise<CommunicationMessage> {
+  const res = await apiRaw<{ ok?: boolean; message?: CommunicationMessage }>(
+    `/api/communications/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: body.title.trim(),
+        message: body.message.trim(),
+      }),
+    }
+  );
+  if (!res.message) throw new Error('Update failed');
+  return res.message;
+}
+
+export async function deleteCommunicationMessage(id: string): Promise<void> {
+  await apiRaw(`/api/communications/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function previewCommunicationRecipientCount(params: {
+  audience: CommunicationAudience;
+  studentIds?: string[];
+  shiftId?: string | null;
+}): Promise<number> {
+  const q = new URLSearchParams();
+  q.set('audience', params.audience);
+  if (params.studentIds?.length) q.set('studentIds', params.studentIds.join(','));
+  if (params.shiftId) q.set('shiftId', params.shiftId);
+  const res = await apiRaw<{ ok?: boolean; count?: number }>(`/api/communications/preview-count?${q}`);
+  return res.count ?? 0;
+}
+
+export async function sendCommunicationMessage(payload: {
+  title: string;
+  message?: string;
+  messageType: CommunicationMessageType;
+  audience: CommunicationAudience;
+  studentIds?: string[];
+  shiftId?: string | null;
+  category?: string;
+  attachment?: File | null;
+}): Promise<{ ok: boolean; recipientCount?: number; message?: string }> {
+  const form = new FormData();
+  form.append('title', payload.title.trim());
+  form.append('message', (payload.message || '').trim());
+  form.append('messageType', payload.messageType);
+  form.append('audience', payload.audience);
+  form.append('category', payload.category || 'general');
+  if (payload.studentIds?.length) form.append('studentIds', JSON.stringify(payload.studentIds));
+  if (payload.shiftId) form.append('shiftId', payload.shiftId);
+  if (payload.attachment) {
+    const isPdf =
+      payload.attachment.type === 'application/pdf' ||
+      payload.attachment.name.toLowerCase().endsWith('.pdf');
+    form.append(isPdf ? 'document' : 'image', payload.attachment);
+  }
+
+  const token = getAuthToken();
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/communications/send`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+      credentials: 'include',
+    });
+  } catch {
+    throw new Error('Could not reach server. Check your connection.');
+  }
+
+  const body = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    recipientCount?: number;
+    message?: string;
+  };
+
+  if (!res.ok) {
+    throw new Error(body.message || `Send failed (${res.status})`);
+  }
+
+  return { ok: true, recipientCount: body.recipientCount };
 }
 
 export type RenewalRequestRow = {
@@ -579,6 +680,8 @@ export type StudentPaymentRow = {
   durationLabel?: string;
   feeMethod?: string;
   expiryDate?: string | null;
+  note?: string;
+  renewalRequestId?: string | null;
 };
 
 export type BillingHistoryItem =

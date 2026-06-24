@@ -22,10 +22,13 @@ import {
   fetchDashboard,
   fetchNotifications,
   markNotificationRead,
+  fetchAllocations,
   fetchRenewalRequests,
   fetchSeats,
+  fetchShifts,
   fetchStudentPayments,
   fetchStudents,
+  type AllocationRow,
   type CommunicationMessage,
   type CommunicationStats,
   type DashboardData,
@@ -34,6 +37,10 @@ import {
   type StudentPaymentRow,
   type StudentRow,
 } from '../api/libraryApi';
+import {
+  buildMonthlyCollectionItems,
+  sumMonthlyCollectionItems,
+} from '../utils/monthlyCollection';
 import {
   countUnreadIncoming,
   isLibraryIncomingUnread,
@@ -69,19 +76,6 @@ function sortRecentStudents(students: StudentRow[]) {
   });
 }
 
-function sumMonthlyPayments(payments: StudentPaymentRow[]) {
-  const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear();
-  return payments
-    .filter((payment) => {
-      if (!payment.paymentDate) return false;
-      const d = new Date(payment.paymentDate);
-      return d.getMonth() === month && d.getFullYear() === year;
-    })
-    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-}
-
 async function fetchWeekAttendanceTrend() {
   const points: { dateStr: string; label: string }[] = [];
   for (let i = 6; i >= 0; i -= 1) {
@@ -99,6 +93,8 @@ async function fetchWeekAttendanceTrend() {
 export function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [seats, setSeats] = useState<SeatRow[]>([]);
+  const [seatAllocations, setSeatAllocations] = useState<AllocationRow[]>([]);
+  const [seatShiftName, setSeatShiftName] = useState<string | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [payments, setPayments] = useState<StudentPaymentRow[]>([]);
   const [notifications, setNotifications] = useState<LibraryNotification[]>([]);
@@ -115,12 +111,21 @@ export function AdminDashboard() {
     { id: string; title: string; subtitle?: string; time?: string; icon?: string }[]
   >([]);
 
+  const loadSeatMap = useCallback(async () => {
+    const [seatRows, shiftRows] = await Promise.all([fetchSeats(), fetchShifts()]);
+    const shift = shiftRows[0];
+    const allocRows = shift?.id
+      ? await fetchAllocations({ shiftId: shift.id })
+      : await fetchAllocations();
+    return { seatRows, allocRows, shiftName: shift?.name ?? null };
+  }, []);
+
   const loadDashboard = useCallback(() => {
     const today = new Date().toISOString().slice(0, 10);
     setCommLoading(true);
     return Promise.all([
       fetchDashboard(),
-      fetchSeats(),
+      loadSeatMap(),
       fetchAttendanceByDate(today),
       fetchStudents(),
       fetchWeekAttendanceTrend(),
@@ -133,7 +138,7 @@ export function AdminDashboard() {
       .then(
         ([
           dash,
-          seatRows,
+          seatMapData,
           attendance,
           studentRows,
           trend,
@@ -147,7 +152,9 @@ export function AdminDashboard() {
             ...dash,
             renewalRequests: { pending: renewals.pendingCount ?? dash.renewalRequests?.pending ?? 0 },
           });
-          setSeats(seatRows);
+          setSeats(seatMapData.seatRows);
+          setSeatAllocations(seatMapData.allocRows);
+          setSeatShiftName(seatMapData.shiftName);
           setStudents(studentRows);
           setWeekTrend(trend);
           setNotifications(notificationRows);
@@ -171,11 +178,27 @@ export function AdminDashboard() {
         setStudentsLoading(false);
         setCommLoading(false);
       });
-  }, []);
+  }, [loadSeatMap]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const refreshSeatMap = () => {
+      loadSeatMap()
+        .then((data) => {
+          setSeats(data.seatRows);
+          setSeatAllocations(data.allocRows);
+          setSeatShiftName(data.shiftName);
+        })
+        .catch(() => {
+          /* keep last good map */
+        });
+    };
+    const id = window.setInterval(refreshSeatMap, 45_000);
+    return () => window.clearInterval(id);
+  }, [loadSeatMap]);
 
   const notificationItems = useMemo(() => {
     const extras: { id: string; title: string; time?: string; icon?: string }[] = [];
@@ -213,6 +236,23 @@ export function AdminDashboard() {
 
   const unreadCount = useMemo(() => countUnreadIncoming(notifications), [notifications]);
 
+  const monthlyItems = useMemo(
+    () => buildMonthlyCollectionItems(students, payments),
+    [students, payments]
+  );
+
+  const monthlyRevenue = useMemo(() => {
+    const apiMonthly = data?.payments.monthlyCollection;
+    const fromItems = sumMonthlyCollectionItems(monthlyItems);
+    if (apiMonthly != null && apiMonthly > 0) return apiMonthly;
+    return fromItems;
+  }, [data?.payments.monthlyCollection, monthlyItems]);
+
+  const monthlyPaymentCount = useMemo(() => {
+    if (data?.payments.monthlyPaymentCount != null) return data.payments.monthlyPaymentCount;
+    return monthlyItems.length;
+  }, [data?.payments.monthlyPaymentCount, monthlyItems.length]);
+
   const handleNotificationClick = useCallback(async (item: NotificationFeedItem) => {
     if (!item.canMarkRead) return;
     setNotifications((prev) =>
@@ -240,8 +280,6 @@ export function AdminDashboard() {
       setMarkingAllRead(false);
     }
   }, [markingAllRead, notifications]);
-
-  const monthlyRevenue = useMemo(() => sumMonthlyPayments(payments), [payments]);
 
   if (loading) return <AdminDashboardSkeleton />;
 
@@ -310,7 +348,7 @@ export function AdminDashboard() {
         <DashboardKpiCard
           index={1}
           label="Monthly Collection"
-          value={`₹${(monthlyRevenue || data.payments.collectedAmount).toLocaleString('en-IN')}`}
+          value={`₹${monthlyRevenue.toLocaleString('en-IN')}`}
           hint={`₹${data.payments.dueAmount.toLocaleString('en-IN')} pending`}
           icon="💰"
           accent="purple"
@@ -347,10 +385,11 @@ export function AdminDashboard() {
         </AnimateIn>
         <AnimateIn delay={120}>
           <AdminFeePanel
-            collected={data.payments.collectedAmount}
+            monthlyTotal={monthlyRevenue}
             pending={data.payments.dueAmount}
             paidStudents={paidStudents}
             pendingStudents={data.payments.feeDueCount}
+            items={monthlyItems}
           />
         </AnimateIn>
       </div>
@@ -375,11 +414,16 @@ export function AdminDashboard() {
             history={commHistory}
             stats={commStats}
             loading={commLoading}
-            onSent={loadDashboard}
           />
         </AnimateIn>
         <AnimateIn delay={120}>
-          <SeatMapPanel seats={seats} loading={seatsLoading} admin />
+          <SeatMapPanel
+            seats={seats}
+            allocations={seatAllocations}
+            shiftName={seatShiftName}
+            loading={seatsLoading}
+            admin
+          />
         </AnimateIn>
       </div>
 
@@ -394,11 +438,11 @@ export function AdminDashboard() {
         </AnimateIn>
         <AnimateIn delay={120}>
           <AdminReportsPanel
-            monthlyRevenue={monthlyRevenue || data.payments.collectedAmount}
+            monthlyRevenue={monthlyRevenue}
             todayAttendance={present}
             feeDueCount={data.payments.feeDueCount}
             studentTotal={data.students.total}
-            paymentCount={payments.length}
+            paymentCount={monthlyPaymentCount}
           />
         </AnimateIn>
       </div>

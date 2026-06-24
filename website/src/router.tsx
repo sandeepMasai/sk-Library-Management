@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminAttendance } from './admin/pages/AdminAttendance';
+import { AdminCommunication } from './admin/pages/AdminCommunication';
 import { AdminDashboard } from './admin/pages/AdminDashboard';
 import { AdminSeats } from './admin/pages/AdminSeats';
 import { AdminSettings } from './admin/pages/AdminSettings';
@@ -21,6 +22,7 @@ import { NotFound } from './pages/NotFound';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
+import { StudentRenew } from './pages/StudentRenew';
 import { SuperAdminLogin } from './pages/SuperAdminLogin';
 import { SuperAdminLayout } from './superadmin/SuperAdminLayout';
 import { SuperAdminDashboard } from './superadmin/pages/SuperAdminDashboard';
@@ -49,8 +51,16 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: (
-          <ProtectedRoute>
+          <ProtectedRoute roles={['student']}>
             <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'dashboard/renew',
+        element: (
+          <ProtectedRoute roles={['student']}>
+            <StudentRenew />
           </ProtectedRoute>
         ),
       },
@@ -72,6 +82,7 @@ export const router = createBrowserRouter([
       { path: 'students', element: <AdminStudents /> },
       { path: 'attendance', element: <AdminAttendance /> },
       { path: 'seats', element: <AdminSeats /> },
+      { path: 'communications', element: <AdminCommunication /> },
       { path: 'subscription', element: <AdminSubscription /> },
       { path: 'settings', element: <AdminSettings /> },
     ],

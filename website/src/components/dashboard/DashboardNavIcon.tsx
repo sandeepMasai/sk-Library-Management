@@ -3,6 +3,7 @@ const icons: Record<string, string> = {
   students: '👥',
   attendance: '📷',
   seats: '🪑',
+  communications: '💬',
   subscription: '💳',
   settings: '⚙',
   libraries: '🏛',

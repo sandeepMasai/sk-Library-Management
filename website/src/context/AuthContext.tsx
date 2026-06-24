@@ -9,8 +9,10 @@ import {
 } from 'react';
 import { ensureSession, getAuthToken, getRefreshToken } from '../lib/http';
 import {
+  LIBRARY_LOGO_UPDATED_EVENT,
   loadStoredUser,
   logout as clearAuth,
+  patchStoredUser,
   persistSession,
   type AuthSession,
   type AuthUser,
@@ -68,15 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setHasAccessToken(false);
     };
 
+    const onLogoUpdated = (event: Event) => {
+      const logoUrl = (event as CustomEvent<{ logoUrl?: string }>).detail?.logoUrl;
+      if (typeof logoUrl !== 'string' || !logoUrl.trim()) return;
+      const next = patchStoredUser({ logoUrl });
+      if (next) setUser(next);
+    };
+
     window.addEventListener('sld:auth-expired', onExpired);
     window.addEventListener('sld:session-updated', syncTokenState);
     window.addEventListener('storage', syncTokenState);
+    window.addEventListener(LIBRARY_LOGO_UPDATED_EVENT, onLogoUpdated);
 
     return () => {
       cancelled = true;
       window.removeEventListener('sld:auth-expired', onExpired);
       window.removeEventListener('sld:session-updated', syncTokenState);
       window.removeEventListener('storage', syncTokenState);
+      window.removeEventListener(LIBRARY_LOGO_UPDATED_EVENT, onLogoUpdated);
     };
   }, [syncTokenState]);
 

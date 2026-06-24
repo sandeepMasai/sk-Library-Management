@@ -18,6 +18,9 @@ export type AuthUser = {
   currentPlanKey?: string;
   subscriptionStatus?: string;
   logoUrl?: string | null;
+  expiryDate?: string;
+  feeStatus?: string;
+  feeAmount?: number;
   library?: { libraryName?: string; logoUrl?: string | null };
 };
 
@@ -180,4 +183,31 @@ export function loadStoredUser(): AuthUser | null {
   } catch {
     return null;
   }
+}
+
+/** Update cached user fields (e.g. logoUrl after settings upload) without re-login. */
+export function patchStoredUser(patch: Partial<AuthUser>): AuthUser | null {
+  try {
+    const current = loadStoredUser();
+    if (!current) return null;
+    const next = formatAuthUser({
+      ...current,
+      ...patch,
+      library: patch.library
+        ? { ...current.library, ...patch.library }
+        : patch.logoUrl !== undefined
+          ? { ...current.library, logoUrl: patch.logoUrl }
+          : current.library,
+    });
+    localStorage.setItem('sld_user', JSON.stringify(next));
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+export const LIBRARY_LOGO_UPDATED_EVENT = 'sld:library-logo-updated';
+
+export function notifyLibraryLogoUpdated(logoUrl: string) {
+  window.dispatchEvent(new CustomEvent(LIBRARY_LOGO_UPDATED_EVENT, { detail: { logoUrl } }));
 }

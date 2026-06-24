@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { formatDisplayName } from '../../utils/formatName';
+import { LIBRARY_LOGO_UPDATED_EVENT } from '../../lib/auth';
 import { fetchLibraryProfile } from '../api/libraryApi';
 import { AdminNotificationPanel, type NotificationFeedItem } from './AdminNotificationPanel';
 
@@ -47,6 +48,15 @@ export function AdminDashboardHeader({
     return () => {
       alive = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const onLogoUpdated = (event: Event) => {
+      const url = (event as CustomEvent<{ logoUrl?: string }>).detail?.logoUrl;
+      if (typeof url === 'string' && url.trim()) setProfileImage(url);
+    };
+    window.addEventListener(LIBRARY_LOGO_UPDATED_EVENT, onLogoUpdated);
+    return () => window.removeEventListener(LIBRARY_LOGO_UPDATED_EVENT, onLogoUpdated);
   }, []);
 
   return (
@@ -103,7 +113,7 @@ export function AdminDashboardHeader({
           >
             <span className="flex h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/20 bg-white/12 ring-2 ring-white/10">
               {profileImage ? (
-                <img src={profileImage} alt="" className="h-full w-full object-cover" />
+                <img key={profileImage} src={profileImage} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-sm font-bold text-white">
                   {initial}

@@ -255,14 +255,6 @@ export function AdminAttendance() {
   }, [showScanner, loadQr]);
 
   useEffect(() => {
-    if (!showScanner) return;
-    const id = window.setInterval(() => {
-      void loadQr();
-    }, 30000);
-    return () => window.clearInterval(id);
-  }, [showScanner, loadQr]);
-
-  useEffect(() => {
     if (periodTab === 'custom') {
       loadTable(date);
       return;
@@ -452,7 +444,6 @@ export function AdminAttendance() {
         error={qrError}
         libraryName={libraryName}
         onClose={() => setShowScanner(false)}
-        onRefresh={() => void loadQr()}
       />
 
       <AttendanceReportModal

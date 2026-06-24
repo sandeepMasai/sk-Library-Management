@@ -11,6 +11,7 @@ const NAV = [
   { to: '/admin/students', label: 'Students', icon: 'students' },
   { to: '/admin/attendance', label: 'Attendance', icon: 'attendance' },
   { to: '/admin/seats', label: 'Seats', icon: 'seats' },
+  { to: '/admin/communications', label: 'Communication', icon: 'communications' },
   { to: '/admin/subscription', label: 'Subscription', icon: 'subscription' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ] as const;

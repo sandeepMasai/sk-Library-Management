@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QrImage, qrImageUrl } from '../../../components/QrImage';
 import { Button } from '../../../components/ui/Button';
@@ -11,7 +12,6 @@ type AttendanceQrScannerProps = {
   error: string;
   libraryName?: string;
   onClose: () => void;
-  onRefresh?: () => void;
 };
 
 function safeFileName(libraryName?: string) {
@@ -89,31 +89,67 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function printAttendanceQr(token: string, libraryName?: string) {
-  const imgUrl = qrImageUrl(token, 400);
+async function printAttendanceQr(token: string, libraryName?: string) {
   const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=520,height=640');
-  if (!win) return;
+  const title = libraryName?.trim() || 'Library';
+
+  let posterUrl: string;
+  let revokeAfterPrint = false;
+
+  try {
+    const blob = await buildQrPosterBlob(token, libraryName);
+    posterUrl = URL.createObjectURL(blob);
+    revokeAfterPrint = true;
+  } catch {
+    posterUrl = qrImageUrl(token, 400);
+  }
+
+  const win = window.open('', '_blank', 'width=520,height=720');
+  if (!win) {
+    if (revokeAfterPrint) URL.revokeObjectURL(posterUrl);
+    window.alert('Pop-up blocked. Allow pop-ups for this site, then try Print again.');
+    return;
+  }
 
   win.document.write(`<!DOCTYPE html>
 <html><head>
   <meta charset="utf-8" />
-  <title>Attendance QR — ${libraryName || 'Library'}</title>
+  <title>Attendance QR — ${title}</title>
   <style>
+    @media print { body { margin: 0; padding: 12mm; } }
     body { font-family: system-ui, sans-serif; text-align: center; padding: 2rem; margin: 0; }
     h1 { font-size: 1.25rem; margin-bottom: 0.25rem; }
     p { color: #64748b; font-size: 0.875rem; margin: 0.5rem 0 1.5rem; }
-    img { border: 1px solid #e2e8f0; border-radius: 12px; }
+    img { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
     .note { margin-top: 1.5rem; font-size: 0.75rem; color: #94a3b8; }
   </style>
 </head><body>
-  <h1>${libraryName || 'Library'} — Attendance QR</h1>
-  <p>${monthLabel} · One QR code per month</p>
-  <img src="${imgUrl}" width="400" height="400" alt="Attendance QR" />
+  <h1>${title} — Attendance QR</h1>
+  <p>${monthLabel}</p>
+  <img id="qr" src="${posterUrl}" width="400" height="400" alt="Attendance QR" />
   <p class="note">Students scan with the SmartLibDesk mobile app</p>
-  <script>window.onload = function() { window.print(); };</script>
 </body></html>`);
   win.document.close();
+
+  const img = win.document.getElementById('qr') as HTMLImageElement | null;
+  const doPrint = () => {
+    win.focus();
+    win.print();
+    if (revokeAfterPrint) {
+      setTimeout(() => URL.revokeObjectURL(posterUrl), 60_000);
+    }
+  };
+
+  if (img && !img.complete) {
+    img.onload = doPrint;
+    img.onerror = () => {
+      window.alert('Could not load QR image for printing. Try Download QR instead.');
+      win.close();
+      if (revokeAfterPrint) URL.revokeObjectURL(posterUrl);
+    };
+  } else {
+    doPrint();
+  }
 }
 
 async function downloadAttendanceQr(token: string, libraryName?: string) {
@@ -140,8 +176,10 @@ export function AttendanceQrScanner({
   error,
   libraryName,
   onClose,
-  onRefresh,
 }: AttendanceQrScannerProps) {
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
   if (!open) return null;
 
   const isExpiredError = /expired|membership|blocked/i.test(error);
@@ -220,14 +258,32 @@ export function AttendanceQrScanner({
           ) : null}
 
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <Button disabled={!token || loading} onClick={() => downloadAttendanceQr(token, libraryName)}>
-              ⬇ Download QR
+            <Button
+              disabled={!token || loading || downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  await downloadAttendanceQr(token, libraryName);
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+            >
+              {downloading ? 'Downloading…' : '⬇ Download QR'}
             </Button>
-            <Button disabled={!token || loading} variant="outline" onClick={() => printAttendanceQr(token, libraryName)}>
-              🖨 Print QR
-            </Button>
-            <Button variant="outline" disabled={loading} onClick={() => onRefresh?.()}>
-              {loading ? 'Syncing…' : 'Sync QR'}
+            <Button
+              disabled={!token || loading || printing}
+              variant="outline"
+              onClick={async () => {
+                setPrinting(true);
+                try {
+                  await printAttendanceQr(token, libraryName);
+                } finally {
+                  setPrinting(false);
+                }
+              }}
+            >
+              {printing ? 'Preparing…' : '🖨 Print QR'}
             </Button>
             <Button variant="ghost" onClick={onClose}>
               Close
@@ -235,7 +291,7 @@ export function AttendanceQrScanner({
           </div>
 
           <p className="mt-4 text-[11px] text-muted">
-            QR loads live from the server (same as mobile). Tap Sync QR after changing code on the app.
+            Same QR as the mobile library app. Students scan with the SmartLibDesk app.
           </p>
         </div>
       </div>

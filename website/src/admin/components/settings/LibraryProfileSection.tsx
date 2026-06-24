@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { formatDisplayName } from '../../../utils/formatName';
+import { notifyLibraryLogoUpdated } from '../../../lib/auth';
 import { updateLibraryProfile, uploadLibraryLogo } from '../../api/libraryApi';
 import { SettingsCard, SettingsField, SettingsSection } from './SettingsPrimitives';
 
@@ -94,7 +95,7 @@ function LibraryLogoPicker({ logoUrl, libraryName, uploading, previewUrl, onPick
       >
         <div className="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white/20 bg-white/10 shadow-lg ring-2 ring-white/10 transition group-hover:ring-teal-400/45">
           {displayUrl ? (
-            <img src={displayUrl} alt="" className="h-full w-full object-cover" />
+            <img key={displayUrl} src={displayUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/40 to-violet-500/30 text-2xl font-bold text-white">
               {initials}
@@ -145,7 +146,7 @@ function LibraryProfilePreviewCard({ form }: { form: ProfileForm }) {
       <div className="relative -mt-12 px-5 pb-5 text-center">
         <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-[#0f172a] bg-white/10 shadow-xl ring-2 ring-white/15">
           {form.logoUrl ? (
-            <img src={form.logoUrl} alt="" className="h-full w-full object-cover" />
+            <img key={form.logoUrl} src={form.logoUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="text-xl font-bold text-white">{libraryLogoInitials(form.libraryName)}</span>
           )}
@@ -267,6 +268,7 @@ export function LibraryProfileSection({
       setForm(nextForm);
       setSavedForm(nextForm);
       onProfileUpdated?.(nextProfile);
+      if (res.logoUrl) notifyLibraryLogoUpdated(res.logoUrl);
       onSaved?.();
       setLogoFlash(true);
       setTimeout(() => setLogoFlash(false), 2000);
