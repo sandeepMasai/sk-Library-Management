@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_API_URL=https://api.smartlibdesk.in npm run build",
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/((?!.*\\..*$).*)", "destination": "/index.html" }],
   "redirects": [
