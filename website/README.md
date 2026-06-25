@@ -199,7 +199,7 @@ Copy `.env.example` to `.env`. Variables prefixed with `VITE_` are embedded at *
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_API_URL` | Yes (prod) | Backend base URL, no trailing slash. Example: `https://sk-library-management-production.up.railway.app` |
+| `VITE_API_URL` | Yes (prod) | Backend base URL, no trailing slash. Example: `https://api.smartlibdesk.in` |
 | `VITE_RAZORPAY_KEY_ID` | For payments | Public Razorpay key (`rzp_test_*` or `rzp_live_*`). **Never** put secret here. |
 | `VITE_RAZORPAY_TEST_ONLY` | Recommended | `true` = sandbox only on website. Set `false` only when going live with matching live keys. |
 | `VITE_APK_DOWNLOAD_URL` | Optional | Full URL if APK is hosted on CDN/Supabase instead of `/downloads/` |
@@ -217,7 +217,7 @@ VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
 ### Example Vercel (production)
 
 ```env
-VITE_API_URL=https://sk-library-management-production.up.railway.app
+VITE_API_URL=https://api.smartlibdesk.in
 VITE_RAZORPAY_TEST_ONLY=true
 VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
 ```

@@ -39,7 +39,7 @@ If GitHub is connected to the website service, each push to `main` may deploy au
 
 | Variable | Example |
 |----------|---------|
-| `VITE_API_URL` | `https://sk-library-management-production.up.railway.app` |
+| `VITE_API_URL` | `https://api.smartlibdesk.in` |
 
 Copy the public URL from **Networking** → **Generate Domain**.
 

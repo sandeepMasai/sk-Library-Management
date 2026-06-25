@@ -4,11 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  // Dev server only: proxy /api to local backend. Do not use VITE_API_URL here —
+  // that value is for production builds (apiConfig.ts).
   const apiTarget =
-    env.VITE_API_URL?.replace(/\/$/, '') ||
-    (mode === 'development'
-      ? 'http://127.0.0.1:1998'
-      : 'https://sk-library-management-production.up.railway.app');
+    env.VITE_DEV_API_URL?.replace(/\/$/, '') || 'http://127.0.0.1:1998';
 
   const proxySecure = apiTarget.startsWith('https://');
 

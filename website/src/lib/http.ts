@@ -1,9 +1,8 @@
-const REMOTE_API =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
-  'https://sk-library-management-production.up.railway.app';
+import { API_BASE_URL } from './apiConfig';
 
-/** In dev, use Vite proxy (`/api` → Railway) to avoid browser CORS. In production, call API directly. */
-export const API_URL = import.meta.env.DEV ? '' : REMOTE_API;
+/** In dev, use Vite proxy (`/api` → backend). In production, call API directly. */
+export const API_URL = import.meta.env.DEV ? '' : API_BASE_URL;
+export { API_BASE_URL };
 
 export type ApiEnvelope<T> = {
   success?: boolean;

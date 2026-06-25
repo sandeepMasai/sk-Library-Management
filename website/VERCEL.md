@@ -12,7 +12,7 @@ Vercel is the recommended host for this Vite + React site (easier than a second 
 
    | Name | Value |
    |------|--------|
-   | `VITE_API_URL` | `https://sk-library-management-production.up.railway.app` |
+   | `VITE_API_URL` | `https://api.smartlibdesk.in` |
 
 6. **Deploy**
 
@@ -61,7 +61,7 @@ Set env on Vercel first:
 
 ```bash
 npx vercel env add VITE_API_URL production
-# paste: https://sk-library-management-production.up.railway.app
+# paste: https://api.smartlibdesk.in
 ```
 
 ## APK download (`/download`)
@@ -110,7 +110,7 @@ The website is configured for sandbox payments only (`VITE_RAZORPAY_TEST_ONLY=tr
 ```env
 VITE_RAZORPAY_TEST_ONLY=true
 VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
-VITE_API_URL=https://sk-library-management-production.up.railway.app
+VITE_API_URL=https://api.smartlibdesk.in
 ```
 
 **Railway (backend)** must use the **same** test pair:

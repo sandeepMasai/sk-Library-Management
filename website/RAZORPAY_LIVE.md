@@ -56,7 +56,7 @@ Must show: `✅ Razorpay keys are VALID` and mode **live**.
 ```env
 VITE_RAZORPAY_KEY_ID=rzp_live_YOUR_KEY_ID
 VITE_RAZORPAY_TEST_ONLY=false
-VITE_API_URL=https://sk-library-management-production.up.railway.app
+VITE_API_URL=https://api.smartlibdesk.in
 ```
 
 | Variable | Important |
@@ -76,7 +76,7 @@ No Razorpay env in the app. Only the API URL:
 `frontend/.env` or `eas.json` (already set for production):
 
 ```env
-EXPO_PUBLIC_API_URL=https://sk-library-management-production.up.railway.app
+EXPO_PUBLIC_API_URL=https://api.smartlibdesk.in
 ```
 
 After Railway has **live** keys:
