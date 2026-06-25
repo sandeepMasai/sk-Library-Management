@@ -1,5 +1,16 @@
 // @ts-check
-const { getDefaultConfig } = require('@expo/metro-config');
+const path = require('path');
+
+function loadExpoMetroConfig() {
+  try {
+    return require('@expo/metro-config');
+  } catch {
+    const expoPkg = require.resolve('expo/package.json');
+    return require(path.join(path.dirname(expoPkg), 'node_modules', '@expo/metro-config'));
+  }
+}
+
+const { getDefaultConfig } = loadExpoMetroConfig();
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
