@@ -3,7 +3,7 @@
     "name": "SmartLibDesk",
     "scheme": "smartlibdesk",
     "slug": "libdesk",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
       "bundleIdentifier": "com.sk245444.libdesk"
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#1E5C52",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -29,7 +29,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://sk-library-management-production.up.railway.app",
+      "apiUrl": "https://api.smartlibdesk.in",
       "apiPort": 1998,
       "eas": {
         "projectId": "8bde25ff-7919-4ae3-aef4-f36e1b0a1292"

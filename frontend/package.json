@@ -1,6 +1,6 @@
 {
   "name": "placeholder-model-2",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -20,7 +20,7 @@
     "build:play": "eas build --platform android --profile production",
     "download:expo-apk": "eas build:download --platform android --profile preview --latest",
     "download:expo-aab": "eas build:download --platform android --profile production --latest",
-    "copy:aab": "mkdir -p dist && cp android/app/build/outputs/bundle/release/app-release.aab dist/SmartLibDesk-v1.0.4-v5-playstore.aab && ls -lh dist/SmartLibDesk-v1.0.4-v5-playstore.aab",
+    "copy:aab": "mkdir -p dist && cp android/app/build/outputs/bundle/release/app-release.aab dist/SmartLibDesk-v1.0.5-v6-playstore.aab && ls -lh dist/SmartLibDesk-v1.0.5-v6-playstore.aab",
     "android": "npm run android:clean-gradle && REACT_NATIVE_PACKAGER_HOSTNAME=$(sh scripts/lan-host.sh) JAVA_HOME=$(/usr/libexec/java_home -v 17 2>/dev/null || echo /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home) ANDROID_HOME=${ANDROID_HOME:-$HOME/Library/Android/sdk} expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
