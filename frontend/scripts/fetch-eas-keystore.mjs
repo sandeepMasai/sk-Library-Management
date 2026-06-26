@@ -12,7 +12,9 @@ const ROOT = path.join(__dirname, '..');
 const require = createRequire(import.meta.url);
 
 const EAS_CLI = '/opt/homebrew/lib/node_modules/eas-cli/build';
-const EXPECTED_SHA1 = 'F1:C4:FE:7B:2E:AA:96:CF:C8:AA:02:AF:C3:54:10:08:7F:7B:B2:D1';
+// Google Play upload key for com.libdesk.app (NOT the EAS-generated F1:C4:FE key)
+const PLAY_UPLOAD_SHA1 = '36:47:F1:EF:A2:6C:9E:B5:46:EE:45:8F:B4:0E:B0:8F:7E:9D:7F:5D';
+const EXPECTED_SHA1 = PLAY_UPLOAD_SHA1;
 const PACKAGE = 'com.libdesk.app';
 const SLUG = 'libdesk';
 const OWNER = 'sk245444';
@@ -82,7 +84,9 @@ async function main() {
   }
 
   if (!match) {
-    console.error('\nPlay upload key (F1:C4:FE:...) not found on EAS.');
+    console.error(`\nPlay upload key (${PLAY_UPLOAD_SHA1}) not found on EAS.`);
+    console.error('Upload the original .jks via: eas credentials → Android → production → Use existing keystore');
+    console.error('Or request Upload key reset in Play Console → App integrity.');
     process.exit(1);
   }
 

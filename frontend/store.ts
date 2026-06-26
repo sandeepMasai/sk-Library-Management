@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, apiDelete, apiGet, apiPatch, apiPost, apiPostFormData, apiPut, type ApiError } from './services/api';
 import { isNotificationUnread } from './utils/notificationRead';
 import { normalizeAuthRole, unwrapAuthLoginPayload } from './utils/authRole';
+import { normalizeImageUrl } from './utils/imageUrl';
 
 export type Role = 'admin' | 'student';
 export type FeeStatus = 'Paid' | 'Half Paid' | 'Pending';
@@ -86,11 +87,14 @@ export interface Attendance {
   id: string;
   studentId: string;
   date: string; // ISO string
+  studentName?: string;
+  photoUrl?: string | null;
+  status?: string;
 }
 
 function attendanceSignature(list: Attendance[]): string {
   return list
-    .map((a) => `${a.id}\t${a.studentId}\t${a.date}`)
+    .map((a) => `${a.id}\t${a.studentId}\t${a.date}\t${a.studentName ?? ''}`)
     .sort()
     .join('\n');
 }
@@ -190,6 +194,7 @@ export interface CommunicationCampaign {
   title: string;
   message: string;
   imageUrl?: string | null;
+  documentUrl?: string | null;
   messageType: CommunicationMessageType;
   audience: CommunicationAudience;
   audienceLabel: string;
@@ -390,6 +395,7 @@ interface AppState {
   deleteStudent: (id: string) => Promise<{ ok: boolean; message?: string }>;
   toggleBlockStudent: (id: string) => Promise<{ ok: boolean; message?: string }>;
   uploadStudentPhoto: (id: string, localUri: string) => Promise<{ ok: boolean; message?: string }>;
+  uploadLibraryLogo: (localUri: string) => Promise<{ ok: boolean; logoUrl?: string | null; message?: string }>;
 
   // Student - Profile
   uploadMyPhoto: (localUri: string) => Promise<{ ok: boolean; message?: string }>;
@@ -425,9 +431,16 @@ interface AppState {
     shiftId?: string | null;
     category?: NotificationCategory;
     imageUri?: string | null;
+    documentUri?: string | null;
+    documentName?: string | null;
   }) => Promise<{ ok: boolean; message?: string; recipientCount?: number }>;
   fetchCommunicationHistory: () => Promise<CommunicationCampaign[]>;
   fetchCommunicationStats: () => Promise<CommunicationStats | null>;
+  updateCommunicationMessage: (
+    id: string,
+    payload: { title: string; message: string }
+  ) => Promise<{ ok: boolean; message?: string; campaign?: CommunicationCampaign }>;
+  deleteCommunicationMessage: (id: string) => Promise<{ ok: boolean; message?: string }>;
   previewCommunicationRecipientCount: (params: {
     audience: CommunicationAudience;
     studentIds?: string[];
@@ -1089,9 +1102,14 @@ export const useAppStore = create<AppState>()(
       },
 
       patchCurrentUser: (patch) =>
-        set((state) => ({
-          currentUser: state.currentUser ? { ...state.currentUser, ...patch } : (state.role ? ({ role: state.role, ...patch } as any) : state.currentUser),
-        })),
+        set((state) => {
+          if (!state.currentUser && !state.role) return { currentUser: state.currentUser };
+          const base = state.currentUser || ({ role: state.role } as User);
+          const next = { ...base, ...patch } as User;
+          const logoUrl = normalizeImageUrl((patch as Partial<User>).logoUrl ?? next.logoUrl);
+          if (logoUrl) next.logoUrl = logoUrl;
+          return { currentUser: next };
+        }),
 
       fetchMyProfile: async () => {
         const { currentUser: cu, role, libraryId } = get();
@@ -1122,7 +1140,7 @@ export const useAppStore = create<AppState>()(
                   emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
                   address: p?.address ?? cu?.address,
                   city: p?.city ?? cu?.city,
-                  logoUrl: p?.logoUrl ?? cu?.logoUrl,
+                  logoUrl: p?.logoUrl ?? cu?.logoUrl ?? null,
                   plan: p?.plan ?? cu?.plan,
                   planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
                   subscriptionStatus: p?.subscriptionStatus ?? cu?.subscriptionStatus,
@@ -1161,7 +1179,7 @@ export const useAppStore = create<AppState>()(
                 emailVerifiedAt: p?.emailVerifiedAt ?? (cu as any)?.emailVerifiedAt ?? null,
                 address: p?.address ?? cu?.address,
                 city: p?.city ?? cu?.city,
-                logoUrl: p?.logoUrl ?? cu?.logoUrl,
+                logoUrl: p?.logoUrl ?? cu?.logoUrl ?? null,
                 plan: p?.plan ?? cu?.plan,
                 planExpiryDate: p?.planExpiryDate ?? cu?.planExpiryDate,
                 attendanceActiveMembersOnly: p?.attendanceActiveMembersOnly !== false,
@@ -1459,23 +1477,59 @@ export const useAppStore = create<AppState>()(
         }
       },
 
+      uploadLibraryLogo: async (localUri) => {
+        try {
+          const formData = new FormData();
+          const filename = localUri.split('/').pop() ?? 'logo.jpg';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          formData.append('logo', { uri: localUri, name: filename, type } as unknown as Blob);
+
+          const response = await api.post<{ ok: boolean; logoUrl?: string; profile?: { logoUrl?: string } }>(
+            `/api/library/logo`,
+            formData,
+            { headers: { 'Content-Type': 'multipart/form-data' } }
+          );
+          const logoUrl = normalizeImageUrl(response.data?.logoUrl || response.data?.profile?.logoUrl);
+          if (!logoUrl) {
+            return {
+              ok: false,
+              message: 'Upload succeeded but server did not return an image URL. Restart backend and try again.',
+            };
+          }
+          get().patchCurrentUser({ logoUrl });
+          return { ok: true, logoUrl };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
       uploadStudentPhoto: async (id, localUri) => {
         try {
           const formData = new FormData();
           const filename = localUri.split('/').pop() ?? 'photo.jpg';
           const match = /\.(\w+)$/.exec(filename);
           const type = match ? `image/${match[1]}` : 'image/jpeg';
-          // React Native FormData accepts this object shape for file uploads
           formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
 
           const response = await api.post<User>(`/api/students/${id}/photo`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
           });
           const updated = response.data;
+          const photoUrl = normalizeImageUrl(updated?.photoUrl);
+          if (!photoUrl) {
+            return {
+              ok: false,
+              message: 'Upload succeeded but server did not return a photo URL. Restart backend and try again.',
+            };
+          }
+          const withPhoto = { ...updated, photoUrl };
           set((state) => ({
-            users: state.users.map((u) => (u.id === id ? updated : u)),
-            currentUser: state.currentUser?.id === id ? updated : state.currentUser,
+            users: state.users.map((u) => (u.id === id ? withPhoto : u)),
+            currentUser: state.currentUser?.id === id ? withPhoto : state.currentUser,
           }));
+          await get().fetchMyProfile();
           return { ok: true };
         } catch (e) {
           const err = e as ApiError;
@@ -1495,12 +1549,19 @@ export const useAppStore = create<AppState>()(
             headers: { 'Content-Type': 'multipart/form-data' },
           });
           const updated = response.data?.student;
-          if (updated?.id) {
-            set((state) => ({
-              users: state.users.map((u) => (u.id === updated.id ? updated : u)),
-              currentUser: state.currentUser?.id === updated.id ? updated : state.currentUser,
-            }));
+          const photoUrl = normalizeImageUrl(updated?.photoUrl);
+          if (!updated?.id || !photoUrl) {
+            return {
+              ok: false,
+              message: 'Upload succeeded but server did not return a photo URL. Restart backend and try again.',
+            };
           }
+          const withPhoto = { ...updated, photoUrl };
+          set((state) => ({
+            users: state.users.map((u) => (u.id === withPhoto.id ? withPhoto : u)),
+            currentUser: state.currentUser?.id === withPhoto.id ? withPhoto : state.currentUser,
+          }));
+          await get().fetchMyProfile();
           return { ok: true };
         } catch (e) {
           const err = e as ApiError;
@@ -1609,6 +1670,8 @@ export const useAppStore = create<AppState>()(
         shiftId = null,
         category = 'general',
         imageUri = null,
+        documentUri = null,
+        documentName = null,
       }) => {
         try {
           const form = new FormData();
@@ -1619,7 +1682,14 @@ export const useAppStore = create<AppState>()(
           form.append('category', category);
           if (studentIds.length) form.append('studentIds', JSON.stringify(studentIds));
           if (shiftId) form.append('shiftId', shiftId);
-          if (imageUri) {
+          if (documentUri) {
+            const name = documentName || documentUri.split('/').pop() || 'document.pdf';
+            form.append('document', {
+              uri: documentUri,
+              name,
+              type: 'application/pdf',
+            } as unknown as Blob);
+          } else if (imageUri) {
             const name = imageUri.split('/').pop() || 'message.jpg';
             form.append('image', { uri: imageUri, name, type: 'image/jpeg' } as unknown as Blob);
           }
@@ -1650,6 +1720,29 @@ export const useAppStore = create<AppState>()(
           return res.stats || null;
         } catch {
           return null;
+        }
+      },
+
+      updateCommunicationMessage: async (id, { title, message }) => {
+        try {
+          const res = await apiPatch<{ ok: boolean; message: CommunicationCampaign }>(
+            `/api/communications/${encodeURIComponent(id)}`,
+            { title: title.trim(), message: message.trim() }
+          );
+          return { ok: true, campaign: res.message };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
+        }
+      },
+
+      deleteCommunicationMessage: async (id) => {
+        try {
+          await apiDelete(`/api/communications/${encodeURIComponent(id)}`);
+          return { ok: true };
+        } catch (e) {
+          const err = e as ApiError;
+          return { ok: false, message: err?.message || `Backend unavailable (${API_URL})` };
         }
       },
 

@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { resolveApiBaseUrl } from '../constants/apiUrl';
+import { API_BASE_URL, resolveApiBaseUrl } from '../constants/apiUrl';
 import { getAccessToken } from './authTokenHolder';
 import { logoutAndClearAuth, refreshAccessToken } from './authSession';
 import { formatReachabilityError, isNetworkFailure } from './networkError';
@@ -35,7 +35,9 @@ export type ApiError = {
 };
 
 export const api = axios.create({
+  baseURL: API_BASE_URL,
   timeout: 30_000,
+  withCredentials: true,
 });
 
 type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };

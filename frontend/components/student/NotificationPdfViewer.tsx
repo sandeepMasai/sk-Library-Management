@@ -7,11 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { downloadNotificationPdf } from '../../utils/downloadNotificationPdf';
+import { downloadNotificationPdf, openNotificationPdf } from '../../utils/downloadNotificationPdf';
 
 type Props = {
   pdfUrl: string | null;
@@ -30,14 +29,7 @@ export function NotificationPdfViewer({ pdfUrl, title, onClose }: Props) {
     if (!pdfUrl || opening) return;
     setOpening(true);
     try {
-      const canOpen = await Linking.canOpenURL(pdfUrl);
-      if (!canOpen) {
-        throw new Error('Cannot open PDF link');
-      }
-      await Linking.openURL(pdfUrl);
-    } catch {
-      // Fallback: try download/share flow if browser cannot open directly.
-      await downloadNotificationPdf(pdfUrl, title);
+      await openNotificationPdf(pdfUrl, title);
     } finally {
       setOpening(false);
     }
@@ -73,7 +65,7 @@ export function NotificationPdfViewer({ pdfUrl, title, onClose }: Props) {
           </View>
           <Text style={styles.heading}>PDF ready to open</Text>
           <Text style={styles.sub}>
-            Tap Open PDF to read in your phone browser, or download to save on your device.
+            Tap Open PDF to view in your PDF reader app, or download to save on your device.
           </Text>
         </View>
 

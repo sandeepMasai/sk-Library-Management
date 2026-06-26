@@ -721,7 +721,7 @@ export default function RegisterLibraryScreen() {
         email.trim() &&
         isValidRegisterEmail(email) &&
         phoneOk &&
-        password.trim() &&
+        password.trim().length >= 6 &&
         registrationToken
     );
   }, [
@@ -798,6 +798,14 @@ export default function RegisterLibraryScreen() {
         title: 'Verify email',
         description:
           'Tap “Send code”, enter the OTP in the popup, then verify before creating your library.',
+      });
+      return;
+    }
+
+    if (password.trim().length < 6) {
+      setInfoModal({
+        title: 'Weak password',
+        description: 'Password must be at least 6 characters.',
       });
       return;
     }
@@ -1019,7 +1027,7 @@ export default function RegisterLibraryScreen() {
                 icon="lock-closed-outline"
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Strong password"
+                placeholder="Min. 6 characters"
                 secureTextEntry={!showPass}
                 autoCapitalize="none"
                 autoCorrect={false}

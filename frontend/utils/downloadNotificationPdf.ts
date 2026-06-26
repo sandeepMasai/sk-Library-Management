@@ -10,6 +10,52 @@ function showSavedMessage() {
   Alert.alert('Downloaded', msg, [{ text: 'OK' }]);
 }
 
+async function downloadPdfToCache(pdfUrl: string, title?: string): Promise<string> {
+  const url = String(pdfUrl || '').trim();
+  if (!url) throw new Error('Missing PDF URL');
+
+  const safeName = String(title || 'document')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .slice(0, 40) || 'document';
+
+  const fileUri = `${FileSystem.cacheDirectory}libdesk-${safeName}-${Date.now()}.pdf`;
+  const downloaded = await FileSystem.downloadAsync(url, fileUri);
+  return downloaded.uri;
+}
+
+/**
+ * Open a PDF in the device viewer (download first, then share/open sheet).
+ */
+export async function openNotificationPdf(pdfUrl: string, title?: string): Promise<boolean> {
+  try {
+    const localUri = await downloadPdfToCache(pdfUrl, title);
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+        return true;
+      }
+      return false;
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(localUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: title || 'Open PDF',
+        UTI: 'com.adobe.pdf',
+      });
+      return true;
+    }
+
+    Alert.alert('PDF ready', 'PDF downloaded. Open it from your files app.');
+    return true;
+  } catch {
+    Alert.alert('Could not open PDF', 'Please try Download PDF or refresh notifications and try again.');
+    return false;
+  }
+}
+
 /**
  * Download a remote notification PDF to the device (share sheet / browser download).
  */
@@ -17,20 +63,14 @@ export async function downloadNotificationPdf(pdfUrl: string, title?: string): P
   const url = String(pdfUrl || '').trim();
   if (!url) return false;
 
-  const safeName = String(title || 'document')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .slice(0, 40) || 'document';
-
   try {
-    const fileUri = `${FileSystem.cacheDirectory}libdesk-${safeName}-${Date.now()}.pdf`;
-    const downloaded = await FileSystem.downloadAsync(url, fileUri);
+    const localUri = await downloadPdfToCache(url, title);
 
     if (Platform.OS === 'web') {
       if (typeof document !== 'undefined') {
         const a = document.createElement('a');
-        a.href = downloaded.uri;
-        a.download = `${safeName}.pdf`;
+        a.href = localUri;
+        a.download = `${String(title || 'document').replace(/[^\w\s-]/g, '') || 'document'}.pdf`;
         a.click();
         showSavedMessage();
         return true;
@@ -39,7 +79,7 @@ export async function downloadNotificationPdf(pdfUrl: string, title?: string): P
     }
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(downloaded.uri, {
+      await Sharing.shareAsync(localUri, {
         mimeType: 'application/pdf',
         dialogTitle: 'Save PDF',
         UTI: 'com.adobe.pdf',

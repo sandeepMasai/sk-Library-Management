@@ -14,6 +14,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { attendanceQrRef } from '../../utils/attendanceQr';
+import { theme } from '../../theme';
 
 export type AttendanceListHeaderStyles = Record<string, ViewStyle | TextStyle>;
 

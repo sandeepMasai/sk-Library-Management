@@ -69,7 +69,6 @@ export default function LoginScreen() {
   const [secretTapCount, setSecretTapCount] = useState(0);
 
   const [identifier, setIdentifier] = useState('');
-  const [libraryCode, setLibraryCode] = useState('');
   const [secret, setSecret] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -127,7 +126,7 @@ export default function LoginScreen() {
     const result =
       loginType === 'library'
         ? await login(id, sec, { mode: 'password' })
-        : await login(id, sec, { mode: 'pin', libraryCode: libraryCode.trim().toUpperCase() || undefined });
+        : await login(id, sec, { mode: 'pin' });
     setLoading(false);
     if (!result.ok) {
       setInfoModal({
@@ -162,7 +161,6 @@ export default function LoginScreen() {
   useEffect(() => {
     // Reset form when switching types (keeps UI clean and avoids cross-role confusion)
     setIdentifier('');
-    setLibraryCode('');
     setSecret('');
     setShowPin(false);
     setIdFocus(false);
@@ -220,8 +218,6 @@ export default function LoginScreen() {
           setLoginType={setLoginType}
           identifier={identifier}
           setIdentifier={setIdentifier}
-          libraryCode={libraryCode}
-          setLibraryCode={setLibraryCode}
           secret={secret}
           setSecret={setSecret}
           showPin={showPin}
@@ -262,8 +258,6 @@ type LoginFormCardProps = {
   setLoginType: (t: 'library' | 'student') => void;
   identifier: string;
   setIdentifier: (v: string) => void;
-  libraryCode: string;
-  setLibraryCode: (v: string) => void;
   secret: string;
   setSecret: (v: string) => void;
   showPin: boolean;
@@ -282,8 +276,6 @@ function LoginFormCard({
   setLoginType,
   identifier,
   setIdentifier,
-  libraryCode,
-  setLibraryCode,
   secret,
   setSecret,
   showPin,
@@ -351,25 +343,6 @@ function LoginFormCard({
           />
         </View>
       </View>
-
-      {loginType === 'student' ? (
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>LIBRARY CODE</Text>
-          <View style={styles.fieldRow}>
-            <Ionicons name="business-outline" size={18} color={stylesVars.icon} />
-            <TextInput
-              value={libraryCode}
-              onChangeText={(v) => setLibraryCode(v.toUpperCase())}
-              placeholder="From admin — required if mobile is in multiple libraries"
-              placeholderTextColor={theme.colors.mutedText}
-              style={styles.input}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              returnKeyType="next"
-            />
-          </View>
-        </View>
-      ) : null}
 
       <View ref={secretWrapRef} collapsable={false} style={styles.fieldWrap}>
         <View style={styles.pinLabelRow}>

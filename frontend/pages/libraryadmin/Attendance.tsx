@@ -78,6 +78,7 @@ export default function AdminAttendance() {
   const dailyQrToken = useAppStore((state) => state.dailyQrToken);
   const generateDailyQr = useAppStore((state) => state.generateDailyQr);
   const fetchAttendanceByDate = useAppStore((state) => state.fetchAttendanceByDate);
+  const fetchStudents = useAppStore((state) => state.fetchStudents);
   const attendances = useAppStore((state) => state.attendances);
   const users = useAppStore((state) => state.users);
 
@@ -124,12 +125,12 @@ export default function AdminAttendance() {
     );
     return sorted.map((item) => {
       const student = studentsById.get(item.studentId);
-      const name = student?.name ?? '?';
+      const name = item.studentName?.trim() || student?.name || 'Student';
       return {
         id: item.id,
-        username: student?.username ?? '—',
+        studentName: name,
         displayInitial: name.charAt(0).toUpperCase(),
-        photoUrl: student?.photoUrl,
+        photoUrl: item.photoUrl ?? student?.photoUrl,
         formattedTime: format(new Date(item.date), 'h:mm a'),
       };
     });
@@ -154,9 +155,12 @@ export default function AdminAttendance() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await generateDailyQr();
-      if (!cancelled) await fetchAttendanceByDate(format(new Date(), 'yyyy-MM-dd'));
-      if (!cancelled) await loadBlockedAttempts();
+      await Promise.all([
+        generateDailyQr(),
+        fetchStudents(),
+        fetchAttendanceByDate(format(new Date(), 'yyyy-MM-dd')),
+        loadBlockedAttempts(),
+      ]);
     })();
     return () => {
       cancelled = true;
@@ -187,6 +191,7 @@ export default function AdminAttendance() {
     try {
       await Promise.all([
         generateDailyQr(),
+        fetchStudents(),
         fetchAttendanceByDate(selectedDate),
         loadBlockedAttempts(),
       ]);

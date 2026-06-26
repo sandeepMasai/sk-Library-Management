@@ -13,8 +13,10 @@ import {
   PaymentExportBar,
   PaymentFiltersBar,
   PaymentKpiGrid,
+  PaymentPlanStatsGrid,
   PaymentViewModal,
   usePaymentsDashboard,
+  usePlanLibraryStats,
   type PaymentRow,
 } from '../../components/superadmin/payments';
 import { navigateToAdminLibraryDetail } from '../../components/superadmin/navigateToAdminLibraryDetail';
@@ -50,6 +52,13 @@ export default function AdminPaymentsPage() {
     loadList,
   } = usePaymentsDashboard(enabled);
 
+  const {
+    counts: planCounts,
+    loading: planStatsLoading,
+    error: planStatsError,
+    reload: reloadPlanStats,
+  } = usePlanLibraryStats(enabled);
+
   const [selected, setSelected] = useState<PaymentRow | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -78,7 +87,15 @@ export default function AdminPaymentsPage() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={listLoading && overviewLoading} onRefresh={refresh} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={listLoading && overviewLoading}
+          onRefresh={() => {
+            refresh();
+            void reloadPlanStats();
+          }}
+        />
+      }
     >
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
@@ -104,6 +121,19 @@ export default function AdminPaymentsPage() {
           </TouchableOpacity>
         </View>
       ) : null}
+
+      <PaymentPlanStatsGrid
+        counts={planCounts}
+        loading={planStatsLoading}
+        error={planStatsError}
+        selected={filters.planType}
+        onSelect={(planType) => updateFilters({ planType })}
+        onRetry={() => void reloadPlanStats()}
+        borderColor={borderColor}
+        surfaceColor={surfaceColor}
+        textColor={textColor}
+        mutedColor={mutedColor}
+      />
 
       <PaymentKpiGrid overview={overview} loading={overviewLoading} />
 

@@ -5,7 +5,7 @@ These screens belong to **`LibraryRoot`** (library staff JWT), **not** Super Adm
 ### Where they are wired
 
 - **Tabs** — [`frontend/App.tsx`](App.tsx) → `function LibraryTabs()` (`Dashboard`, `Students`, `Attendance`, `Payments`, `Seats`, `Settings`).
-- **Shared stack routes** — `AdminStudentDetail`, `AdminStudentForm`, `AdminFees`, `Notifications` (same [`App.tsx`](App.tsx)).
+- **Shared stack routes** — `AdminStudentDetail`, `AdminStudentForm`, `AdminFees`, `Notifications`, `CommunicationCenter` (same [`App.tsx`](App.tsx)).
 
 ### Modules (sources)
 
@@ -17,7 +17,8 @@ These screens belong to **`LibraryRoot`** (library staff JWT), **not** Super Adm
 | [`pages/libraryadmin/StudentDetail.tsx`](pages/libraryadmin/StudentDetail.tsx) | Student detail |
 | [`pages/libraryadmin/Attendance.tsx`](pages/libraryadmin/Attendance.tsx) | Attendance + QR helpers |
 | [`pages/libraryadmin/Fees.tsx`](pages/libraryadmin/Fees.tsx) | Payments / fees (“Payments” tab) |
-| [`pages/libraryadmin/Notifications.tsx`](pages/libraryadmin/Notifications.tsx) | In-app notifications list |
+| [`pages/libraryadmin/Notifications.tsx`](pages/libraryadmin/Notifications.tsx) | In-app notifications list (inbox) |
+| [`pages/libraryadmin/CommunicationCenter.tsx`](pages/libraryadmin/CommunicationCenter.tsx) | Send messages to students (Gmail-style inbox) — see [`../README-COMMUNICATION-CENTER.md`](../README-COMMUNICATION-CENTER.md) |
 | [`pages/libraryadmin/Settings.tsx`](pages/libraryadmin/Settings.tsx) | Legacy settings UI (exported as `LibraryAdminSettingsLegacy`; not mounted in navigator today) |
 
 ### Thin wrappers (`pages/*.tsx`)

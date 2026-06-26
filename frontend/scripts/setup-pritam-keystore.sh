@@ -9,6 +9,8 @@ DOWNLOADS="${HOME}/Downloads"
 
 # Expo often names the file like this when downloaded from credentials page:
 CANDIDATES=(
+  "$DOWNLOADS/dowanlod/@pritamkumars-organization__libdesk-keystore.bak.jks"
+  "$DOWNLOADS/@pritamkumars-organization__libdesk-keystore.bak.jks"
   "$DOWNLOADS/@pritamkumars-organization__libdesk.jks"
   "$DOWNLOADS/pritamkumars-organization__libdesk.jks"
   "$DOWNLOADS/libdesk.jks"

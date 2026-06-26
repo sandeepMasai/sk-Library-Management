@@ -93,7 +93,7 @@ export function NotificationImageViewer({ imageUrl, title, onClose }: Props) {
             ) : (
               <>
                 <Ionicons name="download" size={20} color="#0F172A" />
-                <Text style={styles.downloadBtnTxt}>Download Image</Text>
+                <Text style={styles.downloadBtnTxt}>Save / Share Image</Text>
               </>
             )}
           </TouchableOpacity>

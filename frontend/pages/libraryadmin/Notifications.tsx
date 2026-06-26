@@ -4,14 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Alert,
   Pressable,
-  TextInput,
   ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAppStore, type Notification } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -22,18 +20,13 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { isLibraryIncomingNotification, isLibraryIncomingUnread } from '../../utils/notificationRead';
 
 export default function AdminNotifications() {
+  const navigation = useNavigation<any>();
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(mode), [mode]);
-  const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
-  const [titleFocus, setTitleFocus] = useState(false);
-  const [msgFocus, setMsgFocus] = useState(false);
 
   const fetchNotificationsPage = useAppStore((s) => s.fetchNotificationsPage);
-  const sendNotification = useAppStore((s) => s.sendNotification);
   const markNotificationRead = useAppStore((s) => s.markNotificationRead);
   const scrollBottom = useScrollBottomForTabBar();
 
@@ -77,29 +70,6 @@ export default function AdminNotifications() {
     () => sorted.filter((n) => isLibraryIncomingUnread(n)).length,
     [sorted]
   );
-
-  const handleSend = async () => {
-    const t = title.trim();
-    const m = message.trim();
-    if (!t || !m) {
-      Alert.alert('Missing details', 'Please enter a title and message.');
-      return;
-    }
-    setSending(true);
-    try {
-      const result = await sendNotification(t, m, 'all', 'general');
-      if (!result.ok) {
-        Alert.alert('Could not send', result.message || 'Please try again.');
-        return;
-      }
-      setTitle('');
-      setMessage('');
-      await loadPage(1);
-      Alert.alert('✓ Sent', 'Notification delivered to all students.');
-    } finally {
-      setSending(false);
-    }
-  };
 
   const handleItemPress = useCallback(
     (item: Notification) => {
@@ -190,14 +160,14 @@ export default function AdminNotifications() {
   );
 
   const ListHeader = (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View>
       <View style={styles.pageHeader}>
         <View style={styles.headerIcon}>
-          <Ionicons name="megaphone" size={20} color={theme.colors.primary} />
+          <Ionicons name="mail-open-outline" size={20} color={theme.colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Send Notification</Text>
-          <Text style={styles.pageSub}>Broadcast a message to all students</Text>
+          <Text style={styles.pageTitle}>Inbox</Text>
+          <Text style={styles.pageSub}>Platform alerts and sent message history</Text>
         </View>
         {unreadIncomingCount > 0 ? (
           <View style={styles.headerUnreadBadge}>
@@ -208,61 +178,15 @@ export default function AdminNotifications() {
         ) : null}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.fieldLabel}>Title / Reason</Text>
-        <View style={[styles.inputWrap, titleFocus && styles.inputWrapFocus]}>
-          <Ionicons
-            name="create-outline"
-            size={16}
-            color={titleFocus ? theme.colors.primary : theme.colors.mutedText}
-            style={{ marginRight: 8 }}
-          />
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Library closed tomorrow"
-            placeholderTextColor={theme.colors.mutedText}
-            style={styles.textInput}
-            onFocus={() => setTitleFocus(true)}
-            onBlur={() => setTitleFocus(false)}
-            returnKeyType="next"
-          />
-        </View>
-
-        <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Message</Text>
-        <View style={[styles.inputWrap, styles.textAreaWrap, msgFocus && styles.inputWrapFocus]}>
-          <TextInput
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Type your message here…"
-            placeholderTextColor={theme.colors.mutedText}
-            style={[styles.textInput, styles.textArea]}
-            multiline
-            textAlignVertical="top"
-            onFocus={() => setMsgFocus(true)}
-            onBlur={() => setMsgFocus(false)}
-          />
-        </View>
-
-        <Pressable
-          onPress={handleSend}
-          disabled={sending}
-          style={({ pressed }) => [
-            styles.sendBtn,
-            pressed && !sending && { opacity: 0.88 },
-            sending && { opacity: 0.6 },
-          ]}
-        >
-          {sending ? (
-            <ActivityIndicator color={theme.colors.dark} size="small" />
-          ) : (
-            <>
-              <Ionicons name="send" size={16} color={theme.colors.dark} />
-              <Text style={styles.sendBtnTxt}>Send to all students</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
+      <TouchableOpacity
+        style={styles.commCenterBtn}
+        onPress={() => navigation.navigate('CommunicationCenter')}
+        activeOpacity={0.88}
+      >
+        <Ionicons name="chatbubbles-outline" size={18} color={theme.colors.primary} />
+        <Text style={styles.commCenterBtnTxt}>Send messages in Communication Center</Text>
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.mutedText} />
+      </TouchableOpacity>
 
       {sorted.length > 0 ? (
         <View style={styles.historyHeader}>
@@ -288,7 +212,7 @@ export default function AdminNotifications() {
           ) : null}
         </View>
       ) : null}
-    </KeyboardAvoidingView>
+    </View>
   );
 
   return (
@@ -385,6 +309,19 @@ function makeStyles(mode: 'light' | 'dark') {
     headerUnreadBadgeTxt: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
     pageTitle: { fontSize: 20, fontWeight: '800', color: theme.colors.text },
     pageSub: { fontSize: 13, fontWeight: '500', color: theme.colors.mutedText, marginTop: 2 },
+    commCenterBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 20,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    commCenterBtnTxt: { flex: 1, fontSize: 14, fontWeight: '700', color: theme.colors.text },
 
     card: {
       backgroundColor: theme.colors.surface,

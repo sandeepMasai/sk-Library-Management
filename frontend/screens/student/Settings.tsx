@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert'
 import { LibraryContactSection } from '../../components/student/LibraryContactSection';
 import { getGlobalSettings, isValidHttpUrl, toApiErrorMessage } from '../../services/globalSettings';
 import { APP_DISPLAY_NAME } from '../../constants/branding';
+import { imageCacheKey } from '../../utils/imageUrl';
 
 export default function StudentSettingsScreen({ navigation }: { navigation: any }) {
   const { mode, preference } = useTheme();
@@ -27,6 +28,7 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
 
   const currentUser = useAppStore((s) => s.currentUser);
   const logout = useAppStore((s) => s.logout);
+  const fetchMyProfile = useAppStore((s) => s.fetchMyProfile);
 
   const [infoAlert, setInfoAlert] = useState<{
     title: string;
@@ -44,6 +46,10 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
   const username = (currentUser as any)?.username ?? '';
   const photoUrl = String((currentUser as any)?.photoUrl || '').trim();
 
+  useEffect(() => {
+    if (currentUser?.role === 'student') void fetchMyProfile();
+  }, [currentUser?.role, fetchMyProfile]);
+
   const onLogout = () => setShowLogoutModal(true);
 
   return (
@@ -53,7 +59,7 @@ export default function StudentSettingsScreen({ navigation }: { navigation: any 
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             {photoUrl ? (
-              <Image source={{ uri: photoUrl }} style={styles.avatarImg} />
+              <Image key={imageCacheKey(photoUrl)} source={{ uri: photoUrl }} style={styles.avatarImg} />
             ) : (
               <Text style={styles.avatarTxt}>{name.charAt(0).toUpperCase()}</Text>
             )}

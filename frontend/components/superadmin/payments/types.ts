@@ -61,6 +61,13 @@ export const DEFAULT_PAYMENT_FILTERS: PaymentFilters = {
   to: '',
 };
 
+/** Drop orphan ledger rows (deleted library / missing name). */
+export function isPaymentWithLibrary(row: PaymentRow): boolean {
+  if (!row.libraryId) return false;
+  const name = String(row.libraryName || '').trim();
+  return name.length > 0 && name !== '—' && name !== '-';
+}
+
 export function countActivePaymentFilters(filters: PaymentFilters): number {
   let n = 0;
   if (filters.paymentStatus !== 'all') n += 1;

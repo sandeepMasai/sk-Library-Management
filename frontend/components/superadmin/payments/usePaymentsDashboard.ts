@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, type ApiError } from '../../../services/api';
 import type { PaymentFilters, PaymentRow, PaymentsOverview, PaymentsTotals } from './types';
-import { DEFAULT_PAYMENT_FILTERS } from './types';
+import { DEFAULT_PAYMENT_FILTERS, isPaymentWithLibrary } from './types';
 
 export function usePaymentsDashboard(enabled: boolean) {
   const [filters, setFilters] = useState<PaymentFilters>(DEFAULT_PAYMENT_FILTERS);
@@ -52,7 +52,9 @@ export function usePaymentsDashboard(enabled: boolean) {
         totals: PaymentsTotals;
       }>('/api/superadmin/payments', params);
 
-      setRows(res.payments || []);
+      const payments = (res.payments || []).filter(isPaymentWithLibrary);
+
+      setRows(payments);
       setTotal(Number(res.total || 0));
       setTotals(res.totals || null);
     } catch (e: unknown) {

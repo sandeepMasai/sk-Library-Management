@@ -20,6 +20,7 @@ import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
 import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert';
 import { LibraryContactSection } from '../../components/student/LibraryContactSection';
 import FlashToast from '../../components/auth/FlashToast';
+import { imageCacheKey } from '../../utils/imageUrl';
 
 const { width } = Dimensions.get('window');
 const CARD_W = width - 40;
@@ -34,6 +35,7 @@ export default function StudentProfile() {
   const attendances = useAppStore((s) => s.attendances);
   const fetchStudentAttendance = useAppStore((s) => s.fetchStudentAttendance);
   const uploadMyPhoto = useAppStore((s) => s.uploadMyPhoto);
+  const fetchMyProfile = useAppStore((s) => s.fetchMyProfile);
   const logout = useAppStore((s) => s.logout);
   const [uploading, setUploading] = useState(false);
   const [bootLoading, setBootLoading] = useState(false);
@@ -88,8 +90,11 @@ export default function StudentProfile() {
 
   useFocusEffect(
     useCallback(() => {
+      if (currentUser?.role === 'student' || role === 'student') {
+        void fetchMyProfile();
+      }
       if (currentUser) fetchStudentAttendance(currentUser.id);
-    }, [currentUser, fetchStudentAttendance])
+    }, [currentUser, role, fetchMyProfile, fetchStudentAttendance])
   );
 
   const stats = useMemo(() => {
@@ -302,7 +307,13 @@ export default function StudentProfile() {
               style={styles.avatarRing}
             >
               {currentUser.photoUrl
-                ? <Image source={{ uri: currentUser.photoUrl }} style={styles.avatar} />
+                ? (
+                  <Image
+                    key={imageCacheKey(currentUser.photoUrl)}
+                    source={{ uri: currentUser.photoUrl }}
+                    style={styles.avatar}
+                  />
+                )
                 : <View style={styles.avatarFallback}>
                   <Text style={styles.avatarInitial}>{currentUser.name.charAt(0).toUpperCase()}</Text>
                 </View>
@@ -317,7 +328,7 @@ export default function StudentProfile() {
           <Text style={styles.username}>@{currentUser.username}  ·  {currentUser.mobile}</Text>
           <View style={styles.libraryRow}>
             {libraryLogo ? (
-              <Image source={{ uri: libraryLogo }} style={styles.libraryLogo} />
+              <Image key={imageCacheKey(libraryLogo)} source={{ uri: libraryLogo }} style={styles.libraryLogo} />
             ) : (
               <View style={styles.libraryLogoFallback}>
                 <Text style={styles.libraryLogoTxt}>{libraryName.charAt(0).toUpperCase()}</Text>

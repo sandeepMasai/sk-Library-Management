@@ -23,6 +23,7 @@ import { useAppStore } from '../../store';
 import { theme } from '../../theme';
 import { useTheme } from '../../theme/ThemeProvider';
 import { SimpleAlert, type SimpleAlertTone } from '../../components/SimpleAlert';
+import { imageCacheKey } from '../../utils/imageUrl';
 
 /**
  * Library ProfileScreen
@@ -46,6 +47,8 @@ export default function ProfileScreen() {
   const seats = useAppStore((s) => s.seats);
   const fetchSeats = useAppStore((s) => s.fetchSeats);
   const setTotalSeats = useAppStore((s) => s.setTotalSeats);
+  const uploadLibraryLogo = useAppStore((s) => s.uploadLibraryLogo);
+  const patchCurrentUser = useAppStore((s) => s.patchCurrentUser);
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   // Store update can be added later (not required for UI flow).
@@ -258,17 +261,13 @@ export default function ProfileScreen() {
     if (!logoPreview) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      const filename = logoPreview.split('/').pop() ?? 'logo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('logo', { uri: logoPreview, name: filename, type } as unknown as Blob);
-
-      const response = await api.post<{ ok: boolean; profile: any }>(`/api/library/logo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const p = response.data?.profile;
-      setForm((s) => ({ ...s, logoUrl: p?.logoUrl || s.logoUrl }));
+      const result = await uploadLibraryLogo(logoPreview);
+      if (!result.ok || !result.logoUrl) {
+        showAlert('Error', result.message || 'Failed to upload logo', 'error');
+        return;
+      }
+      setForm((s) => ({ ...s, logoUrl: result.logoUrl! }));
+      patchCurrentUser({ logoUrl: result.logoUrl });
       setLogoPreview(null);
       showAlert('Updated', 'Logo updated.', 'success', 2600);
     } catch (e: any) {
@@ -510,7 +509,11 @@ export default function ProfileScreen() {
           <View style={[styles.card, styles.profileCard]}>
             <TouchableOpacity onPress={pickLogo} activeOpacity={0.85} style={styles.avatarWrap}>
               {logoPreview || form.logoUrl ? (
-                <Image source={{ uri: logoPreview || form.logoUrl || undefined }} style={styles.avatarImg} />
+                <Image
+                  key={imageCacheKey(logoPreview || form.logoUrl)}
+                  source={{ uri: logoPreview || form.logoUrl || undefined }}
+                  style={styles.avatarImg}
+                />
               ) : (
                 <View style={styles.avatarFallback}>
                   <Text style={styles.avatarTxt}>{initial}</Text>

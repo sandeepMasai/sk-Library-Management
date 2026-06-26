@@ -5,7 +5,7 @@ import { theme } from '../../theme';
 
 export type AttendanceEntryRowData = {
   id: string;
-  username: string;
+  studentName: string;
   displayInitial: string;
   photoUrl?: string | null;
   formattedTime: string;
@@ -39,7 +39,7 @@ function AttendanceEntryRowComponent({ item, styles }: Props) {
       </View>
 
       <Text style={styles.entryUsername} numberOfLines={1}>
-        @{item.username}
+        {item.studentName}
       </Text>
 
       <View style={rowStyles.spacer} />
@@ -63,7 +63,7 @@ function propsAreEqual(prev: Props, next: Props) {
   const b = next.item;
   return (
     a.id === b.id &&
-    a.username === b.username &&
+    a.studentName === b.studentName &&
     a.displayInitial === b.displayInitial &&
     a.photoUrl === b.photoUrl &&
     a.formattedTime === b.formattedTime &&

@@ -1,5 +1,8 @@
 import { NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { API_BASE_URL } from './apiConfig';
+
+export { API_BASE_URL };
 
 function isLocalOnlyHost(host: string): boolean {
   const h = host.trim().toLowerCase();
@@ -76,6 +79,10 @@ export function resolveApiBaseUrl(): string {
   const full = getConfiguredApiUrl();
   if (full) {
     return full;
+  }
+
+  if (!__DEV__) {
+    return API_BASE_URL;
   }
 
   const overrideHost = getApiHostOverride();

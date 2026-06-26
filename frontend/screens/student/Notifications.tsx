@@ -7,7 +7,6 @@ import {
   Platform,
   TouchableOpacity,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useAppStore } from '../../store';
@@ -197,16 +196,7 @@ export default function StudentNotifications() {
     setViewer({ url: imageUrl, title });
   }, []);
 
-  const handlePdfPress = useCallback(async (documentUrl: string, title: string) => {
-    try {
-      const canOpen = await Linking.canOpenURL(documentUrl);
-      if (canOpen) {
-        await Linking.openURL(documentUrl);
-        return;
-      }
-    } catch {
-      // Fall through to in-app viewer.
-    }
+  const handlePdfPress = useCallback((documentUrl: string, title: string) => {
     setPdfViewer({ url: documentUrl, title });
   }, []);
 

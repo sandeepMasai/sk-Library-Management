@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Linking, Platform, TouchableOpacity, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { normalizeImageUrl } from '../../utils/imageUrl';
 import { useAppStore } from '../../store';
 import { getSettingsColors, settingsSpacing } from '../../ui/settingsTheme';
 import ProfileCard from '../../components/settings/ProfileCard';
@@ -111,16 +112,22 @@ export default function SettingsScreen() {
       const type = match ? `image/${match[1]}` : 'image/jpeg';
       formData.append('photo', { uri, name: filename, type } as unknown as Blob);
 
-      const response = await api.post<{ ok: boolean; imageUrl: string }>(`/api/user/upload-profile`, formData, {
+      const response = await api.post<{ ok: boolean; imageUrl: string; logoUrl?: string }>(`/api/user/upload-profile`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const imageUrl = response.data?.imageUrl;
-      if (imageUrl) {
-        // Save returned URL to store instantly.
-        if (currentUser?.role === 'library') patchCurrentUser({ logoUrl: imageUrl });
-        else if (currentUser?.role === 'student') patchCurrentUser({ photoUrl: imageUrl } as any);
+      const imageUrl = normalizeImageUrl(response.data?.imageUrl || response.data?.logoUrl);
+      if (!imageUrl) {
         setAvatarPreview(null);
+        setInfoModal({
+          title: 'Upload failed',
+          description: 'Server did not return an image URL. Restart backend and try again.',
+        });
+        return;
       }
+      if (currentUser?.role === 'library') patchCurrentUser({ logoUrl: imageUrl });
+      else if (currentUser?.role === 'student') patchCurrentUser({ photoUrl: imageUrl } as any);
+      await fetchMyProfile();
+      setAvatarPreview(null);
     } catch (e: any) {
       setAvatarPreview(null);
       setInfoModal({ title: 'Upload failed', description: e?.message || 'Could not upload image.' });
@@ -417,23 +424,15 @@ export default function SettingsScreen() {
             <SettingsSectionCard>
               <SettingsItem
                 title="Communication Center"
-                subtitle="Message students · track delivery"
+                subtitle="Send, edit & track messages to students"
                 icon="chatbubbles-outline"
                 iconColor="#25D366"
                 iconBgColor="rgba(37,211,102,0.12)"
                 onPress={() => navTo('CommunicationCenter')}
               />
               <SettingsItem
-                title="Quick Send"
-                subtitle="Broadcast text & image alerts"
-                icon="megaphone-outline"
-                iconColor="#2563EB"
-                iconBgColor="rgba(37,99,235,0.12)"
-                onPress={() => navTo('SendMessage')}
-              />
-              <SettingsItem
                 title="Inbox"
-                subtitle="Messages from platform"
+                subtitle="Platform alerts & message history"
                 icon="notifications-outline"
                 iconColor="#7C3AED"
                 iconBgColor="rgba(124,58,237,0.12)"

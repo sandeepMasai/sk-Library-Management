@@ -1,4 +1,5 @@
 export { PaymentKpiGrid } from './PaymentKpiGrid';
+export { PaymentPlanStatsGrid } from './PaymentPlanStatsGrid';
 export { PaymentChartsPanel } from './PaymentChartsPanel';
 export { PaymentFiltersBar } from './PaymentFiltersBar';
 export { PaymentFilterModal } from './PaymentFilterModal';
@@ -6,4 +7,5 @@ export { PaymentExportBar } from './PaymentExportBar';
 export { PaymentDataTable } from './PaymentDataTable';
 export { PaymentViewModal } from './PaymentViewModal';
 export { usePaymentsDashboard } from './usePaymentsDashboard';
+export { usePlanLibraryStats } from './usePlanLibraryStats';
 export type { PaymentRow, PaymentsOverview, PaymentFilters } from './types';

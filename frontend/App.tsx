@@ -22,17 +22,19 @@ import ForgotPasswordOtpScreen from './screens/auth/ForgotPasswordOtpScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import AdminLoginScreen from './screens/auth/AdminLoginScreen';
 import {
-  AdminDashboardScreen,
-  AdminStudents,
   AdminStudentForm,
   AdminStudentDetail,
-  AdminAttendance,
   AdminNotifications,
   SendMessageScreen,
   CommunicationCenterScreen,
-  AdminFees,
   RenewalRequestsScreen,
 } from './pages/libraryadmin';
+import {
+  LazyAdminDashboard,
+  LazyAdminStudents,
+  LazyAdminAttendance,
+  LazyAdminFees,
+} from './navigation/lazyLibraryScreens';
 import {
   AdminLibraryDetailPage,
   AdminSubscriptionDetailPage,
@@ -218,10 +220,10 @@ function LibraryTabs() {
       })}
     >
       {/* Library dashboard — blocked until paid subscription */}
-      <Tab.Screen name="Dashboard" component={AdminDashboardScreen} listeners={librarySubscriptionTabBlocker} />
-      <Tab.Screen name="Students" component={AdminStudents} listeners={librarySubscriptionTabBlocker} />
-      <Tab.Screen name="Attendance" component={AdminAttendance} listeners={librarySubscriptionTabBlocker} />
-      <Tab.Screen name="Payments" component={AdminFees} listeners={librarySubscriptionTabBlocker} />
+      <Tab.Screen name="Dashboard" component={LazyAdminDashboard} listeners={librarySubscriptionTabBlocker} />
+      <Tab.Screen name="Students" component={LazyAdminStudents} listeners={librarySubscriptionTabBlocker} />
+      <Tab.Screen name="Attendance" component={LazyAdminAttendance} listeners={librarySubscriptionTabBlocker} />
+      <Tab.Screen name="Payments" component={LazyAdminFees} listeners={librarySubscriptionTabBlocker} />
       <Tab.Screen name="Seats" component={LibrarySeatsScreen} listeners={librarySubscriptionTabBlocker} />
       <Tab.Screen name="Settings" component={SettingsScreen} listeners={librarySubscriptionTabBlocker} />
     </Tab.Navigator>
@@ -456,7 +458,7 @@ function AppInner() {
         />
         <Stack.Screen
           name="AdminFees"
-          component={AdminFees}
+          component={LazyAdminFees}
           options={withAppHeaderOptions({ headerShown: true, title: 'Fee Management' })}
         />
         <Stack.Screen

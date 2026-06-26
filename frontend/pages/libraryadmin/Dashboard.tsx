@@ -26,6 +26,7 @@ import { AttendanceCard } from '../../components/AttendanceSummaryCard';
 import { SignOutConfirmModal } from '../../components/SignOutConfirmModal';
 import { resetAuthNavigation } from '../../navigation/rootNavigation';
 import { APP_HEADER_BG } from '../../constants/appHeader';
+import { isLibraryIncomingUnread } from '../../utils/notificationRead';
 
 type DashboardApiResponse = {
   ok: boolean;
@@ -122,10 +123,13 @@ export default function AdminDashboard() {
     setRefreshing(true);
     try {
       await fetchDashboard();
+      if (role === 'library') {
+        await fetchNotifications();
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [fetchDashboard]);
+  }, [fetchDashboard, fetchNotifications, role]);
 
   const students = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
   const todayList = getTodayAttendance();
@@ -144,6 +148,11 @@ export default function AdminDashboard() {
       due: dashboard?.payments.dueAmount ?? 0,
     };
   }, [dashboard]);
+
+  const unreadInboxCount = useMemo(
+    () => notifications.filter((n) => isLibraryIncomingUnread(n)).length,
+    [notifications]
+  );
 
   const RECENT_ACTIVITY_LIMIT = 5;
 
@@ -288,7 +297,20 @@ export default function AdminDashboard() {
           <QuickAction2 icon="person-add-outline" label="Add student" sub="New member" tone="indigo" onPress={() => goForm()} />
           <QuickAction2 icon="people-outline" label="Students" sub="View list" tone="emerald" onPress={() => navigation.navigate('Students')} />
           <QuickAction2 icon="qr-code-outline" label="Attendance" sub="Open QR" tone="violet" onPress={() => navigation.navigate('Attendance')} />
-          <QuickAction2 icon="megaphone-outline" label="Notify" sub="Send update" tone="amber" onPress={() => navigation.navigate('Notifications')} />
+          <QuickAction2
+            icon="mail-open-outline"
+            label="Inbox"
+            sub={unreadInboxCount > 0 ? `${unreadInboxCount} new` : 'Platform alerts'}
+            tone="violet"
+            onPress={() => parentNav()?.navigate?.('Notifications')}
+          />
+          <QuickAction2
+            icon="chatbubbles-outline"
+            label="Communication"
+            sub="Center"
+            tone="rose"
+            onPress={() => parentNav()?.navigate?.('CommunicationCenter')}
+          />
           <QuickAction2 icon="wallet-outline" label="Fees" sub="Overview" tone="slate" onPress={() => parentNav()?.navigate?.('AdminFees')} />
           <QuickAction2
             icon="refresh-outline"

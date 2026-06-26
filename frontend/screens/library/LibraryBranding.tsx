@@ -7,6 +7,7 @@ import { api, apiGet, type ApiError } from '../../services/api';
 import { theme } from '../../theme';
 import { useAppStore } from '../../store';
 import { useTheme } from '../../theme/ThemeProvider';
+import { imageCacheKey } from '../../utils/imageUrl';
 
 /**
  * LibraryBrandingScreen
@@ -22,6 +23,7 @@ export default function LibraryBrandingScreen() {
   const { mode } = useTheme();
   const styles = React.useMemo(() => makeStyles(), [mode]);
   const patchCurrentUser = useAppStore((s) => s.patchCurrentUser);
+  const uploadLibraryLogo = useAppStore((s) => s.uploadLibraryLogo);
 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -75,19 +77,13 @@ export default function LibraryBrandingScreen() {
     if (!logoPreview) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      const filename = logoPreview.split('/').pop() ?? 'logo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('logo', { uri: logoPreview, name: filename, type } as unknown as Blob);
-
-      const response = await api.post<{ ok: boolean; logoUrl: string; profile: any }>(`/api/library/logo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      const logoUrl = response.data?.logoUrl || response.data?.profile?.logoUrl || null;
-      setProfile((s) => ({ ...s, logoUrl }));
-      patchCurrentUser({ logoUrl } as any);
+      const result = await uploadLibraryLogo(logoPreview);
+      if (!result.ok || !result.logoUrl) {
+        Alert.alert('Error', result.message || 'Failed to upload logo');
+        return;
+      }
+      setProfile((s) => ({ ...s, logoUrl: result.logoUrl! }));
+      patchCurrentUser({ logoUrl: result.logoUrl });
       setLogoPreview(null);
       Alert.alert('Updated', 'Library logo updated.');
     } catch (e: any) {
@@ -120,7 +116,7 @@ export default function LibraryBrandingScreen() {
           {loading ? (
             <ActivityIndicator />
           ) : currentLogo ? (
-            <Image source={{ uri: currentLogo }} style={styles.logoImg} />
+            <Image key={imageCacheKey(currentLogo)} source={{ uri: currentLogo }} style={styles.logoImg} />
           ) : (
             <View style={styles.logoPlaceholder}>
               <Ionicons name="business-outline" size={30} color={theme.colors.mutedText} />
@@ -168,7 +164,7 @@ export default function LibraryBrandingScreen() {
           <View style={styles.invoiceRow}>
             <View style={styles.invoiceLogo}>
               {currentLogo ? (
-                <Image source={{ uri: currentLogo }} style={{ width: '100%', height: '100%' }} />
+                <Image key={imageCacheKey(currentLogo)} source={{ uri: currentLogo }} style={{ width: '100%', height: '100%' }} />
               ) : (
                 <View style={[styles.invoiceLogo, { backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }]}>
                   <Ionicons name="image-outline" size={18} color={theme.colors.mutedText} />
