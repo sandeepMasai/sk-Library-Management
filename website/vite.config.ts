@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => {
     env.VITE_DEV_API_URL?.replace(/\/$/, '') || 'http://127.0.0.1:1998';
 
   const proxySecure = apiTarget.startsWith('https://');
+  const apiProxy = {
+    '/api': {
+      target: apiTarget,
+      changeOrigin: true,
+      secure: proxySecure,
+    },
+  };
 
   return {
     plugins: [react(), tailwindcss()],
@@ -26,13 +33,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,
-      proxy: {
-        '/api': {
-          target: apiTarget,
-          changeOrigin: true,
-          secure: proxySecure,
-        },
-      },
+      proxy: apiProxy,
+    },
+    preview: {
+      host: true,
+      port: Number(process.env.PORT) || 3000,
+      proxy: apiProxy,
     },
   };
 });

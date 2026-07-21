@@ -1,7 +1,17 @@
 import { API_BASE_URL } from './apiConfig';
 
-/** In dev, use Vite proxy (`/api` → backend). In production, call API directly. */
-export const API_URL = import.meta.env.DEV ? '' : API_BASE_URL;
+/** True when the page is served from a local machine (dev server or local preview). */
+function isLocalOrigin(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+}
+
+/**
+ * Local dev/preview: relative `/api` → Vite proxy (no CORS).
+ * Production deploy: direct calls to VITE_API_URL.
+ */
+export const API_URL = import.meta.env.DEV || isLocalOrigin() ? '' : API_BASE_URL;
 export { API_BASE_URL };
 
 export type ApiEnvelope<T> = {
