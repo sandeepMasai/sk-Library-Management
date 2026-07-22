@@ -76,15 +76,14 @@ function isOriginAllowed(origin, list) {
     }
   }
 
-  if (envFlag("CORS_ALLOW_SMARTLIBDESK")) {
-    try {
-      const host = new URL(normalized).hostname.toLowerCase();
-      if (host === "smartlibdesk.in" || host === "www.smartlibdesk.in" || host.endsWith(".smartlibdesk.in")) {
-        return true;
-      }
-    } catch {
-      /* ignore invalid origin */
+  // Product domain — always allowed (works even if Render env vars are missing).
+  try {
+    const host = new URL(normalized).hostname.toLowerCase();
+    if (host === "smartlibdesk.in" || host === "www.smartlibdesk.in" || host.endsWith(".smartlibdesk.in")) {
+      return true;
     }
+  } catch {
+    /* ignore invalid origin */
   }
 
   for (const entry of list) {
