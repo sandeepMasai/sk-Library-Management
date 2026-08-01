@@ -1,17 +1,7 @@
 import { API_BASE_URL } from './apiConfig';
 
-/** True when the page is served from a local machine (dev server or local preview). */
-function isLocalOrigin(): boolean {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.hostname.toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-}
-
-/**
- * Local dev/preview: relative `/api` → Vite proxy (no CORS).
- * Production deploy: direct calls to VITE_API_URL.
- */
-export const API_URL = import.meta.env.DEV || isLocalOrigin() ? '' : API_BASE_URL;
+/** Browser: same-origin `/api` (Vite proxy in dev, Vercel rewrite in prod). */
+export const API_URL = typeof window !== 'undefined' ? '' : API_BASE_URL;
 export { API_BASE_URL };
 
 export type ApiEnvelope<T> = {
@@ -186,7 +176,7 @@ export async function apiRaw<T = unknown>(path: string, init: RequestInitWithRet
     throw new Error(
       import.meta.env.DEV
         ? 'Backend is not reachable. Start it with: cd backend && npm run dev (port 1998), then try again.'
-        : 'Payment server is unreachable. Please try again in a moment.'
+        : 'Could not reach the server. Check your connection and try again.'
     );
   }
   const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T> &
