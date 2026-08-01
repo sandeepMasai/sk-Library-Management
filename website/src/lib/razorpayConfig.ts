@@ -18,6 +18,11 @@ export function razorpayKeyMode(keyId: string): 'test' | 'live' | 'unknown' {
 /** Throws if frontend .env key does not match backend order response (common cause of "Authentication failed"). */
 export function assertBackendKeyMatchesEnv(backendKeyId: string): void {
   if (!EXPECTED_RAZORPAY_KEY_ID) {
+    if (!RAZORPAY_TEST_ONLY && razorpayKeyMode(backendKeyId) === 'live') {
+      throw new Error(
+        'VITE_RAZORPAY_KEY_ID is missing. Set it to the same live rzp_live_* Key ID used by the production backend, then rebuild and redeploy the website.'
+      );
+    }
     if (import.meta.env.DEV) {
       console.warn(
         '[razorpay] VITE_RAZORPAY_KEY_ID is unset — skipping key match check. Set it to your rzp_live_* or rzp_test_* id in website/.env'
@@ -48,7 +53,7 @@ export function assertWebsiteTestModeOnly(backendKeyId: string): void {
   if (razorpayKeyMode(backendKeyId) === 'live') {
     throw new Error(
       'Razorpay mode conflict: your Railway/production backend uses a LIVE key (rzp_live_*), but this website has VITE_RAZORPAY_TEST_ONLY=true (test only). ' +
-        'For real payments: set VITE_RAZORPAY_TEST_ONLY=false and VITE_RAZORPAY_KEY_ID to the same live Key ID as Railway, then restart the website. ' +
+        'For real payments: set VITE_RAZORPAY_TEST_ONLY=false and VITE_RAZORPAY_KEY_ID to the same live Key ID as Railway, then rebuild and redeploy the website. ' +
         'For sandbox testing: set Railway RAZORPAY_KEY_ID=rzp_test_* (and matching secret), redeploy Railway, and keep VITE_RAZORPAY_KEY_ID as the same test Key ID.'
     );
   }

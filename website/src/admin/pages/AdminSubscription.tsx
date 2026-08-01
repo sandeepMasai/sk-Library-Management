@@ -65,6 +65,9 @@ export function AdminSubscription() {
   const [payError, setPayError] = useState('');
   const [payPhase, setPayPhase] = useState<'idle' | 'creating' | 'verifying'>('idle');
   const [success, setSuccess] = useState(false);
+  const isModeConflict = /mode conflict|TEST_ONLY|rzp_live_/i.test(payError);
+  const isKeyAuthenticationError =
+    !isModeConflict && /authentication failed|razorpay.*key|RAZORPAY/i.test(payError);
 
   useEffect(() => {
     preloadRazorpayCheckout();
@@ -315,18 +318,19 @@ export function AdminSubscription() {
               <div className="mt-4 rounded-xl border border-red-400/35 bg-red-500/10 px-3 py-3 text-sm text-red-100">
                 <p className="font-semibold">Payment could not start</p>
                 <p className="mt-1 text-red-200/90">{payError}</p>
-                {/authentication failed|razorpay.*key|RAZORPAY/i.test(payError) ? (
+                {isModeConflict ? (
+                  <p className="mt-2 text-xs text-red-200/75">
+                    The production backend uses live keys, while this website build is test-only. In the website host's
+                    environment, set <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_TEST_ONLY=false</code>{' '}
+                    and <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_KEY_ID</code> to the same live Key
+                    ID, then rebuild and redeploy the website.
+                  </p>
+                ) : isKeyAuthenticationError ? (
                   <p className="mt-2 text-xs text-red-200/75">
                     Fix: Razorpay Dashboard → regenerate Key ID + Secret together → update Railway env vars (
                     <code className="rounded bg-black/20 px-1">RAZORPAY_KEY_ID</code>,{' '}
                     <code className="rounded bg-black/20 px-1">RAZORPAY_KEY_SECRET</code>) and matching{' '}
                     <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_KEY_ID</code> in website/.env.
-                  </p>
-                ) : /mode conflict|TEST_ONLY|rzp_live_/i.test(payError) ? (
-                  <p className="mt-2 text-xs text-red-200/75">
-                    You are calling Railway (production) which uses live keys, but website/.env has test-only mode. Either
-                    set <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_TEST_ONLY=false</code> + live Key ID, or
-                    switch Railway to <code className="rounded bg-black/20 px-1">rzp_test_*</code> keys for sandbox.
                   </p>
                 ) : null}
               </div>
