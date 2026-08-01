@@ -320,10 +320,10 @@ export function AdminSubscription() {
                 <p className="mt-1 text-red-200/90">{payError}</p>
                 {isModeConflict ? (
                   <p className="mt-2 text-xs text-red-200/75">
-                    The production backend uses live keys, while this website build is test-only. In the website host's
-                    environment, set <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_TEST_ONLY=false</code>{' '}
-                    and <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_KEY_ID</code> to the same live Key
-                    ID, then rebuild and redeploy the website.
+                    The backend uses live keys, while this website build is explicitly test-only. Remove{' '}
+                    <code className="rounded bg-black/20 px-1">VITE_RAZORPAY_TEST_ONLY</code> or set it to{' '}
+                    <code className="rounded bg-black/20 px-1">false</code>, then rebuild and redeploy. Checkout
+                    uses the Key ID returned by the authenticated backend.
                   </p>
                 ) : isKeyAuthenticationError ? (
                   <p className="mt-2 text-xs text-red-200/75">
