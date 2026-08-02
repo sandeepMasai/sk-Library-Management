@@ -18,8 +18,16 @@ const { createHttpError } = require("../utils/httpError");
  * Get request metadata
  */
 function getRequestMeta(req) {
+  // Proxies append their own address to X-Forwarded-For. Store only the
+  // originating address; persisting the whole chain can exceed the IPv6
+  // column limit (45 characters).
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const clientIp = Array.isArray(forwardedFor)
+    ? forwardedFor[0]
+    : String(forwardedFor || "").split(",")[0].trim();
+
   return {
-    ip: String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown"),
+    ip: clientIp || String(req.socket?.remoteAddress || "unknown"),
     userAgent: String(req.headers["user-agent"] || ""),
   };
 }

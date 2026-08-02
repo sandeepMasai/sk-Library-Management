@@ -50,7 +50,14 @@ const out = {
   RESEND_API_KEY: localEnv.RESEND_API_KEY,
   EMAIL_FROM: localEnv.EMAIL_FROM,
   CONTACT_TO_EMAIL: localEnv.CONTACT_TO_EMAIL,
-  ALLOWED_ORIGINS: localEnv.ALLOWED_ORIGINS,
+  EMAIL_OTP_DEV_LOG: localEnv.EMAIL_OTP_DEV_LOG || "false",
+  WEBSITE_URL: localEnv.WEBSITE_URL || "https://www.smartlibdesk.in",
+  CORS_ALLOW_SMARTLIBDESK: localEnv.CORS_ALLOW_SMARTLIBDESK || "true",
+  CORS_ALLOW_VERCEL: localEnv.CORS_ALLOW_VERCEL || "true",
+  CORS_CREDENTIALS: localEnv.CORS_CREDENTIALS || "true",
+  ALLOWED_ORIGINS:
+    localEnv.ALLOWED_ORIGINS ||
+    "https://www.smartlibdesk.in,https://smartlibdesk.in,http://localhost:5173,http://localhost:3000",
   FRONTEND_URL: localEnv.FRONTEND_URL,
   LOG_LEVEL: localEnv.LOG_LEVEL || "info",
 };

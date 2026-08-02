@@ -30,6 +30,43 @@ function isResendSandboxRecipientError(message) {
   return /only send testing emails to your own email address/i.test(String(message || ""));
 }
 
+/** Map Resend / config failures to actionable codes for OTP handlers. */
+function parseResendError(error) {
+  const msg = String(error?.message || error || "").trim();
+  const lower = msg.toLowerCase();
+
+  if (
+    error?.code === "RESEND_NOT_CONFIGURED" ||
+    /resend_api_key is not configured/i.test(lower) ||
+    /api key is invalid/i.test(lower) ||
+    /invalid api key/i.test(lower)
+  ) {
+    return {
+      code: "RESEND_NOT_CONFIGURED",
+      message:
+        "Email service is not configured on the server. Set RESEND_API_KEY and EMAIL_FROM in Render (or Railway), then redeploy the backend.",
+    };
+  }
+
+  if (error?.code === "RESEND_SANDBOX_RECIPIENT" || isResendSandboxRecipientError(msg)) {
+    return {
+      code: "RESEND_SANDBOX_RECIPIENT",
+      message:
+        "Email is in Resend sandbox mode: only your Resend account email can receive mail. " +
+        "Verify smartlibdesk.in at resend.com/domains and set EMAIL_FROM=noreply@smartlibdesk.in on the server.",
+    };
+  }
+
+  if (/domain.*not verified|verify your domain|not a verified|from address/i.test(lower)) {
+    return {
+      code: "RESEND_DOMAIN_NOT_VERIFIED",
+      message: `Sender domain is not verified in Resend. Verify ${EMAIL_FROM} at resend.com/domains, then redeploy the backend.`,
+    };
+  }
+
+  return { code: "RESEND_SEND_FAILED", message: msg || "Failed to send email" };
+}
+
 function logDevOtp({ to, otp, label }) {
   const line = "=".repeat(56);
   const body = [
@@ -52,7 +89,9 @@ function logDevOtp({ to, otp, label }) {
  */
 function assertResendConfigured() {
   if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === "your_resend_api_key_here") {
-    throw new Error("RESEND_API_KEY is not configured. Please set it in your environment variables.");
+    const err = new Error("RESEND_API_KEY is not configured. Please set it in your environment variables.");
+    err.code = "RESEND_NOT_CONFIGURED";
+    throw err;
   }
   if (!EMAIL_FROM) {
     throw new Error("EMAIL_FROM is not configured. Please set it in your environment variables.");
@@ -397,10 +436,9 @@ async function sendEmail({ to, subject, html, text }) {
       stack: error.stack,
     });
 
-    const err = new Error(`Failed to send email: ${error.message}`);
-    if (isResendSandboxRecipientError(error.message)) {
-      err.code = "RESEND_SANDBOX_RECIPIENT";
-    }
+    const parsed = parseResendError(error);
+    const err = new Error(`Failed to send email: ${parsed.message}`);
+    err.code = parsed.code;
     throw err;
   }
 }
@@ -510,6 +548,7 @@ module.exports = {
   assertResendConfigured,
   isOtpDevConsoleEnabled,
   isResendSandboxRecipientError,
+  parseResendError,
   sendEmail,
   sendOtpEmail,
   sendPasswordResetOtpEmail,

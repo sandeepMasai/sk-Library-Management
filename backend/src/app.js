@@ -22,12 +22,17 @@ app.get("/", (_req, res) => {
 /** Railway / load-balancer liveness — always 200 while process is up */
 app.get("/health", (_req, res) => {
   const db = getMongoStatus();
+  const resendKey = String(process.env.RESEND_API_KEY || "").trim();
   res.status(200).json({
     ok: true,
     alive: true,
     service: "smartlibdesk-backend",
     env: process.env.NODE_ENV || "development",
     db,
+    email: {
+      resendConfigured: Boolean(resendKey && resendKey !== "your_resend_api_key_here"),
+      from: process.env.EMAIL_FROM || null,
+    },
     timestamp: new Date().toISOString(),
   });
 });

@@ -7,7 +7,7 @@ const {
   sendOtpEmail,
   sendPasswordResetOtpEmail,
   sendVerificationSuccessEmail,
-  isResendSandboxRecipientError,
+  parseResendError,
 } = require("./email.service");
 const { hashPassword } = require("../utils/authCredentials");
 const logger = require("../utils/logger");
@@ -132,24 +132,23 @@ async function sendEmailOtp({
       resendAfterSeconds: EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
     };
   } catch (error) {
+    const parsed = parseResendError(error);
     logger.error("Failed to send email OTP", {
       email: normalizedEmail,
       purpose,
-      error: error.message,
-      code: error.code,
+      error: parsed.message,
+      code: parsed.code,
     });
 
-    if (error.code === "RESEND_SANDBOX_RECIPIENT" || isResendSandboxRecipientError(error.message)) {
-      throw createHttpError(
-        503,
-        "Email is in Resend sandbox mode: only your Resend account email can receive mail. " +
-          "For local testing set EMAIL_OTP_DEV_LOG=true (OTP prints in the server console), " +
-          "or verify a domain at resend.com/domains and use EMAIL_FROM on that domain.",
-        { code: "RESEND_SANDBOX_RECIPIENT" }
-      );
+    if (
+      parsed.code === "RESEND_NOT_CONFIGURED" ||
+      parsed.code === "RESEND_SANDBOX_RECIPIENT" ||
+      parsed.code === "RESEND_DOMAIN_NOT_VERIFIED"
+    ) {
+      throw createHttpError(503, parsed.message, { code: parsed.code });
     }
 
-    throw createHttpError(500, "Failed to send OTP. Please try again later.");
+    throw createHttpError(500, "Failed to send OTP. Please try again later.", { code: parsed.code });
   }
 }
 
