@@ -1,17 +1,25 @@
 {
-  "buildCommand": "VITE_API_URL=https://sk-library-management.onrender.com npm run build",
+  "buildCommand": "VITE_API_URL=https://sk-library-management-production.up.railway.app npm run build",
   "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://sk-library-management.onrender.com/api/:path*"
+      "destination": "https://sk-library-management-production.up.railway.app/api/:path*"
     },
-    { "source": "/((?!.*\\..*$).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!.*\\..*$).*)",
+      "destination": "/index.html"
+    }
   ],
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "smartlibdesk.in" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "smartlibdesk.in"
+        }
+      ],
       "destination": "https://www.smartlibdesk.in/:path*",
       "permanent": true
     },
@@ -25,29 +33,53 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     },
     {
       "source": "/assets/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     },
     {
       "source": "/downloads/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600" },
-        { "key": "Content-Type", "value": "application/vnd.android.package-archive" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/vnd.android.package-archive"
+        }
       ]
     },
     {
       "source": "/(favicon\\.png|favicon\\.svg|logo\\.png|site\\.webmanifest|robots\\.txt|sitemap\\.xml)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
       ]
     }
   ]
